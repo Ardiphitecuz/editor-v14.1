@@ -13,6 +13,54 @@ app.get('/', (req, res) => {
   res.send('Server Berjalan!');
 });
 
+// Direct content fetcher endpoint
+app.get('/api/fetch-content', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL is required' });
+    }
+
+    const response = await axios.get(url, {
+      timeout: 12000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const html = response.data;
+    
+    // Extract image
+    let image = null;
+    const ogImg = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/.exec(html);
+    if (ogImg) image = ogImg[1];
+
+    // Extract content paragraphs
+    const pTags = html.match(/<p[^>]*>([^<]+)<\/p>/g) || [];
+    const content = pTags
+      .slice(0, 12)
+      .map(tag => tag.replace(/<[^>]+>/g, '').trim())
+      .filter(text => text.length > 15);
+
+    return res.json({ 
+      success: content.length > 0, 
+      items: [{
+        title: '',
+        description: content.join('\n'),
+        image: image,
+        summary: content[0] || ''
+      }]
+    });
+  } catch (error) {
+    console.error('Content fetch error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      items: []
+    });
+  }
+});
+
 // FeedAPI endpoint for RSS Generator
 app.get('/api/feedapi', async (req, res) => {
   try {

@@ -158,13 +158,13 @@ export async function fetchWithFallback(url: string, ms = 12000): Promise<string
   // For Google News, try with proper headers first via a dedicated proxy approach
   const isGNews = url.includes("news.google.com");
   
+  // Try server endpoint first
   const proxyList = isGNews
     ? [
-        // For Google News: try rss2json as a direct proxy first (it can handle GNews)
         null, // placeholder for direct rss2json attempt below
         ...PROXIES,
       ]
-    : PROXIES;
+    : [undefined, ...PROXIES]; // undefined = try server endpoint first
 
   for (const proxy of proxyList) {
     try {
@@ -172,7 +172,18 @@ export async function fetchWithFallback(url: string, ms = 12000): Promise<string
       const t = setTimeout(() => ctrl.abort(), ms);
       
       let fetchUrl: string;
-      if (proxy === null) {
+      if (proxy === undefined) {
+        // Try server endpoint first (no CORS issues, same origin)
+        fetchUrl = `/api/fetch-content?url=${encodeURIComponent(url)}`;
+        const res = await fetch(fetchUrl, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!res.ok) throw new Error("Server fetch failed");
+        const json = await res.json();
+        if (json.success && json.items?.[0]?.description) {
+          return json.items[0].description; // Return as text content
+        }
+        throw new Error("No content from server");
+      } else if (proxy === null) {
         // For Google News: try rss2json endpoint
         fetchUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=20`;
         const res = await fetch(fetchUrl, { signal: ctrl.signal });
@@ -231,6 +242,30 @@ export async function fetchArticleContent(
   try {
     // Validate URL first
     if (!url || !/^https?:\/\//i.test(url)) return null;
+
+    // Try server API first (more reliable)
+    try {
+      const serverRes = await fetch('http://localhost:3000/api/feedapi?url=' + encodeURIComponent(url), {
+        signal: AbortSignal.timeout(10000)
+      });
+      if (serverRes.ok) {
+        const serverData = await serverRes.json();
+        if (serverData.success && serverData.items?.[0]) {
+          const content = stripHtml(serverData.items[0].description || serverData.items[0].summary || "")
+            .split(/\n+/)
+            .filter(t => t.trim().length > 15)
+            .map(t => t.trim())
+            .slice(0, 12);
+          if (content.length > 0) {
+            return {
+              content,
+              image: serverData.items[0].image,
+              summary: serverData.items[0].description?.split('\n')[0] || serverData.items[0].title
+            };
+          }
+        }
+      }
+    } catch { /* fallback to proxy */ }
 
     const html = await fetchWithFallback(url, 12000);
     
