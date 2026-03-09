@@ -24,7 +24,7 @@ app.get('/api/fetch-content', async (req, res) => {
     const response = await axios.get(url, {
       timeout: 12000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
 
@@ -35,18 +35,78 @@ app.get('/api/fetch-content', async (req, res) => {
     const ogImg = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/.exec(html);
     if (ogImg) image = ogImg[1];
 
-    // Extract content paragraphs
-    const pTags = html.match(/<p[^>]*>([^<]+)<\/p>/g) || [];
-    const content = pTags
-      .slice(0, 12)
-      .map(tag => tag.replace(/<[^>]+>/g, '').trim())
-      .filter(text => text.length > 15);
+    const paragraphs = [];
+    
+    // Strategy 1: Find article/content container and extract all paragraphs
+    const articleMatch = html.match(/<article[^>]*>[\s\S]*?<\/article>/i);
+    const mainMatch = html.match(/<main[^>]*>[\s\S]*?<\/main>/i);
+    const contentDivMatch = html.match(/<div[^>]*class=["\']([^"]*content[^"]*)["\'][^>]*>[\s\S]{100,}<\/div>/i);
+    
+    let contentHtml = articleMatch?.[0] || mainMatch?.[0] || contentDivMatch?.[0] || html;
+
+    // Extract all <p> tags with content
+    const pMatches = contentHtml.match(/<p[^>]*>([^<]+(?:<[^/>][^>]*>[^<]*)*)<\/p>/gi) || [];
+    pMatches.forEach(tag => {
+      const text = tag
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+        .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (text.length > 15) paragraphs.push(text);
+    });
+
+    // Strategy 2: If still low content, try extracting from other elements
+    if (paragraphs.length < 3) {
+      // Extract from divs, blockquotes, etc.
+      const otherMatches = contentHtml.match(/<(div|blockquote|section)[^>]*>([^<]{50,}(?:<[^/>][^>]*>[^<]*)*)<\/(div|blockquote|section)>/gi) || [];
+      otherMatches.forEach(tag => {
+        const text = tag
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\s+/g, ' ')
+          .trim();
+        // Only add if not already in paragraphs and long enough
+        if (text.length > 40 && !paragraphs.some(p => p.includes(text.substring(0, 30)))) {
+          paragraphs.push(text);
+        }
+      });
+    }
+
+    // Strategy 3: Fallback - split by common content delimiters
+    if (paragraphs.length < 3) {
+      // Remove script, style, nav, etc noise
+      const cleanHtml = contentHtml
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+        .replace(/<header[\s\S]*?<\/header>/gi, '')
+        .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+        .replace(/<[^>]+>/g, '\n');
+      
+      const lines = cleanHtml
+        .split(/\n+/)
+        .map(l => l.trim())
+        .filter(l => l.length > 30 && l.length < 1000 && !/^(var|function|if|else|return)/.test(l));
+      
+      paragraphs.push(...lines.slice(0, 12 - paragraphs.length));
+    }
+
+    // Limit to 12 paragraphs max
+    const content = paragraphs.slice(0, 12);
 
     return res.json({ 
       success: content.length > 0, 
       items: [{
         title: '',
-        description: content.join('\n'),
+        description: content.join('\n\n'),
         image: image,
         summary: content[0] || ''
       }]

@@ -245,27 +245,29 @@ export async function fetchArticleContent(
 
     // Try server API first (more reliable)
     try {
-      const serverRes = await fetch('http://localhost:3000/api/feedapi?url=' + encodeURIComponent(url), {
+      const serverRes = await fetch('http://localhost:3000/api/fetch-content?url=' + encodeURIComponent(url), {
         signal: AbortSignal.timeout(10000)
       });
       if (serverRes.ok) {
         const serverData = await serverRes.json();
-        if (serverData.success && serverData.items?.[0]) {
-          const content = stripHtml(serverData.items[0].description || serverData.items[0].summary || "")
-            .split(/\n+/)
-            .filter(t => t.trim().length > 15)
-            .map(t => t.trim())
+        if (serverData.success && serverData.items?.[0]?.description) {
+          const content = serverData.items[0].description
+            .split(/\n\n+/)
+            .map((t: string) => t.trim())
+            .filter((t: string) => t.length > 15)
             .slice(0, 12);
           if (content.length > 0) {
             return {
               content,
               image: serverData.items[0].image,
-              summary: serverData.items[0].description?.split('\n')[0] || serverData.items[0].title
+              summary: content[0]
             };
           }
         }
       }
-    } catch { /* fallback to proxy */ }
+    } catch (e) {
+      console.debug("Server fetch failed, trying proxy:", e);
+    }
 
     const html = await fetchWithFallback(url, 12000);
     
@@ -334,6 +336,16 @@ function articlesFromR2J(source: NewsSource, data: R2JFeed, limit: number): Arti
     const cat = guessCategory(title, item.categories ?? []);
     const fullHtml = dec(item.content || item.description || "");
 
+    // Extract text content from HTML for initial display
+    let initialContent: string[] = [];
+    if (fullHtml.length > 20) {
+      const textParts = stripHtml(fullHtml)
+        .split(/\n+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 20);
+      initialContent = textParts.slice(0, 3);
+    }
+
     let image = "";
     if (goodImage(item.thumbnail)) image = item.thumbnail;
     else if (goodImage(item.enclosure?.link)) image = item.enclosure!.link!;
@@ -342,10 +354,10 @@ function articlesFromR2J(source: NewsSource, data: R2JFeed, limit: number): Arti
     return {
       id: source.id + "-r-" + i,
       category: cat, title,
-      summary: title,   // will be updated after content fetch
-      content: [],      // always empty — triggers background fetch
+      summary: initialContent[0] || title,
+      content: initialContent.length > 0 ? initialContent : [],
       source: source.name, image,
-      readTime: 3,
+      readTime: Math.max(1, Math.ceil((initialContent.join(" ").split(/\s+/).length || 50) / 200)),
       publishedAt: relTime(item.pubDate),
       hot: i < 2,
       originalUrl: item.link || undefined,
@@ -369,10 +381,23 @@ function parseXml(source: NewsSource, rawText: string, limit: number): Article[]
     const pubDate = item.querySelector("pubDate, published, updated")?.textContent ?? "";
     const link = item.querySelector("link")?.textContent?.trim()
       || item.querySelector("link")?.getAttribute("href") || "";
-    const fullHtml = dec((
-      item.getElementsByTagNameNS("http://purl.org/rss/1.0/modules/content/", "encoded")[0]?.textContent
-      ?? item.querySelector("description, summary")?.textContent ?? ""
-    ).replace(/<!--\[CDATA\[|]]-->/g, ""));
+    
+    // Extract content with proper namespace and fallbacks
+    const contentEncoded = item.getElementsByTagNameNS("http://purl.org/rss/1.0/modules/content/", "encoded")[0]?.textContent
+      || item.getElementsByTagName("content:encoded")[0]?.textContent
+      || item.querySelector("description, summary")?.textContent 
+      || "";
+    const fullHtml = dec(contentEncoded.replace(/<!--\[CDATA\[|]]-->/g, ""));
+
+    // Extract text from HTML content for initial display
+    let initialContent: string[] = [];
+    if (fullHtml.length > 20) {
+      const textParts = stripHtml(fullHtml)
+        .split(/\n+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 20);
+      initialContent = textParts.slice(0, 3); // First 3 paragraphs
+    }
 
     const tags = Array.from(item.querySelectorAll("category")).map(c => c.textContent?.trim() ?? "");
     const cat = guessCategory(title, tags);
@@ -387,10 +412,10 @@ function parseXml(source: NewsSource, rawText: string, limit: number): Article[]
     return {
       id: source.id + "-x-" + i,
       category: cat, title,
-      summary: title,   // will be updated after content fetch
-      content: [],      // always empty — triggers background fetch
+      summary: initialContent[0] || title,
+      content: [],  // Empty to trigger background fetch of full content
       source: srcName, image,
-      readTime: 3,
+      readTime: Math.max(1, Math.ceil((initialContent.join(" ").split(/\s+/).length || 50) / 200)),
       publishedAt: relTime(pubDate),
       hot: i < 2,
       originalUrl: link || undefined,
