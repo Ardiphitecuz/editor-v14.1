@@ -1,0 +1,39 @@
+/* ── Custom Fonts (Gilroy) ── */
+
+/* 1. Gilroy Bold (Untuk Judul Umum) */
+@font-face {
+  font-family: 'Gilroy-Bold';
+  src: url('/fonts/Gilroy-Bold.woff2') format('woff2'),
+       url('/fonts/Gilroy-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 2. Gilroy Heavy (Untuk Judul Sangat Tebal/Highlight) */
+@font-face {
+  font-family: 'Gilroy-Heavy';
+  src: url('/fonts/Gilroy-Heavy.woff2') format('woff2'),
+       url('/fonts/Gilroy-Heavy.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 3. Gilroy Bold Italic (Untuk Aksen Miring) */
+@font-face {
+  font-family: 'Gilroy-BoldItalic';
+  src: url('/fonts/Gilroy-BoldItalic.woff2') format('woff2'),
+       url('/fonts/Gilroy-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ── Fallback Fonts ── */
+/* Import Inter untuk UI/Body text agar tetap bersih */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+}
