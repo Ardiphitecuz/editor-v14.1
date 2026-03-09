@@ -52,9 +52,9 @@ export function useNews(): UseNewsState {
       setErrors(result.errors ?? {});
       setFromCache(result.fromCache ?? false);
 
-      // Background prefetch content for first 5 articles
+      // Background prefetch content for first 10 articles
       if (result.articles.length > 0) {
-        setTimeout(() => prefetchArticleContents(result.articles, 5), 500);
+        setTimeout(() => prefetchArticleContents(result.articles.slice(0, 20), 10), 500);
       }
     } catch (err) {
       if (mountedRef.current) {

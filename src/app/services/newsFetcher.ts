@@ -130,7 +130,7 @@ export function extractParagraphs(html: string): string[] {
       }
     }
     if (buf) result.push(buf);
-    return result.slice(0, 12);
+    return result.slice(0, 20); // Return more paragraphs (up to 20)
   }
 
   // Fallback: plain text split
@@ -147,7 +147,7 @@ export function extractParagraphs(html: string): string[] {
     }
   }
   if (buf) result.push(buf);
-  return result.slice(0, 12);
+  return result.slice(0, 20); // Return more paragraphs (up to 20)
 }
 
 // ── Proxy fetch ───────────────────────────────────────────────────────────────
