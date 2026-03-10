@@ -129,8 +129,9 @@ export function sanitizeRssHtml(rawHtml: string, baseUrl: string): string {
     if (!src) return "";
     src = src.trim();
     if (src.startsWith("data:")) return ""; // buang data URI
-    if (src.startsWith("http")) return src;
     if (src.startsWith("//")) return "https:" + src;
+    if (src.startsWith("http://")) return src.replace("http://", "https://"); // upgrade HTTP→HTTPS
+    if (src.startsWith("https://")) return src;
     if (src.startsWith("/") && origin) return origin + src;
     try { return new URL(src, baseUrl).href; } catch { return src; }
   }
@@ -235,6 +236,22 @@ export function sanitizeRssHtml(rawHtml: string, baseUrl: string): string {
   doc.body.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6").forEach(el => {
     const hasImg = el.querySelector("img");
     if (!hasImg && !(el.textContent ?? "").trim()) el.remove();
+  });
+
+  // Post-pass 1b: hapus <ul>/<ol> yang isinya hanya link navigasi pendek
+  // Ciri: semua <li> berisi satu <a> dengan teks < 40 karakter (menu, sidebar)
+  // Konten editorial yang sah biasanya memiliki teks lebih panjang atau gambar
+  doc.body.querySelectorAll("ul, ol").forEach(list => {
+    const items = Array.from(list.querySelectorAll("li"));
+    if (items.length === 0) { list.remove(); return; }
+    const isNavList = items.every(li => {
+      const links = li.querySelectorAll("a");
+      const imgs  = li.querySelectorAll("img");
+      const text  = (li.textContent ?? "").trim();
+      // Nav item: hanya berisi link, teks pendek (< 40 char), tidak ada gambar
+      return imgs.length === 0 && links.length >= 1 && text.length < 40;
+    });
+    if (isNavList) { list.remove(); }
   });
 
   // Post-pass 2: wrap orphan text nodes (hasil unwrap div) ke dalam <p>

@@ -144,8 +144,9 @@ app.get('/api/fetch-content', async (req, res) => {
     function resolveUrl(src) {
       if (!src) return src;
       src = src.trim();
-      if (src.startsWith('data:') || src.startsWith('http')) return src;
-      if (src.startsWith('//')) return pageUrl.protocol + src;
+      if (src.startsWith('data:') || src.startsWith('https://')) return src;
+      if (src.startsWith('http://')) return src.replace('http://', 'https://'); // upgrade HTTP→HTTPS
+      if (src.startsWith('//')) return 'https:' + src;
       if (src.startsWith('/')) return baseUrl + src;
       return baseUrl + '/' + src;
     }
@@ -308,6 +309,19 @@ app.get('/api/fetch-content', async (req, res) => {
     // Post-pass: hapus elemen kosong
     contentDoc.body.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6').forEach(el => {
       if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
+    });
+
+    // Post-pass: hapus list navigasi (ul/ol berisi hanya link pendek)
+    contentDoc.body.querySelectorAll('ul, ol').forEach(list => {
+      const items = Array.from(list.querySelectorAll('li'));
+      if (items.length === 0) { list.remove(); return; }
+      const isNav = items.every(li => {
+        const text = (li.textContent ?? '').trim();
+        return li.querySelectorAll('img').length === 0
+          && li.querySelectorAll('a').length >= 1
+          && text.length < 40;
+      });
+      if (isNav) list.remove();
     });
 
     const contentHtml = contentDoc.body.innerHTML.trim();
