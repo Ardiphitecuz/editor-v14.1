@@ -7,7 +7,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { FetchRSSPage } from "./components/FetchRSSPage";
 import { ExplorePage } from "./components/ExplorePage";
 import { SavedPage } from "./components/SavedPage";
-import { SubscriptionsPage } from "./components/SubscriptionsPage";
+import { SubscriptionsPage } from "./components/Subscriptionspage";
 
 export const router = createBrowserRouter([
   {
