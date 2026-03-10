@@ -12,6 +12,13 @@ export interface NewsSource {
   lastFetched?: string;
   articleCount?: number;
   error?: string;
+  /**
+   * true  → konten dari RSS feed sudah lengkap, JANGAN fetch halaman penuh.
+   *         (cocok untuk: yaraon, matome site, atau situs yg RSS-nya full-text)
+   * false → RSS hanya excerpt, perlu fetch halaman penuh untuk konten lengkap.
+   * undefined → default: fetch halaman penuh (backward compatible)
+   */
+  rssContentSufficient?: boolean;
 }
 
 const STORAGE_KEY = "discuss_news_sources";
@@ -26,6 +33,7 @@ const DEFAULT_SOURCES: NewsSource[] = [
     language: "ja",
     enabled: true,
     addedAt: new Date().toISOString(),
+    rssContentSufficient: false,  // RSS Yaraon hanya cover image — teks まとめ hanya ada di halaman asli, perlu fetch
   },
 ];
 
@@ -40,7 +48,22 @@ export function getSources(): NewsSource[] {
       saveSources(merged);
       return merged;
     }
-    return parsed;
+    // ── Migrate: patch field baru yang mungkin belum ada di data lama ──
+    const migrated = parsed.map(s => {
+      // Yaraon: reset ke false — RSS hanya cover image, perlu fetch halaman penuh
+      if (s.id === "yaraon") {
+        return { ...s, rssContentSufficient: false };
+      }
+      // Sumber RSS lain: default false — selalu fetch konten lengkap
+      if (s.type === "rss" && s.rssContentSufficient === undefined) {
+        return { ...s, rssContentSufficient: false };
+      }
+      return s;
+    });
+    // Simpan hasil migrasi agar tidak perlu migrate ulang
+    const needsSave = migrated.some((s, i) => s !== parsed[i]);
+    if (needsSave) saveSources(migrated);
+    return migrated;
   } catch { return DEFAULT_SOURCES; }
 }
 
@@ -49,7 +72,14 @@ export function saveSources(sources: NewsSource[]): void {
 }
 
 export function addSource(source: Omit<NewsSource, "id" | "addedAt">): NewsSource {
-  const newSource: NewsSource = { ...source, id: "src_" + Date.now(), addedAt: new Date().toISOString() };
+  const newSource: NewsSource = {
+    ...source,
+    id: "src_" + Date.now(),
+    addedAt: new Date().toISOString(),
+    // RSS: default false — perlu fetch halaman penuh untuk konten lengkap
+    // Set ke true hanya jika admin tahu RSS-nya full-text (jarang)
+    rssContentSufficient: source.rssContentSufficient ?? false,
+  };
   saveSources([...getSources(), newSource]);
   return newSource;
 }
@@ -65,7 +95,7 @@ export function toggleSource(id: string, enabled: boolean): void {
 
 export function updateSourceMeta(
   id: string,
-  meta: Partial<Pick<NewsSource, "lastFetched" | "articleCount" | "error">>
+  meta: Partial<Pick<NewsSource, "lastFetched" | "articleCount" | "error" | "rssContentSufficient">>
 ): void {
   saveSources(getSources().map((s) => (s.id === id ? { ...s, ...meta } : s)));
 }
@@ -103,18 +133,28 @@ function normalizeUrl(url: string): string {
 
 // ── Proxy fetch ───────────────────────────────────────────────────────────────
 
-const PROXIES = [
-  "https://api.rss2json.com/v1/api.json?rss_url=", // only for RSS check
+const PUBLIC_PROXIES_SM = [
   "https://corsproxy.io/?",
   "https://api.allorigins.win/raw?url=",
   "https://api.codetabs.com/v1/proxy?quest=",
 ];
 
 async function proxyFetch(url: string, timeoutMs = 10000): Promise<string> {
-  // Skip rss2json for generic proxy fetch, use raw proxies
-  const rawProxies = PROXIES.slice(1);
+  // ① Server proxy sendiri dulu
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch("/api/rss?url=" + encodeURIComponent(url), { signal: ctrl.signal });
+    clearTimeout(t);
+    if (res.ok) {
+      const text = await res.text();
+      if (text.length > 50) return text;
+    }
+  } catch { /* server tidak jalan */ }
+
+  // ② Fallback proxy publik
   let lastErr: Error = new Error("all proxies failed");
-  for (const proxy of rawProxies) {
+  for (const proxy of PUBLIC_PROXIES_SM) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), timeoutMs);

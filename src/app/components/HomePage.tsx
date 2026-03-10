@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { ARTICLES, CATEGORIES, type Article } from "../data/articles";
 import { useNews } from "../hooks/useNews";
-import { Flame, Clock, ChevronRight, Search, RefreshCw, Wifi, WifiOff, Settings } from "lucide-react";
+import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from "lucide-react";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -236,13 +236,11 @@ export function HomePage() {
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-neutral-400" style={{ fontSize: 13 }}>
-                Selamat pagi ☕
-              </p>
+              {/* Selamat pagi dihapus */}
               <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.1 }}>Menu Hari Ini</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {!loading && (hasErrors ? <WifiOff size={14} className="text-neutral-400" /> : <Wifi size={14} className="text-[#ff742f]" />)}
+              {/* Icon Wifi dihapus */}
               <button onClick={refresh} disabled={loading} className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 disabled:opacity-50">
                 <RefreshCw size={16} className={`text-neutral-600 ${loading ? "animate-spin" : ""}`} />
               </button>

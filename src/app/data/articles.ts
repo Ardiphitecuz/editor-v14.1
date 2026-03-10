@@ -1,3 +1,10 @@
+export interface ContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+  tag?: string;
+  src?: string;
+}
+
 export interface Article {
   id: string;
   category: string;
@@ -5,10 +12,16 @@ export interface Article {
   summary: string;
   content: string[];
   source: string;
+  sourceId?: string;
+  rssContentSufficient?: boolean;
   image: string;
+  images?: string[];
+  blocks?: ContentBlock[];
+  contentHtml?: string;          // HTML bersih siap render (Inoreader-style)
   readTime: number;
   publishedAt: string;
   hot?: boolean;
+  originalUrl?: string;
 }
 
 export const ARTICLES: Article[] = [

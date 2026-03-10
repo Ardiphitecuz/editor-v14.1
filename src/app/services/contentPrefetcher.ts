@@ -1,27 +1,26 @@
 /**
  * Background content prefetcher.
- * After articles are listed, this prefetches content from article URLs
- * so when user opens an article, content is already ready.
+ * Setelah artikel di-list, prefetch konten dari URL asli agar
+ * saat user buka artikel, konten sudah siap (tidak perlu tunggu lagi).
  */
 import { fetchArticleContent } from "./newsFetcher";
 import { articleStore } from "../store/articleStore";
 import type { Article } from "../data/articles";
 
-type ExtArticle = Article & { originalUrl?: string };
-
-// Track which IDs have been prefetched to avoid duplicate work
+// Track ID yang sudah/sedang di-prefetch agar tidak duplikat
 const prefetchedIds = new Set<string>();
 
 export async function prefetchArticleContents(articles: Article[], batchSize = 5): Promise<void> {
-  const needsFetch = (articles as ExtArticle[]).filter(a =>
-    (!a.content || a.content.length === 0) &&
-    a.originalUrl &&
-    !prefetchedIds.has(a.id)
+  const needsFetch = articles.filter(a =>
+    a.originalUrl &&                       // harus punya URL sumber
+    !prefetchedIds.has(a.id) &&           // belum pernah di-prefetch
+    !a.blocks?.length &&                  // belum punya konten lengkap
+    !a.rssContentSufficient               // ← SKIP jika RSS sudah cukup (yaraon, dll)
   ).slice(0, batchSize);
 
   if (needsFetch.length === 0) return;
 
-  // Mark as in-progress immediately to prevent duplicate fetches
+  // Tandai segera agar tidak ada fetch duplikat
   needsFetch.forEach(a => prefetchedIds.add(a.id));
 
   await Promise.allSettled(
@@ -31,14 +30,17 @@ export async function prefetchArticleContents(articles: Article[], batchSize = 5
         if (!result || result.content.length === 0) return;
         const updated: Article = {
           ...art,
+          originalUrl: art.originalUrl,   // jangan sampai hilang
           content: result.content,
           summary: result.summary ?? art.summary,
           image: result.image?.startsWith("http") ? result.image : art.image,
+          images: result.images?.length ? result.images : art.images,
+          blocks: result.blocks as Article["blocks"],
           readTime: Math.max(1, Math.ceil(result.content.join(" ").split(/\s+/).length / 200)),
         };
         articleStore.updateById(art.id, updated);
       } catch {
-        // Prefetch failure is silent — article will fetch on demand when opened
+        // Prefetch gagal — akan di-fetch on-demand saat user buka artikel
         prefetchedIds.delete(art.id);
       }
     })

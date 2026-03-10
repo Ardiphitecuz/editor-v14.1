@@ -288,16 +288,25 @@ export async function rewriteArticleOnDemand(
 
   const parts: string[] = [`Judul Asli: ${article.title}`];
   
-  if (article.content && article.content.length > 0) {
-    // Filter konten duplikat judul jika ada
-    const contentText = article.content
-        .filter(c => c !== article.title)
-        .join("\n\n");
-    parts.push("Isi Artikel Asli:", contentText);
+  // Ambil teks dari blocks (lebih lengkap) atau content[]
+  const bodyText = (() => {
+    if (article.blocks && article.blocks.length > 0) {
+      return article.blocks
+        .filter(b => b.type === 'text' && b.text && b.text !== article.title)
+        .map(b => b.text!)
+        .join('\n\n');
+    }
+    return (article.content ?? [])
+      .filter(c => c !== article.title)
+      .join('\n\n');
+  })();
+
+  if (bodyText.length > 0) {
+    parts.push('Isi Artikel Asli:', bodyText);
   }
   
   if (extraContent) {
-    parts.push("Konteks Tambahan:", extraContent);
+    parts.push('Konteks Tambahan:', extraContent);
   }
 
   const userPrompt = parts.join("\n\n");
@@ -316,11 +325,30 @@ export async function rewriteArticleOnDemand(
     
     const wordCount = parsed.content.join(" ").split(/\s+/).length;
 
+    // Rebuild blocks: ganti teks dengan hasil AI, pertahankan gambar di posisi asli
+    let rebuiltBlocks = article.blocks;
+    if (article.blocks && article.blocks.length > 0 && parsed.content.length > 0) {
+      const aiParagraphs = [...parsed.content];
+      let aiIdx = 0;
+      rebuiltBlocks = article.blocks.map(b => {
+        if (b.type === 'image') return b; // gambar tetap di posisi asli
+        if (b.type === 'text' && aiIdx < aiParagraphs.length) {
+          return { ...b, text: aiParagraphs[aiIdx++] };
+        }
+        return b;
+      });
+      // Sisa paragraf AI yang belum masuk (jika AI menghasilkan lebih banyak paragraf)
+      while (aiIdx < aiParagraphs.length) {
+        rebuiltBlocks.push({ type: 'text', tag: 'p', text: aiParagraphs[aiIdx++] });
+      }
+    }
+
     const result: Article = {
       ...article,
       title: parsed.title,
       summary: parsed.summary,
       content: parsed.content,
+      blocks: rebuiltBlocks,
       category: parsed.category || article.category,
       readTime: Math.max(1, Math.round(wordCount / 200)),
     };

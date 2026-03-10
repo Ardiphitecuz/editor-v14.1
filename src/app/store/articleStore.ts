@@ -4,7 +4,7 @@ import { ARTICLES } from "../data/articles";
 type Listener = () => void;
 
 const SAVED_KEY = "otaku_saved_ids";
-const CACHE_KEY = "otaku_articles_cache";
+const CACHE_KEY = "otaku_articles_cache_v8";  // v8 = yaraon fetch fix + media thumbnail + CJK scoring
 const CACHE_TTL = 1000 * 60 * 30; // 30 menit
 
 interface ArticleCache {

@@ -31,7 +31,15 @@ export default defineConfig({
   server: {
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
+      // COEP dihapus — gambar cross-origin bisa dimuat langsung
+      // Jika butuh FFmpeg/SharedArrayBuffer, aktifkan kembali dan pakai image proxy
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

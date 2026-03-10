@@ -7,7 +7,7 @@ import {
 const NAV_ITEMS = [
   { label: "Home",     path: "/",               icon: Home },
   { label: "Sources",  path: "/subscriptions",  icon: Rss },
-  { label: "Chat",     path: "/editor",         icon: MessageSquare },
+  // { label: "Chat",     path: "/editor",         icon: MessageSquare },
   { label: "Activity", path: "/activity",       icon: Bell },
   { label: "Explore",  path: "/jelajahi",       icon: Search },
   { label: "Settings", path: "/pengaturan",     icon: Settings },

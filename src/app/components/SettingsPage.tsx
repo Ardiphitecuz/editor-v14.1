@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getSources, addSource, removeSource, toggleSource,
+  getSources, addSource, removeSource, toggleSource, updateSourceMeta,
   detectSourceType, buildGoogleNewsUrl, isGoogleNewsUrl, type NewsSource,
 } from "../services/sourceManager";
 import { clearAllSourceCache } from "../services/newsFetcher";
@@ -35,8 +35,8 @@ const KEY_URLS: Record<AIProvider, string> = {
 
 // ── Source Card ───────────────────────────────────────────────────────────────
 
-function SourceCard({ source, onToggle, onRemove }: {
-  source: NewsSource; onToggle: () => void; onRemove: () => void;
+function SourceCard({ source, onToggle, onToggleRss, onRemove }: {
+  source: NewsSource; onToggle: () => void; onToggleRss: () => void; onRemove: () => void;
 }) {
   const isDefault = source.id === "yaraon";
   const isGoogle = isGoogleNewsUrl(source.feedUrl ?? source.url);
@@ -90,7 +90,25 @@ function SourceCard({ source, onToggle, onRemove }: {
       {/* Source Info */}
       <div className="flex-1 min-w-0">
         <p className="font-bold text-gray-900 text-sm truncate">{source.name}</p>
-        <p className="text-gray-500 text-xs truncate">{source.feedUrl ?? source.url}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className="text-gray-500 text-xs truncate">{source.feedUrl ?? source.url}</p>
+        </div>
+        {/* RSS Lengkap toggle — hanya tampil jika sumber punya feedUrl (RSS) */}
+        {source.feedUrl && (
+          <button
+            onClick={onToggleRss}
+            className="mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors"
+            style={{
+              background: source.rssContentSufficient ? '#fff7ed' : '#f5f5f5',
+              border: `1px solid ${source.rssContentSufficient ? '#ff742f' : '#e5e5e5'}`,
+            }}
+            title="Jika RSS feed sudah mengandung konten lengkap, aktifkan ini agar tidak fetch ulang ke situs"
+          >
+            <span style={{ fontSize: 9, fontWeight: 700, color: source.rssContentSufficient ? '#ff742f' : '#999', letterSpacing: '0.03em' }}>
+              {source.rssContentSufficient ? '✓ RSS LENGKAP' : 'RSS EXCERPT'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Time Badge with Dynamic Color */}
@@ -389,32 +407,41 @@ function AIConfigSection() {
 
         <div className="flex flex-col gap-2">
           <label style={{ fontSize: 12, fontWeight: 700, color: "#555" }}>Provider AI</label>
-          <div className="flex flex-col gap-2">
-            {(Object.keys(PROVIDER_MODELS) as AIProvider[]).map((provider) => (
-              <button key={provider} onClick={() => handleProviderChange(provider)}
-                className="flex items-center justify-between px-3 py-3 rounded-xl border-2 transition-all text-left"
-                style={{ borderColor: config.provider === provider ? "#ff742f" : "#e5e5e5", background: config.provider === provider ? "#fff8f4" : "white" }}>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{PROVIDER_MODELS[provider].label}</p>
-                  <p style={{ fontSize: 11, color: "#888" }}>{PROVIDER_MODELS[provider].models.length + " model tersedia"}</p>
-                </div>
-                {config.provider === provider && <CheckCircle2 size={18} className="text-[#ff742f] shrink-0" />}
-              </button>
-            ))}
+          <div className="relative" style={{ maxWidth: 320 }}>
+            <select
+              value={config.provider}
+              onChange={e => handleProviderChange(e.target.value as AIProvider)}
+              className="w-full bg-neutral-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 appearance-none focus:ring-2 focus:ring-[#ff742f] transition-all hover:border-[#ff742f] cursor-pointer pr-10 shadow-sm"
+              style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }}
+            >
+              {(Object.keys(PROVIDER_MODELS) as AIProvider[]).map((provider) => (
+                <option key={provider} value={provider}>
+                  {PROVIDER_MODELS[provider].label} ({PROVIDER_MODELS[provider].models.length} model)
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </span>
           </div>
         </div>
 
         <div className="flex flex-col gap-2">
           <label style={{ fontSize: 12, fontWeight: 700, color: "#555" }}>Model</label>
-          <div className="flex flex-col gap-1.5">
-            {providerInfo.models.map((m) => (
-              <button key={m.id} onClick={() => { setConfig({ ...config, model: m.id }); setSaved(false); }}
-                className="flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all text-left"
-                style={{ borderColor: config.model === m.id ? "#ff742f" : "#e5e5e5", background: config.model === m.id ? "#fff8f4" : "white" }}>
-                <span style={{ fontSize: 13, color: "#333", fontWeight: config.model === m.id ? 700 : 400 }}>{m.label}</span>
-                {config.model === m.id && <CheckCircle2 size={16} className="text-[#ff742f] shrink-0" />}
-              </button>
-            ))}
+          <div className="relative" style={{ maxWidth: 320 }}>
+            <select
+              value={config.model}
+              onChange={e => { setConfig({ ...config, model: e.target.value }); setSaved(false); }}
+              className="w-full bg-neutral-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 appearance-none focus:ring-2 focus:ring-[#ff742f] transition-all hover:border-[#ff742f] cursor-pointer pr-10 shadow-sm"
+              style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }}
+            >
+              {providerInfo.models.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </span>
           </div>
         </div>
 
@@ -526,6 +553,13 @@ export function SettingsPage() {
     loadSources();
   }
 
+  function handleToggleRss(id: string) {
+    const src = sources.find((s) => s.id === id);
+    if (!src) return;
+    updateSourceMeta(id, { rssContentSufficient: !src.rssContentSufficient });
+    loadSources();
+  }
+
   function handleRemove(id: string) {
     removeSource(id);
     clearAllSourceCache(); clearRewriteCache();
@@ -573,7 +607,7 @@ export function SettingsPage() {
               <p className="text-gray-500 text-center py-6 text-sm">Belum ada sumber berita</p>
             ) : (
               sources.map((source) => (
-                <SourceCard key={source.id} source={source} onToggle={() => handleToggle(source.id)} onRemove={() => handleRemove(source.id)} />
+                <SourceCard key={source.id} source={source} onToggle={() => handleToggle(source.id)} onToggleRss={() => handleToggleRss(source.id)} onRemove={() => handleRemove(source.id)} />
               ))
             )}
           </div>

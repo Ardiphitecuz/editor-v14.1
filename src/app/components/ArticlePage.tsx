@@ -2,12 +2,20 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   ArrowLeft, Clock, Share2, Bookmark, Sparkles,
-  RefreshCw, ExternalLink, Edit3,
+  RefreshCw, ExternalLink, Edit3, Languages,
 } from "lucide-react";
 import { articleStore } from "../store/articleStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
 import { fetchArticleContent } from "../services/newsFetcher";
 import type { Article } from "../data/articles";
+
+// ── Image proxy — semua gambar cross-origin diload via server agar COEP tidak blokir
+function proxyImg(src: string): string {
+  if (!src) return src;
+  // Jika sudah lokal atau data URI, tidak perlu proxy
+  if (src.startsWith('/') || src.startsWith('data:')) return src;
+  return '/api/img?url=' + encodeURIComponent(src);
+}
 
 // ── Google Translate helper ──────────────────────────────────────────────────
 async function gtranslate(text: string): Promise<string> {
@@ -22,12 +30,43 @@ async function gtranslate(text: string): Promise<string> {
 }
 
 async function translateArticleContent(article: Article): Promise<Article> {
-  const [title, summary, ...contentParts] = await Promise.all([
-    gtranslate(article.title),
-    gtranslate(article.summary ?? ""),
-    ...( article.content ?? []).map(p => gtranslate(p)),
-  ]);
-  return { ...article, title, summary, content: contentParts };
+  // Kumpulkan semua teks yang perlu ditranslate sekaligus
+  const textsToTranslate: string[] = [
+    article.title,
+    article.summary ?? "",
+    ...(article.content ?? []),
+  ];
+
+  // Jika ada blocks, tambahkan teks dari blocks
+  const blockTextIndices: number[] = [];
+  if (article.blocks?.length) {
+    article.blocks.forEach((b, i) => {
+      if (b.type === 'text' && b.text) {
+        blockTextIndices.push(textsToTranslate.length);
+        textsToTranslate.push(b.text);
+      }
+    });
+  }
+
+  const translated = await Promise.all(textsToTranslate.map(t => gtranslate(t)));
+
+  const [title, summary, ...rest] = translated;
+  const contentTranslated = rest.slice(0, article.content?.length ?? 0);
+  const blockTexts = rest.slice(article.content?.length ?? 0);
+
+  // Rebuild blocks dengan teks yang sudah ditranslate
+  let translatedBlocks = article.blocks;
+  if (article.blocks?.length && blockTexts.length) {
+    let btIdx = 0;
+    translatedBlocks = article.blocks.map(b => {
+      if (b.type === 'text' && b.text) {
+        return { ...b, text: blockTexts[btIdx++] ?? b.text };
+      }
+      return b;
+    });
+  }
+
+  return { ...article, title, summary, content: contentTranslated, blocks: translatedBlocks };
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -37,12 +76,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 
-type RawArticle = Article & { originalUrl?: string };
 
 function RelatedCard({ article, onClick }: { article: Article; onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex gap-3 items-start text-left group w-full">
-      <img src={article.image} alt={article.title}
+      <img src={proxyImg(article.image)} alt={article.title}
         className="rounded-xl object-cover shrink-0 group-hover:opacity-90 transition-opacity"
         style={{ width: 80, height: 64 }}
         onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=60"; }} />
@@ -61,7 +99,7 @@ export function ArticlePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const rawArticle = articleStore.findById(id ?? "") as RawArticle | undefined;
+  const rawArticle = articleStore.findById(id ?? "") as Article | undefined;
   const originalUrl = rawArticle?.originalUrl;
 
   const [displayArticle, setDisplayArticle] = useState<Article | null>(rawArticle ?? null);
@@ -87,18 +125,50 @@ export function ArticlePage() {
 
   useEffect(() => {
     if (!rawArticle || fetchedRef.current === rawArticle.id) return;
-    // Only skip fetch if we have substantial content (>3 paragraphs)
-    if ((rawArticle.content?.length ?? 0) >= 4) { fetchedRef.current = rawArticle.id; return; }
-    if (!originalUrl) return;
     fetchedRef.current = rawArticle.id;
-    setContentLoading(true);
+
+    // Jika sudah sufficient (RSS konten lengkap) ATAU tidak ada URL → tampilkan saja apa yang ada
+    if (rawArticle.rssContentSufficient || !originalUrl) return;
+
+    // Konten RSS tidak cukup → fetch artikel penuh di background
+    // PENTING: jika sudah ada contentHtml dari RSS, jangan tampilkan loading skeleton
+    // (user sudah lihat konten RSS), fetch hanya untuk "upgrade" ke versi lebih lengkap
+    const hasRssContent = !!(rawArticle as any).contentHtml;
+    if (!hasRssContent) setContentLoading(true);
+
     fetchArticleContent(originalUrl).then(result => {
-      if (!result || !result.content.length) return;
+      if (!result || (!result.contentHtml && !result.content.length)) {
+        // Fetch gagal — jika belum ada contentHtml sama sekali, buat dari summary
+        if (!(rawArticle as any).contentHtml && rawArticle.summary && rawArticle.summary !== rawArticle.title) {
+          const updated: Article = {
+            ...rawArticle,
+            contentHtml: `<p>${rawArticle.summary}</p>`,
+          };
+          setDisplayArticle(updated);
+          articleStore.updateById(rawArticle!.id, updated);
+        }
+        return;
+      }
+
+      // Hanya replace jika konten yang di-fetch lebih panjang dari RSS
+      const fetchedLen = result.contentHtml
+        ? result.contentHtml.replace(/<[^>]+>/g, ' ').trim().length
+        : result.content.join(' ').length;
+      const rssLen = ((rawArticle as any).contentHtml ?? '')
+        .replace(/<[^>]+>/g, ' ').trim().length;
+
+      if (fetchedLen <= rssLen * 0.4) return; // fetch tidak lebih baik, skip
+
+      const wordCount = Math.ceil(fetchedLen / 5 / 200); // estimasi kata
       const updated: Article = {
-        ...rawArticle, content: result.content,
+        ...rawArticle,
+        originalUrl: rawArticle.originalUrl,
+        content: result.content,
         summary: result.summary ?? rawArticle.summary,
         image: result.image?.startsWith("http") ? result.image : rawArticle.image,
-        readTime: Math.max(1, Math.ceil(result.content.join(" ").split(/\s+/).length / 200)),
+        contentHtml: (result as any).contentHtml,
+        rssContentSufficient: true, // mark sebagai sufficient setelah fetch berhasil
+        readTime: Math.max(1, wordCount),
       };
       setDisplayArticle(updated);
       articleStore.updateById(rawArticle!.id, updated);
@@ -213,12 +283,10 @@ export function ArticlePage() {
             className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
             style={{ background: isTranslated ? "rgba(59,130,246,0.9)" : "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)" }}
           >
-            {translateLoading
-              ? <RefreshCw size={15} color="white" className="animate-spin" />
-              : <span style={{ fontSize: 11, fontWeight: 800, color: "white", letterSpacing: "-0.5px" }}>
-                  {isTranslated ? "ID✓" : "ID"}
-                </span>
-            }
+              {translateLoading
+                ? <RefreshCw size={15} color="white" className="animate-spin" />
+                : <Languages size={17} color="white" />
+              }
           </button>
           <button
             className="w-9 h-9 flex items-center justify-center rounded-full transition-colors active:scale-95"
@@ -228,9 +296,11 @@ export function ArticlePage() {
         </div>
       </div>
 
-      {/* ── Full-width hero image ────────────────────────────────────────── */}
-      <div className="relative w-full" style={{ height: 480 }}>
-        <img src={article.image} alt={article.title}
+      {/* ── Full-width hero image — 16:9 di mobile, fixed 480px di desktop ────── */}
+      <div className="relative w-full md:h-[480px]" style={{ aspectRatio: '16/9' }}
+        onLoad={() => {}}
+        ref={el => { if (el && window.innerWidth >= 768) { el.style.aspectRatio = 'unset'; el.style.height = '480px'; } }}>
+        <img src={proxyImg(article.image)} alt={article.title}
           className="w-full h-full object-cover"
           onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80"; }} />
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.65) 100%)" }} />
@@ -338,23 +408,98 @@ export function ArticlePage() {
                   <div key={i} className="rounded animate-pulse" style={{ height: 14, background: "#f5f5f5", width: w + "%" }} />
                 ))}
               </div>
+            ) : (article as any).contentHtml ? (
+              /* ── Render contentHtml: Inoreader-style HTML dengan prose CSS ── */
+              <>
+                <style>{`
+                  .article-prose { font-size: 15px; color: #333; line-height: 1.85; }
+                  .article-prose p { margin-bottom: 1.1em; text-align: justify; }
+                  .article-prose h2 { font-size: 18px; font-weight: 800; color: #1a1a1a; line-height: 1.4; margin: 1.4em 0 0.5em; }
+                  .article-prose h3 { font-size: 16px; font-weight: 700; color: #1a1a1a; line-height: 1.4; margin: 1.2em 0 0.4em; }
+                  .article-prose h4, .article-prose h5, .article-prose h6 { font-size: 14px; font-weight: 700; color: #333; margin: 1em 0 0.3em; }
+                  .article-prose img { width: 100%; max-width: 100%; border-radius: 14px; margin: 1.2em 0; object-fit: cover; display: block; }
+                  .article-prose figure { margin: 1.2em 0; }
+                  .article-prose figcaption { font-size: 12px; color: #888; text-align: center; margin-top: -0.6em; margin-bottom: 0.8em; font-style: italic; }
+                  .article-prose blockquote { border-left: 3px solid #ff742f; padding: 0.6em 1em; margin: 1em 0; background: #fff8f4; border-radius: 0 8px 8px 0; color: #555; font-style: italic; }
+                  .article-prose ul { list-style: disc; padding-left: 1.5em; margin-bottom: 1em; }
+                  .article-prose ol { list-style: decimal; padding-left: 1.5em; margin-bottom: 1em; }
+                  .article-prose li { margin-bottom: 0.4em; }
+                  .article-prose a { color: #ff742f; text-decoration: none; }
+                  .article-prose a:hover { text-decoration: underline; }
+                  .article-prose strong, .article-prose b { font-weight: 700; color: #1a1a1a; }
+                  .article-prose em, .article-prose i { font-style: italic; }
+                  .article-prose table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 1em 0; }
+                  .article-prose th { background: #f5f5f5; font-weight: 700; padding: 8px; border: 1px solid #e5e5e5; }
+                  .article-prose td { padding: 7px 8px; border: 1px solid #e5e5e5; }
+                  .article-prose br { display: block; content: ""; margin-top: 0.4em; }
+                `}</style>
+                <div
+                  className="article-prose"
+                  dangerouslySetInnerHTML={{ __html: (article as any).contentHtml }}
+                />
+              </>
+            ) : (article.blocks && article.blocks.length > 0) ? (
+              /* ── Render blocks: teks + gambar sesuai urutan artikel asli ── */
+              <div className="flex flex-col gap-5">
+                {article.blocks.map((block, i) => {
+                  if (block.type === 'image' && block.src) {
+                    const heroName = article.image?.split('/').pop()?.split('?')[0] || '';
+                    const blockName = block.src?.split('/').pop()?.split('?')[0] || '';
+                    if (heroName && blockName && heroName === blockName) return null;
+                    return (
+                      <figure key={i} className="my-2">
+                        <img src={proxyImg(block.src)} alt=""
+                          className="rounded-2xl w-full object-cover" style={{ maxHeight: 480 }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      </figure>
+                    );
+                  }
+                  if (block.type === 'text' && block.text) {
+                    const isHeading = block.tag && /^h[1-6]$/.test(block.tag);
+                    const temp = document.createElement('div');
+                    temp.innerHTML = block.text;
+                    temp.querySelectorAll('script,style,[onclick],[onload]').forEach(el => el.remove());
+                    const cleanHtml = temp.innerHTML;
+                    return isHeading ? (
+                      <h2 key={i} style={{ fontSize: 18, fontWeight: 800, color: '#1a1a1a', lineHeight: '1.4', marginTop: 8 }}>
+                        {block.text.replace(/<[^>]+>/g, '')}
+                      </h2>
+                    ) : (
+                      <div key={i}
+                        style={{ fontSize: 15, color: '#333', lineHeight: '1.85', textAlign: 'justify' as const }}
+                        dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+                    );
+                  }
+                  return null;
+                })}
+              </div>
             ) : article.content?.length > 0 ? (
+              /* ── Fallback: render content[] string biasa ── */
               <div className="flex flex-col gap-5">
                 {article.content.map((p, i) => (
-                  <p key={i} style={{ fontSize: 15, color: "#333", lineHeight: "1.8", textAlign: "justify" as const }}>{p}</p>
+                  <p key={i} style={{ fontSize: 15, color: "#333", lineHeight: "1.85", textAlign: "justify" as const }}>{p}</p>
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-3 py-12">
-                <p style={{ fontSize: 36 }}>📄</p>
-                <p style={{ fontSize: 14, color: "#888", textAlign: "center" }}>Konten tidak tersedia.</p>
-                {originalUrl && (
-                  <a href={originalUrl} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-full"
-                    style={{ background: "#ff742f", color: "white", fontSize: 13, fontWeight: 600 }}>
-                    <ExternalLink size={14} /> Buka Artikel Asli
-                  </a>
+              /* ── Last resort: tampilkan summary + tombol buka asli ── */
+              <div className="flex flex-col gap-4">
+                {article.summary && article.summary !== article.title && (
+                  <p style={{ fontSize: 15, color: "#555", lineHeight: "1.85", textAlign: "justify" as const }}>
+                    {article.summary}
+                  </p>
                 )}
+                <div className="flex flex-col items-center gap-3 py-6 rounded-2xl" style={{ background: "#f9f9f9" }}>
+                  <p style={{ fontSize: 13, color: "#888", textAlign: "center" }}>
+                    Konten penuh tidak dapat dimuat secara otomatis.
+                  </p>
+                  {originalUrl && (
+                    <a href={originalUrl} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-full"
+                      style={{ background: "#ff742f", color: "white", fontSize: 13, fontWeight: 600 }}>
+                      <ExternalLink size={14} /> Buka Artikel Asli
+                    </a>
+                  )}
+                </div>
               </div>
             )}
 
