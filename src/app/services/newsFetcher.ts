@@ -648,15 +648,20 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Article[]> {
   const feedUrl = source.feedUrl ?? source.url;
 
-  // rss2json: decode konten lebih baik untuk banyak feed (terutama Feedburner)
-  if (!feedUrl.includes("news.google.com")) {
-    const j = await fetchRss2Json(feedUrl);
-    if (j) return articlesFromR2J(source, j, limit);
-  }
+  try {
+    // Panggil rss2json dan Proxy internal secara paralel
+    const rawData = await Promise.any([
+      fetchRss2Json(feedUrl),
+      fetchWithFallback(feedUrl).then(xml => ({ type: 'xml', data: xml }))
+    ]);
 
-  // Fallback: parse XML langsung
-  const raw = await fetchWithFallback(feedUrl);
-  return parseXmlFeed(source, raw, limit);
+    if (rawData && rawData.type === 'xml') {
+      return parseXmlFeed(source, rawData.data, limit);
+    }
+    return articlesFromR2J(source, rawData, limit);
+  } catch (err) {
+    throw new Error("Gagal mengambil feed dari semua jalur.");
+  }
 }
 
 async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<Article[]> {

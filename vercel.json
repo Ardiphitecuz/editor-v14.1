@@ -3,14 +3,13 @@
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "Permissions-Policy",
-          "value": "browsing-topics=()"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=300, s-maxage=600" },
+        { "key": "Permissions-Policy", "value": "browsing-topics=()" }
       ]
     }
   ],
   "rewrites": [
+    { "source": "/api/rss", "destination": "/server-rss.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
