@@ -481,4 +481,11 @@ app.get('/api/img', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Jalankan server hanya di lokal (bukan di Vercel/serverless)
+// Di Vercel, file api/index.js yang meng-import dan meng-export app ini
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+export default app;

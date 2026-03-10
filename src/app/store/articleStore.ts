@@ -4,8 +4,8 @@ import { ARTICLES } from "../data/articles";
 type Listener = () => void;
 
 const SAVED_KEY = "otaku_saved_ids";
-const CACHE_KEY = "otaku_articles_cache_v8";  // v8 = yaraon fetch fix + media thumbnail + CJK scoring
-const CACHE_TTL = 1000 * 60 * 30; // 30 menit
+const CACHE_KEY = "otaku_articles_cache_v9";  // v9 = Vercel serverless + HTTPS yaraon + server proxy first
+const CACHE_TTL = 1000 * 60 * 120; // 2 jam — survive tab close, langsung tampil saat buka ulang
 
 interface ArticleCache {
   articles: Article[];
@@ -14,10 +14,10 @@ interface ArticleCache {
 
 function loadCachedArticles(): Article[] {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
+    // Coba localStorage dulu (survive tab close), fallback ke sessionStorage
+    const raw = localStorage.getItem(CACHE_KEY) ?? sessionStorage.getItem(CACHE_KEY);
     if (!raw) return ARTICLES;
     const cache: ArticleCache = JSON.parse(raw);
-    // Pakai cache selama masih fresh (30 menit)
     if (Date.now() - cache.savedAt < CACHE_TTL && cache.articles.length > 0) {
       return cache.articles;
     }
@@ -28,8 +28,16 @@ function loadCachedArticles(): Article[] {
 function persistArticles(articles: Article[]) {
   try {
     const cache: ArticleCache = { articles, savedAt: Date.now() };
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-  } catch { /* storage full — skip */ }
+    const data = JSON.stringify(cache);
+    // Simpan ke localStorage agar survive tab close / revisit
+    localStorage.setItem(CACHE_KEY, data);
+  } catch {
+    // localStorage penuh — fallback ke sessionStorage
+    try {
+      const cache: ArticleCache = { articles, savedAt: Date.now() };
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    } catch { /* skip */ }
+  }
 }
 
 class ArticleStore {

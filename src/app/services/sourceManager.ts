@@ -27,8 +27,8 @@ const DEFAULT_SOURCES: NewsSource[] = [
   {
     id: "yaraon",
     name: "やらおん！",
-    url: "http://yaraon-blog.com/",
-    feedUrl: "http://yaraon-blog.com/feed",
+    url: "https://yaraon-blog.com/",
+    feedUrl: "https://yaraon-blog.com/feed",
     type: "rss",
     language: "ja",
     enabled: true,
@@ -50,9 +50,14 @@ export function getSources(): NewsSource[] {
     }
     // ── Migrate: patch field baru yang mungkin belum ada di data lama ──
     const migrated = parsed.map(s => {
-      // Yaraon: reset ke false — RSS hanya cover image, perlu fetch halaman penuh
+      // Yaraon: reset URL ke HTTPS + rssContentSufficient ke false
       if (s.id === "yaraon") {
-        return { ...s, rssContentSufficient: false };
+        return {
+          ...s,
+          url: "https://yaraon-blog.com/",
+          feedUrl: "https://yaraon-blog.com/feed",
+          rssContentSufficient: false,
+        };
       }
       // Sumber RSS lain: default false — selalu fetch konten lengkap
       if (s.type === "rss" && s.rssContentSufficient === undefined) {

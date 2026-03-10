@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
-import { ARTICLES, CATEGORIES, type Article } from "../data/articles";
+import { CATEGORIES, type Article } from "../data/articles";
 import { useNews } from "../hooks/useNews";
 import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from "lucide-react";
 
@@ -200,7 +200,12 @@ export function HomePage() {
   const translatedIdsRef = useRef(new Set<string>());
 
   const { articles: fetchedArticles, loading, progressMsg, progressDone, progressTotal, errors, fromCache, refresh } = useNews();
-  const allArticles = fetchedArticles.length > 0 ? fetchedArticles : ARTICLES;
+  const allArticles = fetchedArticles;
+  const hasArticles = allArticles.length > 0;
+  // Skeleton hanya saat pertama kali buka & belum ada artikel sama sekali
+  const showSkeleton = loading && !hasArticles;
+  // Refresh bar tipis saat update di background (sudah ada artikel)
+  const showRefreshBar = loading && hasArticles;
   const hasErrors = Object.keys(errors).length > 0;
 
   useEffect(() => {
@@ -270,6 +275,18 @@ export function HomePage() {
 
       {/* Body */}
       <div className="flex-1 pb-24 lg:pb-6">
+
+        {/* Refresh bar — tipis di atas, muncul saat ada artikel tapi sedang update */}
+        {showRefreshBar && (
+          <div className="h-0.5 w-full bg-neutral-100 overflow-hidden">
+            <div
+              className="h-full bg-[#ff742f] transition-all duration-500"
+              style={{ width: progressTotal > 0 ? `${Math.round((progressDone / progressTotal) * 100)}%` : "30%",
+                animation: progressTotal === 0 ? "pulse 1s ease-in-out infinite" : undefined }}
+            />
+          </div>
+        )}
+
         {!loading && hasErrors && (
           <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2">
             <WifiOff size={14} className="text-amber-500 shrink-0" />
@@ -277,7 +294,8 @@ export function HomePage() {
           </div>
         )}
 
-        {loading && (
+        {/* Loading skeleton — hanya jika benar-benar kosong (kunjungan pertama) */}
+        {showSkeleton && (
           <div className="px-4 pt-5 flex flex-col gap-4">
             {progressTotal > 0 && (
               <div className="flex flex-col gap-2">
@@ -303,7 +321,8 @@ export function HomePage() {
           </div>
         )}
 
-        {!loading && (
+        {/* Konten artikel — tampil segera jika ada, bahkan saat refresh berlangsung */}
+        {!showSkeleton && (
           activeCategory === "Semua" && !searchQuery ? (
             <>
               {/* ── DESKTOP two-column layout ── */}

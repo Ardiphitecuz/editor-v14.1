@@ -478,29 +478,13 @@ function buildFromRssContent(
 
 async function fetchRss2Json(feedUrl: string): Promise<any> {
   try {
-    // 1. Coba pakai rss2json dulu
     const res = await fetch(`${RSS2JSON}${encodeURIComponent(feedUrl)}&count=20`, {
       signal: AbortSignal.timeout(15000),
     });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === "ok") return data;
-    }
-    // 2. Jika gagal (error 422 atau lainnya), fallback ke proxy internal
-    console.warn("rss2json gagal, mencoba fallback ke proxy internal...");
-    const proxyRes = await fetch(`${SERVER_RSS_PROXY}${encodeURIComponent(feedUrl)}`, {
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!proxyRes.ok) return null;
-    const rawFeed = await proxyRes.json();
-    // 3. Palsukan format agar mirip rss2json
-    return {
-      status: "ok",
-      items: parseXmlToR2JFormat(rawFeed)
-    };
-  } catch (err) {
-    return null;
-  }
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.status === "ok" && data.items?.length ? data : null;
+  } catch { return null; }
 }
 
 function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[] {
@@ -648,20 +632,28 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Article[]> {
   const feedUrl = source.feedUrl ?? source.url;
 
-  try {
-    // Panggil rss2json dan Proxy internal secara paralel
-    const rawData = await Promise.any([
-      fetchRss2Json(feedUrl),
-      fetchWithFallback(feedUrl).then(xml => ({ type: 'xml', data: xml }))
-    ]);
-
-    if (rawData && rawData.type === 'xml') {
-      return parseXmlFeed(source, rawData.data, limit);
-    }
-    return articlesFromR2J(source, rawData, limit);
-  } catch (err) {
-    throw new Error("Gagal mengambil feed dari semua jalur.");
+  // ① rss2json DULU — memberikan thumbnail, content terformat, dan metadata terlengkap
+  // Skip untuk Google News (redirect chain tidak di-resolve dengan benar oleh rss2json)
+  if (!feedUrl.includes("news.google.com")) {
+    const j = await fetchRss2Json(feedUrl);
+    if (j) return articlesFromR2J(source, j, limit);
   }
+
+  // ② Server proxy /api/rss — fallback jika rss2json gagal (rate limit, HTTP feed, dll)
+  // Di Vercel: serverless function. Di lokal: Express server.
+  try {
+    const res = await fetch(SERVER_RSS_PROXY + encodeURIComponent(feedUrl), {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text.length > 200) return parseXmlFeed(source, text, limit);
+    }
+  } catch { /* lanjut ke public proxy */ }
+
+  // ③ Public CORS proxy — last resort
+  const raw = await fetchWithFallback(feedUrl);
+  return parseXmlFeed(source, raw, limit);
 }
 
 async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<Article[]> {

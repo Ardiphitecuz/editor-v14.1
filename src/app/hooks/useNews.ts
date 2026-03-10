@@ -18,7 +18,8 @@ export interface UseNewsState {
 
 export function useNews(): UseNewsState {
   const [articles, setArticles] = useState<Article[]>(articleStore.get());
-  const [loading, setLoading] = useState(true);
+  // Loading skeleton hanya jika cache benar-benar kosong (kunjungan pertama)
+  const [loading, setLoading] = useState(() => articleStore.get().length === 0);
   const [progressMsg, setProgressMsg] = useState("Memuat berita...");
   const [progressDone, setProgressDone] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
@@ -28,7 +29,11 @@ export function useNews(): UseNewsState {
 
   const load = useCallback(async (forceRefresh = false) => {
     if (!mountedRef.current) return;
-    setLoading(true);
+    const hasCache = articleStore.get().length > 0;
+    // Hanya tampilkan loading skeleton jika tidak ada artikel sama sekali
+    if (!hasCache || forceRefresh) {
+      setLoading(true);
+    }
     setProgressMsg("Memuat berita...");
     setProgressDone(0);
     setProgressTotal(0);
@@ -52,7 +57,7 @@ export function useNews(): UseNewsState {
       setErrors(result.errors ?? {});
       setFromCache(result.fromCache ?? false);
 
-      // Background prefetch content for first 10 articles
+      // Background prefetch content for first 20 articles
       if (result.articles.length > 0) {
         setTimeout(() => prefetchArticleContents(result.articles.slice(0, 20), 10), 500);
       }
