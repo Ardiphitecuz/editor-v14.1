@@ -478,13 +478,29 @@ function buildFromRssContent(
 
 async function fetchRss2Json(feedUrl: string): Promise<any> {
   try {
+    // 1. Coba pakai rss2json dulu
     const res = await fetch(`${RSS2JSON}${encodeURIComponent(feedUrl)}&count=20`, {
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.status === "ok" && data.items?.length ? data : null;
-  } catch { return null; }
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "ok") return data;
+    }
+    // 2. Jika gagal (error 422 atau lainnya), fallback ke proxy internal
+    console.warn("rss2json gagal, mencoba fallback ke proxy internal...");
+    const proxyRes = await fetch(`${SERVER_RSS_PROXY}${encodeURIComponent(feedUrl)}`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!proxyRes.ok) return null;
+    const rawFeed = await proxyRes.json();
+    // 3. Palsukan format agar mirip rss2json
+    return {
+      status: "ok",
+      items: parseXmlToR2JFormat(rawFeed)
+    };
+  } catch (err) {
+    return null;
+  }
 }
 
 function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[] {
