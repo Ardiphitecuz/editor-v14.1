@@ -18,7 +18,7 @@ export const router = createBrowserRouter([
       { path: "artikel/:id", Component: ArticlePage },
       { path: "jelajahi", Component: ExplorePage },
       { path: "simpan", Component: SavedPage },
-      { path: "subscriptions", Component: Subscriptionspage },
+      { path: "subscriptions", Component: SubscriptionsPage },
       { path: "editor", Component: EditorPage },
       { path: "pengaturan", Component: SettingsPage },
       { path: "fetchrss", Component: FetchRSSPage },
