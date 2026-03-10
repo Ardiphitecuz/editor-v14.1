@@ -27,3 +27,8 @@ export interface Article {
 // Artikel asli selalu di-fetch dari RSS sources via newsFetcher.ts
 // Array ini sengaja kosong — tidak ada dummy/placeholder
 export const ARTICLES: Article[] = [];
+
+export const CATEGORIES = [
+  "Semua", "Hot Topic", "Breaking", "Trending",
+  "Discuss", "Review", "Analisis",
+];
