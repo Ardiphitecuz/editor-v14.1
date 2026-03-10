@@ -16,18 +16,26 @@ async function gtranslate(text: string): Promise<string> {
 }
 
 function needsTranslation(text: string): boolean {
-  return /[\u3000-\u9FFF\uF900-\uFAFF]/.test(text);
+  // Translate ALL articles - Google Translate with sl=auto will handle any language
+  // and return the original if it's already Indonesian
+  if (!text || text.length < 3) return false;
+  return true;
 }
 
 async function translateTitles(articles: Article[]): Promise<Record<string, string>> {
   const toTranslate = articles.filter(a => needsTranslation(a.title));
   if (toTranslate.length === 0) return {};
-  const results = await Promise.allSettled(toTranslate.map(a => gtranslate(a.title)));
+  // Batch in groups of 10 to avoid rate limiting
+  const BATCH = 10;
   const map: Record<string, string> = {};
-  results.forEach((r, i) => {
-    if (r.status === "fulfilled" && r.value !== toTranslate[i].title)
-      map[toTranslate[i].id] = r.value;
-  });
+  for (let i = 0; i < toTranslate.length; i += BATCH) {
+    const batch = toTranslate.slice(i, i + BATCH);
+    const results = await Promise.allSettled(batch.map(a => gtranslate(a.title)));
+    results.forEach((r, j) => {
+      if (r.status === "fulfilled" && r.value && r.value !== batch[j].title)
+        map[batch[j].id] = r.value;
+    });
+  }
   return map;
 }
 
@@ -47,32 +55,32 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
-// Desktop hero — large image with overlay text
+// Desktop hero — image and text separated (Substack style)
 function HeroCard({ article, onClick, displayTitle }: { article: Article; onClick: () => void; displayTitle?: string }) {
-  const placeholderImg = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80";
+  const placeholderImg = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1000&q=80";
   return (
-    <button onClick={onClick}
-      className="relative w-full rounded-2xl overflow-hidden text-left active:scale-[0.99] transition-transform"
-      style={{ height: 360 }}>
-      <img 
-        src={article.image || placeholderImg} 
-        alt={article.title} 
-        className="absolute inset-0 w-full h-full object-cover" 
-        onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
-      />
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 25%, rgba(0,0,0,0.85) 100%)" }} />
-      <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#ff742f] text-white rounded-full px-2.5 py-1" style={{ fontSize: 11, fontWeight: 700 }}>
-        <Flame size={11} /> HOT
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 p-5">
-        <CategoryBadge category={article.category} />
-        <p className="text-white mt-2" style={{ fontSize: 20, fontWeight: 800, lineHeight: "1.3", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {displayTitle ?? article.title}
-        </p>
-        <div className="flex items-center gap-2 mt-2">
-          <Clock size={11} className="text-white/60" />
-          <span className="text-white/60" style={{ fontSize: 12 }}>{article.readTime} mnt · {article.publishedAt}</span>
+    <button onClick={onClick} className="w-full text-left active:opacity-90 transition-opacity cursor-pointer">
+      <div className="flex gap-6 items-start">
+        <div className="flex-1 order-2">
+          <CategoryBadge category={article.category} />
+          <p className="mt-3" style={{ fontSize: 24, fontWeight: 800, lineHeight: "1.25", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {displayTitle ?? article.title}
+          </p>
+          <p className="mt-3 text-neutral-600" style={{ fontSize: 15, lineHeight: "1.5", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {article.summary}
+          </p>
+          <div className="flex items-center gap-2 mt-3">
+            <Clock size={13} className="text-neutral-400" />
+            <span className="text-neutral-400" style={{ fontSize: 13 }}>{article.readTime} mnt · {article.publishedAt}</span>
+          </div>
         </div>
+        <img 
+          src={article.image || placeholderImg} 
+          alt={article.title}
+          className="rounded-2xl object-cover shrink-0 order-1" 
+          style={{ width: 280, height: 180 }}
+          onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
+        />
       </div>
     </button>
   );
@@ -83,79 +91,79 @@ function FeaturedCard({ article, onClick, displayTitle }: { article: Article; on
   const placeholderImg = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&q=80";
   return (
     <button onClick={onClick}
-      className="relative w-full rounded-2xl overflow-hidden text-left shadow-lg active:scale-[0.98] transition-transform"
-      style={{ height: 220 }}>
+      className="w-full text-left rounded-2xl overflow-hidden bg-white shadow-sm active:scale-[0.98] transition-transform">
       <img 
         src={article.image || placeholderImg} 
         alt={article.title} 
-        className="absolute inset-0 w-full h-full object-cover"
+        className="w-full object-cover"
+        style={{ height: 200 }}
         onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
       />
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.75) 100%)" }} />
-      <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#ff742f] text-white rounded-full px-2.5 py-1" style={{ fontSize: 11, fontWeight: 700 }}>
-        <Flame size={11} /> HOT
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 p-4">
+      <div className="p-4">
         <CategoryBadge category={article.category} />
-        <p className="text-white mt-1.5" style={{ fontSize: 16, fontWeight: 700, lineHeight: "1.35", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+        <p className="mt-2.5" style={{ fontSize: 16, fontWeight: 700, lineHeight: "1.35", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
           {displayTitle ?? article.title}
         </p>
-        <div className="flex items-center gap-2 mt-2">
-          <Clock size={11} className="text-white/70" />
-          <span className="text-white/70" style={{ fontSize: 11 }}>{article.readTime} mnt · {article.publishedAt}</span>
+        <p className="mt-2 text-neutral-500" style={{ fontSize: 13, lineHeight: "1.4", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {article.summary}
+        </p>
+        <div className="flex items-center gap-1.5 mt-2">
+          <Clock size={12} className="text-neutral-400" />
+          <span className="text-neutral-400" style={{ fontSize: 12 }}>{article.readTime} mnt · {article.publishedAt}</span>
         </div>
       </div>
     </button>
   );
 }
 
-// Right sidebar item — thumbnail + title + time
-function SidebarItem({ article, onClick, displayTitle }: { article: Article; onClick: () => void; displayTitle?: string }) {
-  const placeholderImg = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=200&q=60";
+// Right sidebar item — updated for numbered list
+function SidebarItem({ articleIndex, article, onClick, displayTitle }: { articleIndex: number; article: Article; onClick: () => void; displayTitle?: string }) {
   return (
     <button onClick={onClick}
-      className="w-full flex gap-3 items-start text-left py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors rounded-lg px-1">
-      <img 
-        src={article.image || placeholderImg} 
-        alt={article.title}
-        className="rounded-xl object-cover shrink-0" 
-        style={{ width: 68, height: 68 }}
-        onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
-      />
-      <div className="flex-1 min-w-0">
-        <CategoryBadge category={article.category} />
-        <p className="mt-1" style={{ fontSize: 12, fontWeight: 700, lineHeight: "1.35", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {displayTitle ?? article.title}
-        </p>
-        <p className="mt-1" style={{ fontSize: 11, color: "#999" }}>{article.publishedAt}</p>
+      className="w-full text-left hover:bg-neutral-50 p-2 rounded-lg transition-colors group">
+      <div className="flex items-start gap-3">
+        <span className="text-neutral-300 font-bold shrink-0" style={{ fontSize: 18, lineHeight: 1.2 }}>
+          {articleIndex}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="group-hover:text-[#ff742f] transition-colors" style={{ fontSize: 13, fontWeight: 600, lineHeight: "1.3", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {displayTitle ?? article.title}
+          </p>
+          <p className="mt-1 text-neutral-400" style={{ fontSize: 11 }}>{article.publishedAt}</p>
+        </div>
       </div>
     </button>
   );
 }
 
-// Standard list card
+// Standard list card - Substack style (left: text, right: thumbnail)
 function ArticleCard({ article, onClick, displayTitle }: { article: Article; onClick: () => void; displayTitle?: string }) {
   const placeholderImg = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=300&q=60";
   return (
     <button onClick={onClick}
-      className="w-full flex gap-3 items-start text-left py-4 border-b border-neutral-100 active:bg-neutral-50 transition-colors">
+      className="w-full flex gap-4 items-start text-left py-4 border-b border-neutral-100 active:bg-neutral-50 transition-colors">
+      <div className="flex-1 min-w-0">
+        <p className="inline-block" style={{ fontSize: 12, fontWeight: 700, color: "#ff742f", letterSpacing: "0.04em" }}>
+          {article.source}
+        </p>
+        <p className="mt-1" style={{ fontSize: 15, fontWeight: 700, lineHeight: "1.35", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {displayTitle ?? article.title}
+        </p>
+        <p className="mt-1.5 text-neutral-500" style={{ fontSize: 13, lineHeight: "1.4", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {article.summary}
+        </p>
+        <div className="flex items-center gap-1.5 mt-2">
+          <Clock size={12} className="text-neutral-400" />
+          <span className="text-neutral-400" style={{ fontSize: 12 }}>{article.readTime} mnt · {article.publishedAt}</span>
+        </div>
+      </div>
       <img 
         src={article.image || placeholderImg} 
         alt={article.title}
-        className="rounded-xl object-cover shrink-0" 
-        style={{ width: 80, height: 80 }}
+        className="rounded-lg object-cover shrink-0" 
+        style={{ width: 100, height: 80 }}
         onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
       />
-      <div className="flex-1 min-w-0">
-        <CategoryBadge category={article.category} />
-        <p className="mt-1" style={{ fontSize: 14, fontWeight: 700, lineHeight: "1.35", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-          {displayTitle ?? article.title}
-        </p>
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <Clock size={10} className="text-neutral-400" />
-          <span className="text-neutral-400" style={{ fontSize: 11 }}>{article.readTime} mnt · {article.publishedAt}</span>
-        </div>
-      </div>
     </button>
   );
 }
@@ -197,13 +205,14 @@ export function HomePage() {
 
   useEffect(() => {
     if (allArticles.length === 0) return;
-    const untranslated = allArticles.filter(a => needsTranslation(a.title) && !translatedIdsRef.current.has(a.id));
+    const untranslated = allArticles.filter(a => !translatedIdsRef.current.has(a.id));
     if (untranslated.length === 0) return;
+    // Mark all as queued immediately to prevent duplicate requests
     untranslated.forEach(a => translatedIdsRef.current.add(a.id));
     translateTitles(untranslated).then(map => {
       if (Object.keys(map).length > 0) setTranslatedTitles(prev => ({ ...prev, ...map }));
     });
-  }, [allArticles.length]);
+  }, [allArticles]);
 
   const getTitle = (a: Article) => translatedTitles[a.id] ?? a.title;
 
@@ -227,10 +236,10 @@ export function HomePage() {
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-neutral-400" style={{ fontSize: 12 }}>
-                {loading ? progressMsg : hasErrors ? "Beberapa sumber gagal dimuat" : fromCache ? "Dari cache · perbarui untuk konten baru" : `${allArticles.length} artikel · baru diperbarui`}
+              <p className="text-neutral-400" style={{ fontSize: 13 }}>
+                Selamat pagi ☕
               </p>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.1 }}>Discuss</h1>
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.1 }}>Menu Hari Ini</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {!loading && (hasErrors ? <WifiOff size={14} className="text-neutral-400" /> : <Wifi size={14} className="text-[#ff742f]" />)}
@@ -242,9 +251,9 @@ export function HomePage() {
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-neutral-100 rounded-xl px-3 py-2.5">
+          <div className="flex items-center gap-2 bg-neutral-100 rounded-lg px-3 py-2.5">
             <Search size={15} className="text-neutral-400 shrink-0" />
-            <input type="text" placeholder="Cari artikel..." value={searchQuery}
+            <input type="text" placeholder="Cari konten..." value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="flex-1 bg-transparent text-neutral-800 placeholder-neutral-400 focus:outline-none"
               style={{ fontSize: 14 }} />
@@ -323,14 +332,30 @@ export function HomePage() {
                 </div>
 
                 {/* Right column: sticky sidebar */}
-                <div className="shrink-0 pt-5 pr-4" style={{ width: 300 }}>
+                <div className="shrink-0 pt-5 pr-4" style={{ width: 280 }}>
                   <div className="sticky top-[120px]">
-                    <h2 className="mb-3 flex items-center gap-1.5" style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a" }}>
-                      🔥 Terbaru
+                    <h2 className="mb-4" style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a" }}>
+                      Sedang Ramai di Cafe
                     </h2>
-                    <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm px-3 py-1">
-                      {sidebarArticles.map(a => (
-                        <SidebarItem key={a.id} article={a} onClick={() => goToArticle(a.id)} displayTitle={getTitle(a)} />
+                    <div className="space-y-3">
+                      {sidebarArticles.map((a, idx) => (
+                        <button
+                          key={a.id}
+                          onClick={() => goToArticle(a.id)}
+                          className="w-full text-left hover:bg-neutral-50 p-2 rounded-lg transition-colors group"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-neutral-300 font-bold shrink-0" style={{ fontSize: 18, lineHeight: 1.2 }}>
+                              {idx + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="group-hover:text-[#ff742f] transition-colors" style={{ fontSize: 13, fontWeight: 600, lineHeight: "1.3", color: "#1a1a1a", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                                {getTitle(a)}
+                              </p>
+                              <p className="mt-1 text-neutral-400" style={{ fontSize: 11 }}>{a.publishedAt}</p>
+                            </div>
+                          </div>
+                        </button>
                       ))}
                     </div>
                   </div>

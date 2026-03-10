@@ -5,6 +5,9 @@ import { ArticlePage } from "./components/ArticlePage";
 import { EditorPage } from "./components/EditorPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { FetchRSSPage } from "./components/FetchRSSPage";
+import { ExplorePage } from "./components/ExplorePage";
+import { SavedPage } from "./components/SavedPage";
+import { SubscriptionsPage } from "./components/SubscriptionsPage";
 
 export const router = createBrowserRouter([
   {
@@ -13,6 +16,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: HomePage },
       { path: "artikel/:id", Component: ArticlePage },
+      { path: "jelajahi", Component: ExplorePage },
+      { path: "simpan", Component: SavedPage },
+      { path: "subscriptions", Component: SubscriptionsPage },
       { path: "editor", Component: EditorPage },
       { path: "pengaturan", Component: SettingsPage },
       { path: "fetchrss", Component: FetchRSSPage },

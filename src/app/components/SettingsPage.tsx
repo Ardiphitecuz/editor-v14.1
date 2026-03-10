@@ -541,20 +541,20 @@ export function SettingsPage() {
   const enabledCount = sources.filter((s) => s.enabled).length;
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "#ffffff" }}>
-      <div className="sticky top-0 z-30 bg-white border-b border-gray-200">
-        <div className="px-4 pt-4 pb-3 max-w-6xl mx-auto w-full flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 active:opacity-70 shrink-0">
-            <ArrowLeft size={18} className="text-gray-600" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#1a1a1a" }}>Pengaturan</h1>
-            <p className="text-gray-500" style={{ fontSize: 12 }}>{enabledCount + " sumber aktif"}</p>
+    <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
+      <div className="sticky top-0 z-30 border-b" style={{ background: "rgba(252,249,245,0.97)", backdropFilter: "blur(16px)", borderColor: "#ede8e2" }}>
+        <div className="px-4 pt-4 pb-4">
+          <div className="mb-3">
+            <p style={{ fontSize: 11, fontWeight: 700, color: "#ff742f", letterSpacing: "0.08em" }}>☕ PENGATURAN</p>
+            <h1 style={{ fontSize: 26, fontWeight: 900, color: "#1a1a1a", lineHeight: 1.1, letterSpacing: "-0.01em" }}>Daftar Barista</h1>
           </div>
+          <p className="text-neutral-500" style={{ fontSize: 12 }}>
+            {enabledCount} sumber aktif
+          </p>
         </div>
       </div>
 
-      <div className="flex-1 px-4 pt-5 pb-32 max-w-6xl mx-auto w-full flex flex-col gap-5">
+      <div className="flex-1 px-4 pt-5 pb-32 max-w-4xl mx-auto w-full flex flex-col gap-6">
         <AIConfigSection />
 
         <div>

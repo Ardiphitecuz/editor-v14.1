@@ -2,12 +2,33 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   ArrowLeft, Clock, Share2, Bookmark, Sparkles,
-  RefreshCw, ExternalLink, Edit3, Languages,
+  RefreshCw, ExternalLink, Edit3,
 } from "lucide-react";
 import { articleStore } from "../store/articleStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
 import { fetchArticleContent } from "../services/newsFetcher";
 import type { Article } from "../data/articles";
+
+// ── Google Translate helper ──────────────────────────────────────────────────
+async function gtranslate(text: string): Promise<string> {
+  try {
+    const res = await fetch(
+      "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=id&dt=t&q=" + encodeURIComponent(text)
+    );
+    if (!res.ok) return text;
+    const data = await res.json();
+    return (data[0] as [string, string][]).map(s => s[0]).join("") || text;
+  } catch { return text; }
+}
+
+async function translateArticleContent(article: Article): Promise<Article> {
+  const [title, summary, ...contentParts] = await Promise.all([
+    gtranslate(article.title),
+    gtranslate(article.summary ?? ""),
+    ...( article.content ?? []).map(p => gtranslate(p)),
+  ]);
+  return { ...article, title, summary, content: contentParts };
+}
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Hot Topic": "#ff742f", "Breaking": "#e53e3e", "Trending": "#805ad5",
@@ -15,25 +36,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Review": "#c05621", "Exclusive": "#1a202c",
 };
 
-async function translateText(text: string, targetLang = "id"): Promise<string> {
-  try {
-    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl="
-      + targetLang + "&dt=t&q=" + encodeURIComponent(text);
-    const res = await fetch(url);
-    if (!res.ok) return text;
-    const data = await res.json();
-    return (data[0] as [string, string][]).map(seg => seg[0]).join("") || text;
-  } catch { return text; }
-}
-
-async function translateArticle(article: Article): Promise<Article> {
-  const [title, summary, ...contentParts] = await Promise.all([
-    translateText(article.title),
-    translateText(article.summary),
-    ...article.content.map(p => translateText(p)),
-  ]);
-  return { ...article, title, summary, content: contentParts };
-}
 
 type RawArticle = Article & { originalUrl?: string };
 
@@ -67,21 +69,26 @@ export function ArticlePage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(() => articleStore.isSaved(id ?? ""));
   const [isTranslated, setIsTranslated] = useState(false);
   const [translateLoading, setTranslateLoading] = useState(false);
+  const [translatedArticle, setTranslatedArticle] = useState<Article | null>(null);
 
   const fetchedRef = useRef<string | null>(null);
-  const translatedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Scroll to top whenever article changes
+    window.scrollTo({ top: 0, behavior: "instant" });
     setDisplayArticle(rawArticle ?? null);
     setIsAIMode(false); setAiError(null);
-    setContentLoading(false); setIsTranslated(false); setTranslateLoading(false);
+    setContentLoading(false);
+    setIsTranslated(false); setTranslatedArticle(null);
   }, [id]);
 
   useEffect(() => {
     if (!rawArticle || fetchedRef.current === rawArticle.id) return;
-    if (rawArticle.content?.length > 0) { fetchedRef.current = rawArticle.id; return; }
+    // Only skip fetch if we have substantial content (>3 paragraphs)
+    if ((rawArticle.content?.length ?? 0) >= 4) { fetchedRef.current = rawArticle.id; return; }
     if (!originalUrl) return;
     fetchedRef.current = rawArticle.id;
     setContentLoading(true);
@@ -94,21 +101,9 @@ export function ArticlePage() {
         readTime: Math.max(1, Math.ceil(result.content.join(" ").split(/\s+/).length / 200)),
       };
       setDisplayArticle(updated);
-      articleStore.updateById(rawArticle.id, updated);
+      articleStore.updateById(rawArticle!.id, updated);
     }).finally(() => setContentLoading(false));
   }, [rawArticle?.id]);
-
-  useEffect(() => {
-    if (!rawArticle || translatedRef.current === rawArticle.id || isAIMode) return;
-    const art = displayArticle ?? rawArticle;
-    if (!art.content?.length) return;
-    const looksJapanese = /[\u3000-\u9FFF]/.test(art.title + art.content.join(""));
-    if (!looksJapanese) return;
-    translatedRef.current = rawArticle.id;
-    setTranslateLoading(true);
-    translateArticle(art).then(t => { setDisplayArticle(t); setIsTranslated(true); })
-      .finally(() => setTranslateLoading(false));
-  }, [rawArticle?.id, displayArticle?.content?.length]);
 
   if (!rawArticle) {
     return (
@@ -128,20 +123,51 @@ export function ArticlePage() {
   const hasApiKey = !!aiConfig.apiKey;
 
   async function handleAIRewrite() {
-    if (!hasApiKey) { setAiError("API key belum diset. Buka Pengaturan."); return; }
+    if (!hasApiKey || !rawArticle) { setAiError("API key belum diset. Buka Pengaturan."); return; }
     const cached = getCachedRewrite(rawArticle.id);
     if (cached && isAIMode) {
-      setDisplayArticle(isTranslated ? await translateArticle(rawArticle) : rawArticle);
+      setDisplayArticle(rawArticle!);
       setIsAIMode(false); return;
     }
     if (cached && !isAIMode) { setDisplayArticle(cached); setIsAIMode(true); return; }
     setAiLoading(true); setAiError(null);
     try {
-      const rewritten = await rewriteArticleOnDemand(displayArticle ?? rawArticle);
+      const rewritten = await rewriteArticleOnDemand((displayArticle ?? rawArticle)!);
       setDisplayArticle(rewritten); setIsAIMode(true);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Gagal menulis ulang");
     } finally { setAiLoading(false); }
+  }
+
+  function handleSave() {
+    if (!rawArticle) return;
+    const saved = articleStore.toggleSave(rawArticle.id);
+    setIsSaved(saved);
+  }
+
+  async function handleTranslate() {
+    if (!rawArticle) return;
+    if (isTranslated) {
+      // Toggle back to original
+      setDisplayArticle(rawArticle);
+      setIsTranslated(false);
+      return;
+    }
+    if (translatedArticle) {
+      setDisplayArticle(translatedArticle);
+      setIsTranslated(true);
+      return;
+    }
+    setTranslateLoading(true);
+    try {
+      const src = displayArticle ?? rawArticle;
+      const translated = await translateArticleContent(src);
+      setTranslatedArticle(translated);
+      setDisplayArticle(translated);
+      setIsTranslated(true);
+    } finally {
+      setTranslateLoading(false);
+    }
   }
 
   const related = articleStore.get()
@@ -150,35 +176,64 @@ export function ArticlePage() {
 
   return (
     <div className="min-h-screen bg-white">
+
+      {/* ── Sticky floating top bar ─────────────────────────────────────── */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4"
+        style={{ height: 60, pointerEvents: "none" }}
+      >
+        {/* Back */}
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 px-3 py-2 rounded-full text-white transition-colors active:opacity-70"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)", pointerEvents: "auto" }}
+        >
+          <ArrowLeft size={16} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Kembali</span>
+        </button>
+
+        {/* Right action buttons */}
+        <div className="flex gap-2" style={{ pointerEvents: "auto" }}>
+          {originalUrl && (
+            <a href={originalUrl} target="_blank" rel="noreferrer"
+              className="w-9 h-9 flex items-center justify-center rounded-full transition-colors"
+              style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)" }}>
+              <ExternalLink size={16} className="text-white" />
+            </a>
+          )}
+          <button
+            onClick={handleSave}
+            className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+            style={{ background: isSaved ? "rgba(255,116,47,0.9)" : "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)" }}>
+            <Bookmark size={16} color="white" fill={isSaved ? "white" : "none"} />
+          </button>
+          <button
+            onClick={handleTranslate}
+            disabled={translateLoading}
+            className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95"
+            style={{ background: isTranslated ? "rgba(59,130,246,0.9)" : "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)" }}
+          >
+            {translateLoading
+              ? <RefreshCw size={15} color="white" className="animate-spin" />
+              : <span style={{ fontSize: 11, fontWeight: 800, color: "white", letterSpacing: "-0.5px" }}>
+                  {isTranslated ? "ID✓" : "ID"}
+                </span>
+            }
+          </button>
+          <button
+            className="w-9 h-9 flex items-center justify-center rounded-full transition-colors active:scale-95"
+            style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)" }}>
+            <Share2 size={16} className="text-white" />
+          </button>
+        </div>
+      </div>
+
       {/* ── Full-width hero image ────────────────────────────────────────── */}
       <div className="relative w-full" style={{ height: 480 }}>
         <img src={article.image} alt={article.title}
           className="w-full h-full object-cover"
           onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80"; }} />
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.6) 100%)" }} />
-
-        {/* Back button */}
-        <button onClick={() => navigate(-1)}
-          className="absolute top-5 left-5 flex items-center gap-2 px-3 py-2 rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors">
-          <ArrowLeft size={16} />
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Kembali</span>
-        </button>
-
-        {/* Action buttons */}
-        <div className="absolute top-5 right-5 flex gap-2">
-          {originalUrl && (
-            <a href={originalUrl} target="_blank" rel="noreferrer"
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors">
-              <ExternalLink size={16} className="text-white" />
-            </a>
-          )}
-          <button className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors">
-            <Bookmark size={16} className="text-white" />
-          </button>
-          <button className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors">
-            <Share2 size={16} className="text-white" />
-          </button>
-        </div>
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.65) 100%)" }} />
 
         {/* Category + badges */}
         <div className="absolute bottom-5 left-5 flex items-center gap-2">
@@ -190,12 +245,6 @@ export function ArticlePage() {
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full"
               style={{ background: "rgba(124,58,237,0.85)", color: "white", fontSize: 11, fontWeight: 700 }}>
               <Sparkles size={10} />AI
-            </span>
-          )}
-          {(translateLoading || isTranslated) && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full"
-              style={{ background: "rgba(30,100,200,0.75)", color: "white", fontSize: 11, fontWeight: 700 }}>
-              <Languages size={10} />{translateLoading ? "..." : "ID"}
             </span>
           )}
         </div>

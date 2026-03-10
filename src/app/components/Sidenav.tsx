@@ -1,25 +1,18 @@
 import { useNavigate, useLocation } from "react-router";
-import { Home, Compass, Edit3, Bookmark, Settings } from "lucide-react";
-import svgPaths from "../../imports/svg-0zf9wwjyvn";
+import {
+  Home, Rss, MessageSquare, Bell,
+  Search, Settings, User, ChevronDown,
+} from "lucide-react";
 
-const NAV_PATHS = [
-  { label: "Beranda", path: "/" },
-  { label: "Jelajahi", path: "/jelajahi" },
-  { label: "Editor", path: "/editor" },
-  { label: "Simpan", path: "/simpan" },
-  { label: "Sumber", path: "/pengaturan" },
+const NAV_ITEMS = [
+  { label: "Home",     path: "/",               icon: Home },
+  { label: "Sources",  path: "/subscriptions",  icon: Rss },
+  { label: "Chat",     path: "/editor",         icon: MessageSquare },
+  { label: "Activity", path: "/activity",       icon: Bell },
+  { label: "Explore",  path: "/jelajahi",       icon: Search },
+  { label: "Settings", path: "/pengaturan",     icon: Settings },
+  { label: "Profile",  path: "/profile",        icon: User },
 ];
-
-function NavIcon({ path, active }: { path: string; active: boolean }) {
-  const color = active ? "#ff742f" : "#555";
-  const size = 20;
-  if (path === "/") return <Home size={size} color={color} />;
-  if (path === "/jelajahi") return <Compass size={size} color={color} />;
-  if (path === "/editor") return <Edit3 size={size} color="white" />;
-  if (path === "/simpan") return <Bookmark size={size} color={color} />;
-  if (path === "/pengaturan") return <Settings size={size} color={color} />;
-  return null;
-}
 
 export function SideNav() {
   const navigate = useNavigate();
@@ -31,71 +24,84 @@ export function SideNav() {
   };
 
   return (
-    <nav className="flex flex-col h-full px-4 py-6 gap-1" style={{ background: "transparent" }}>
+    <aside
+      className="flex flex-col h-full py-5"
+      style={{
+        background: "#fff",
+        borderRight: "1px solid #f0ede9",
+        width: "100%",
+      }}
+    >
       {/* Logo */}
-      <div className="mb-6 px-3">
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: "#1a1a1a", letterSpacing: "-0.5px" }}>
-          Dis<span style={{ color: "#ff742f" }}>cuss</span>
-        </h1>
-        <p style={{ fontSize: 11, color: "#999", marginTop: 2 }}>Agregator Berita</p>
-      </div>
-
-      {NAV_PATHS.map((item) => {
-        const active = isActive(item.path);
-        const isEditor = item.path === "/editor";
-
-        if (isEditor) {
-          return (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className="flex items-center gap-3 px-3 py-3 rounded-2xl transition-all active:scale-95 mb-1"
-              style={{
-                background: "linear-gradient(135deg, #ff742f 0%, #ff9a5c 100%)",
-                boxShadow: "0 4px 16px rgba(255,116,47,0.35)",
-                color: "white",
-              }}
-            >
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.25)" }}>
-                <svg width="18" height="18" viewBox="0 0 41.667 41.6667" fill="none">
-                  <path d={svgPaths.p29f60d00} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 14, fontWeight: 700 }}>Editor</span>
-            </button>
-          );
-        }
-
-        return (
-          <button
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className="flex items-center gap-3 px-3 py-3 rounded-2xl transition-all active:scale-95 text-left"
-            style={{
-              background: active ? "#ff742f15" : "transparent",
-              color: active ? "#ff742f" : "#555",
-            }}
-          >
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: active ? "#ff742f20" : "transparent" }}
-            >
-              <NavIcon path={item.path} active={active} />
-            </div>
-            <span style={{ fontSize: 14, fontWeight: active ? 700 : 500 }}>{item.label}</span>
-            {active && (
-              <div className="ml-auto w-1.5 h-6 rounded-full" style={{ background: "#ff742f" }} />
-            )}
-          </button>
-        );
-      })}
-
-      <div className="mt-auto px-3 pb-2">
-        <div className="rounded-2xl p-3" style={{ background: "#ff742f12", border: "1px solid #ff742f30" }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#ff742f" }}>Discuss v14</p>
-          <p style={{ fontSize: 10, color: "#999", marginTop: 2 }}>News aggregator berbasis AI</p>
+      <div className="px-5 mb-6">
+        <div className="flex items-center gap-2.5">
+          <span style={{ fontSize: 26 }}>☕</span>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 900, color: "#1a1a1a", lineHeight: 1.1, letterSpacing: "-0.3px" }}>
+              Otaku Cafe
+            </p>
+            <p style={{ fontSize: 10, color: "#b0a89e", fontWeight: 500 }}>Aggregator</p>
+          </div>
         </div>
       </div>
-    </nav>
+
+      {/* Nav list */}
+      <nav className="flex flex-col gap-0.5 flex-1 px-3">
+        {NAV_ITEMS.map(({ label, path, icon: Icon }) => {
+          const active = isActive(path);
+          return (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className="flex items-center gap-4 px-3 py-3 rounded-xl w-full text-left transition-all active:scale-[0.98]"
+              style={{
+                background: active ? "#f8f5f1" : "transparent",
+                color: active ? "#1a1a1a" : "#6b6560",
+              }}
+            >
+              {label === "Profile" ? (
+                <div
+                  className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg,#ff742f,#c0392b)" }}
+                >
+                  <User size={14} color="white" />
+                </div>
+              ) : (
+                <Icon
+                  size={22}
+                  strokeWidth={active ? 2.2 : 1.7}
+                  color={active ? "#1a1a1a" : "#8a8078"}
+                />
+              )}
+              <span style={{
+                fontSize: 15,
+                fontWeight: active ? 700 : 400,
+                letterSpacing: "-0.1px",
+                color: active ? "#1a1a1a" : "#4a4540",
+              }}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Create Post button */}
+      <div className="px-4 pt-4 mt-2">
+        <button
+          onClick={() => navigate("/editor")}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl transition-all active:scale-[0.97] hover:opacity-90"
+          style={{ background: "#ff742f", color: "white" }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.2px" }}>Create</span>
+          <div
+            className="flex items-center justify-center w-5 h-5 rounded"
+            style={{ background: "rgba(0,0,0,0.15)" }}
+          >
+            <ChevronDown size={13} color="white" strokeWidth={2.5} />
+          </div>
+        </button>
+      </div>
+    </aside>
   );
 }

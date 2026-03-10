@@ -1,8 +1,23 @@
 @custom-variant dark (&:is(.dark *));
 
+/* ── Otaku Cafe Global Design Tokens ──────────────────────────────────────── */
+:root {
+  --cafe-bg: #f8f5f1;
+  --cafe-accent: #ff742f;
+  --cafe-accent-hover: #ff9a5c;
+  --cafe-accent-light: #fff8f4;
+  --cafe-accent-border: #ffd5be;
+  --cafe-text-primary: #1a1a1a;
+  --cafe-text-secondary: #6b6560;
+  --cafe-text-muted: #b0a89e;
+  --cafe-border: #ede8e2;
+  --cafe-card: #ffffff;
+  --cafe-nav-bg: rgba(252, 249, 245, 0.97);
+}
+
 :root {
   --font-size: 16px;
-  --background: #ffffff;
+  --background: #f8f5f1;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
   --card-foreground: oklch(0.145 0 0);
@@ -18,9 +33,9 @@
   --accent-foreground: #030213;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.1);
+  --border: #ede8e2;
   --input: transparent;
-  --input-background: #f3f3f5;
+  --input-background: #f5f1ec;
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;

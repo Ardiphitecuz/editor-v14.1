@@ -339,11 +339,21 @@ function articlesFromR2J(source: NewsSource, data: R2JFeed, limit: number): Arti
     // Extract text content from HTML for initial display
     let initialContent: string[] = [];
     if (fullHtml.length > 20) {
-      const textParts = stripHtml(fullHtml)
-        .split(/\n+/)
-        .map(t => t.trim())
+      // Use full paragraph extraction from the HTML
+      const doc = new DOMParser().parseFromString(fullHtml, "text/html");
+      const pTags = Array.from(doc.querySelectorAll("p, blockquote"))
+        .map(p => p.textContent?.replace(/\s+/g, " ").trim() ?? "")
         .filter(t => t.length > 20);
-      initialContent = textParts.slice(0, 3);
+      if (pTags.length >= 2) {
+        initialContent = pTags.slice(0, 20);
+      } else {
+        // fallback to plain text split
+        const textParts = stripHtml(fullHtml)
+          .split(/\n+/)
+          .map(t => t.trim())
+          .filter(t => t.length > 20);
+        initialContent = textParts.slice(0, 20);
+      }
     }
 
     let image = "";
@@ -392,11 +402,19 @@ function parseXml(source: NewsSource, rawText: string, limit: number): Article[]
     // Extract text from HTML content for initial display
     let initialContent: string[] = [];
     if (fullHtml.length > 20) {
-      const textParts = stripHtml(fullHtml)
-        .split(/\n+/)
-        .map(t => t.trim())
+      const doc = new DOMParser().parseFromString(fullHtml, "text/html");
+      const pTags = Array.from(doc.querySelectorAll("p, blockquote"))
+        .map(p => p.textContent?.replace(/\s+/g, " ").trim() ?? "")
         .filter(t => t.length > 20);
-      initialContent = textParts.slice(0, 3); // First 3 paragraphs
+      if (pTags.length >= 2) {
+        initialContent = pTags.slice(0, 20);
+      } else {
+        const textParts = stripHtml(fullHtml)
+          .split(/\n+/)
+          .map(t => t.trim())
+          .filter(t => t.length > 20);
+        initialContent = textParts.slice(0, 20);
+      }
     }
 
     const tags = Array.from(item.querySelectorAll("category")).map(c => c.textContent?.trim() ?? "");
@@ -413,7 +431,7 @@ function parseXml(source: NewsSource, rawText: string, limit: number): Article[]
       id: source.id + "-x-" + i,
       category: cat, title,
       summary: initialContent[0] || title,
-      content: [],  // Empty to trigger background fetch of full content
+      content: initialContent,  // Use RSS content; background fetch will upgrade if short
       source: srcName, image,
       readTime: Math.max(1, Math.ceil((initialContent.join(" ").split(/\s+/).length || 50) / 200)),
       publishedAt: relTime(pubDate),
