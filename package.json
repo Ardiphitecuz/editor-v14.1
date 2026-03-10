@@ -4,9 +4,10 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n \"server,vite\" -c \"blue,green\" \"node server.js\" \"vite\"",
     "build": "vite build",
-    "start": "node server.js"
+    "start": "node server.js",
+    "server": "node server.js"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -82,6 +83,7 @@
     "autoprefixer": "^10.4.27",
     "node-fetch": "^3.3.2",
     "tailwindcss": "4.1.12",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "concurrently": "^9.0.0"
   }
 }

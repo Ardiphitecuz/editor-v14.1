@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { Article } from "../data/articles";
 import { getSources } from "../services/sourceManager";
 import { fetchAllSourcesCached, clearAllSourceCache } from "../services/newsFetcher";
-import { prefetchArticleContents } from "../services/contentPrefetcher";
+import { prefetchArticleContents, prefetchThumbnails } from "../services/contentPrefetcher";
 import { articleStore } from "../store/articleStore";
 
 export interface UseNewsState {
@@ -57,9 +57,12 @@ export function useNews(): UseNewsState {
       setErrors(result.errors ?? {});
       setFromCache(result.fromCache ?? false);
 
-      // Background prefetch content for first 20 articles
+      // Background prefetch:
+      // - thumbnail (og:image) untuk semua artikel yang gambarnya masih fallback
+      // - konten lengkap untuk 10 artikel teratas
       if (result.articles.length > 0) {
-        setTimeout(() => prefetchArticleContents(result.articles.slice(0, 20), 10), 500);
+        setTimeout(() => prefetchThumbnails(result.articles, 3), 800);
+        setTimeout(() => prefetchArticleContents(result.articles.slice(0, 10), 5), 1500);
       }
     } catch (err) {
       if (mountedRef.current) {

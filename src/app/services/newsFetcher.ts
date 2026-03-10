@@ -3,7 +3,8 @@ import type { NewsSource } from "./sourceManager";
 import { updateSourceMeta } from "./sourceManager";
 
 const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
-const SERVER_RSS_PROXY = "/api/rss?url=";
+const SERVER_RSS_PROXY  = "/api/rss?url=";    // untuk RSS/XML feed
+const SERVER_PROXY     = "/api/proxy?url=";  // untuk halaman artikel (HTML biasa)
 const PUBLIC_PROXIES = [
   "https://corsproxy.io/?",
   "https://api.allorigins.win/raw?url=",
@@ -104,7 +105,7 @@ const REMOVE_WITH_CONTENT = new Set([
 ]);
 
 // Pola URL gambar yang merupakan tracking pixel / iklan / noise
-const TRACKING_IMG_URL = /feedburner\.com|doubleclick\.net|google-analytics|googletagmanager|pixel\.|1x1|2x1|tracking|analytics|stat\.|adserver|pagead|banner_ad|adsystem|scorecardresearch|quantserve|omniture|chartbeat|newrelic|\/ads\/|\/ad\//i;
+const TRACKING_IMG_URL = /feedburner\.com|doubleclick\.net|google-analytics|googletagmanager|\/pixel\.gif|\/pixel\.png|1x1\.|2x1\.|adserver|pagead|banner_ad|adsystem|scorecardresearch|quantserve|omniture|chartbeat|newrelic|\/ads\/|\/ad\//i;
 
 // Pola teks yang merupakan noise editorial (label, tombol, CTA)
 const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comment[s]?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here|more\.{3}|続きを読む|もっと見る)\.?$/i;
@@ -238,20 +239,23 @@ export function sanitizeRssHtml(rawHtml: string, baseUrl: string): string {
     if (!hasImg && !(el.textContent ?? "").trim()) el.remove();
   });
 
-  // Post-pass 1b: hapus <ul>/<ol> yang isinya hanya link navigasi pendek
-  // Ciri: semua <li> berisi satu <a> dengan teks < 40 karakter (menu, sidebar)
-  // Konten editorial yang sah biasanya memiliki teks lebih panjang atau gambar
+  // Post-pass 1b: hapus list navigasi / menu sidebar
+  // Cara deteksi: hitung rasio teks yang berupa link (link density)
+  // Jika >80% teks di dalam <a> tag → ini navigasi, bukan konten
   doc.body.querySelectorAll("ul, ol").forEach(list => {
     const items = Array.from(list.querySelectorAll("li"));
     if (items.length === 0) { list.remove(); return; }
-    const isNavList = items.every(li => {
-      const links = li.querySelectorAll("a");
-      const imgs  = li.querySelectorAll("img");
-      const text  = (li.textContent ?? "").trim();
-      // Nav item: hanya berisi link, teks pendek (< 40 char), tidak ada gambar
-      return imgs.length === 0 && links.length >= 1 && text.length < 40;
+    // Hitung total teks dan teks yang ada di dalam link
+    const totalText = (list.textContent ?? "").trim().length;
+    if (totalText === 0) { list.remove(); return; }
+    let linkText = 0;
+    list.querySelectorAll("a").forEach(a => {
+      linkText += (a.textContent ?? "").trim().length;
     });
-    if (isNavList) { list.remove(); }
+    const linkDensity = totalText > 0 ? linkText / totalText : 0;
+    const hasImages = list.querySelector("img") !== null;
+    // Nav list: link density tinggi (>75%) dan tidak ada gambar
+    if (linkDensity > 0.75 && !hasImages) { list.remove(); }
   });
 
   // Post-pass 2: wrap orphan text nodes (hasil unwrap div) ke dalam <p>
@@ -306,17 +310,55 @@ function extractPlainParagraphs(html: string): string[] {
 
 function extractFirstImageUrl(html: string): string | null {
   if (!html) return null;
-  // Cek media:thumbnail dan media:content (WordPress, Feedburner, dll)
+
+  function upgradeUrl(u: string): string {
+    if (!u) return u;
+    return u.startsWith("http://") ? u.replace("http://", "https://") : u;
+  }
+  function isRealImage(u: string): boolean {
+    if (!u || u.startsWith("data:")) return false;
+    if (TRACKING_IMG_URL.test(u)) return false;
+    // Buang 1x1 pixel / tracking pixel berdasarkan dimensi di URL
+    if (/[/?](1x1|pixel|tracking|stat|beacon|count)\./i.test(u)) return false;
+    return true;
+  }
+
+  // 1. media:thumbnail / media:content (WordPress, Feedburner — paling akurat)
   const mediaThumbnail = html.match(/media:thumbnail[^>]+url=["']([^"']{10,})["']/i)
     || html.match(/media:content[^>]+url=["']([^"']{10,})["']/i);
-  if (mediaThumbnail) return mediaThumbnail[1];
-  // Cek enclosure (podcast/media RSS style)
+  if (mediaThumbnail) {
+    const u = upgradeUrl(mediaThumbnail[1]);
+    if (isRealImage(u)) return u;
+  }
+
+  // 2. enclosure image
   const enclosure = html.match(/enclosure[^>]+url=["']([^"']{10,})["'][^>]*type=["']image/i)
     || html.match(/enclosure[^>]+type=["']image[^"']*["'][^>]+url=["']([^"']{10,})["']/i);
-  if (enclosure) return enclosure[enclosure[1] ? 1 : 1];
-  // Cek <img> tag biasa
-  const img = html.match(/<img[^>]+src=["']([^"']{10,})["']/i);
-  if (img) return img[1];
+  if (enclosure) {
+    const u = upgradeUrl(enclosure[1]);
+    if (isRealImage(u)) return u;
+  }
+
+  // 3. Cari semua <img> — cek src, data-src, data-lazy-src, data-original
+  // WordPress lazy load sering menaruh real URL di data-src bukan src
+  const imgRe = /<img([^>]+)>/gi;
+  let m;
+  while ((m = imgRe.exec(html)) !== null) {
+    const attrs = m[1];
+    // Cek semua atribut sumber gambar dalam urutan prioritas
+    const srcMatch =
+      attrs.match(/data-lazy-src=["']([^"']{10,})["']/i) ||
+      attrs.match(/data-src=["']([^"']{10,})["']/i) ||
+      attrs.match(/data-original=["']([^"']{10,})["']/i) ||
+      attrs.match(/src=["']([^"']{10,})["']/i);
+    if (!srcMatch) continue;
+    const candidate = upgradeUrl(srcMatch[1]);
+    if (!isRealImage(candidate)) continue;
+    // Skip placeholder GIF/SVG (lazy load placeholder)
+    if (/\.(gif|svg)(\?|$)/i.test(candidate) && candidate.includes('placeholder')) continue;
+    if (/data:image|placeholder|spinner|loading/i.test(candidate)) continue;
+    return candidate;
+  }
   return null;
 }
 
@@ -325,9 +367,9 @@ function extractFirstImageUrl(html: string): string | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function fetchWithFallback(url: string, ms = 12000): Promise<string> {
-  // ① Server proxy (paling handal)
+  // ① Server proxy (paling handal) — gunakan /api/proxy untuk halaman HTML
   try {
-    const res = await fetch(SERVER_RSS_PROXY + encodeURIComponent(url), {
+    const res = await fetch(SERVER_PROXY + encodeURIComponent(url), {
       signal: AbortSignal.timeout(ms),
     });
     if (res.ok) {
@@ -525,13 +567,16 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
       ? item.enclosures.find((e: any) => e.type?.startsWith("image") && e.link)?.link
       : null;
 
+    function upgradeR2J(u: string): string {
+      return u && u.startsWith("http://") ? u.replace("http://", "https://") : u;
+    }
     let heroImage =
       (item.thumbnail && !TRACKING_IMG_URL.test(item.thumbnail) && item.thumbnail.startsWith("http"))
-        ? item.thumbnail
+        ? upgradeR2J(item.thumbnail)
         : (enclosureImg && !TRACKING_IMG_URL.test(enclosureImg))
-        ? enclosureImg
+        ? upgradeR2J(enclosureImg)
         : (parsed.heroImage && !TRACKING_IMG_URL.test(parsed.heroImage))
-        ? parsed.heroImage
+        ? upgradeR2J(parsed.heroImage)
         : fallbackImg(cat);
 
     return {
@@ -606,21 +651,30 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
     }
 
     // Thumbnail: coba dari media:thumbnail, media:content, enclosure, lalu dari konten
+    // PENTING: jangan pakai || chain dengan ternary — JS mem-parse a||b||c||d?e:f sebagai (a||b||c||d)?e:f
     const mediaNs = "http://search.yahoo.com/mrss/";
-    const mediaThumbUrl =
-      item.getElementsByTagNameNS(mediaNs, "thumbnail")[0]?.getAttribute("url") ||
-      item.getElementsByTagNameNS(mediaNs, "content")[0]?.getAttribute("url") ||
-      item.querySelector("enclosure[type^='image']")?.getAttribute("url") ||
-      // Beberapa feed pakai <enclosure url="..." type="image/jpeg">
-      (item.querySelector("enclosure")?.getAttribute("type") ?? "").startsWith("image")
-        ? item.querySelector("enclosure")?.getAttribute("url") ?? ""
-        : "";
+    const mediaThumbUrl = (() => {
+      const mt = item.getElementsByTagNameNS(mediaNs, "thumbnail")[0]?.getAttribute("url");
+      if (mt) return mt;
+      const mc = item.getElementsByTagNameNS(mediaNs, "content")[0]?.getAttribute("url");
+      if (mc) return mc;
+      const encImg = item.querySelector("enclosure[type^='image']")?.getAttribute("url");
+      if (encImg) return encImg;
+      const encEl = item.querySelector("enclosure");
+      if (encEl && (encEl.getAttribute("type") ?? "").startsWith("image"))
+        return encEl.getAttribute("url") ?? "";
+      return "";
+    })();
 
+    function upgradeHttp(u: string): string {
+      return u.startsWith("http://") ? u.replace("http://", "https://") : u;
+    }
+    const rawThumb = mediaThumbUrl ? upgradeHttp(mediaThumbUrl) : "";
     const heroImage =
-      (mediaThumbUrl && !TRACKING_IMG_URL.test(mediaThumbUrl) && mediaThumbUrl.startsWith("http"))
-        ? mediaThumbUrl
+      (rawThumb && !TRACKING_IMG_URL.test(rawThumb) && rawThumb.startsWith("http"))
+        ? rawThumb
         : (parsed.heroImage && !TRACKING_IMG_URL.test(parsed.heroImage))
-        ? parsed.heroImage
+        ? upgradeHttp(parsed.heroImage)
         : fallbackImg(cat);
 
     return {
@@ -668,9 +722,18 @@ async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Article[]> 
     }
   } catch { /* lanjut ke public proxy */ }
 
-  // ③ Public CORS proxy — last resort
-  const raw = await fetchWithFallback(feedUrl);
-  return parseXmlFeed(source, raw, limit);
+  // ③ Public CORS proxy langsung untuk RSS — fetchWithFallback pakai /api/proxy (HTML), tidak cocok untuk XML
+  for (const proxy of PUBLIC_PROXIES) {
+    try {
+      const res = await fetch(proxy + encodeURIComponent(feedUrl), {
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text.length > 200) return parseXmlFeed(source, text, limit);
+    } catch { /* coba proxy berikutnya */ }
+  }
+  return []; // semua gagal
 }
 
 async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<Article[]> {

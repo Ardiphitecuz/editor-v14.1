@@ -211,14 +211,14 @@ export default async function handler(req, res) {
       if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
     });
 
-    // Post-pass: hapus list navigasi (ul/ol berisi hanya link pendek tanpa gambar)
+    // Post-pass: hapus list navigasi berdasarkan link density
     contentDoc.body.querySelectorAll('ul,ol').forEach(list => {
-      const items = Array.from(list.querySelectorAll('li'));
-      if (!items.length) { list.remove(); return; }
-      const isNav = items.every(li =>
-        !li.querySelector('img') && li.querySelector('a') && (li.textContent ?? '').trim().length < 40
-      );
-      if (isNav) list.remove();
+      const totalText = (list.textContent ?? '').trim().length;
+      if (!totalText) { list.remove(); return; }
+      let linkText = 0;
+      list.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').trim().length; });
+      const density = linkText / totalText;
+      if (density > 0.75 && !list.querySelector('img')) list.remove();
     });
 
     const contentHtml = contentDoc.body.innerHTML.trim();

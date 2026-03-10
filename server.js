@@ -311,17 +311,14 @@ app.get('/api/fetch-content', async (req, res) => {
       if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
     });
 
-    // Post-pass: hapus list navigasi (ul/ol berisi hanya link pendek)
+    // Post-pass: hapus list navigasi berdasarkan link density
     contentDoc.body.querySelectorAll('ul, ol').forEach(list => {
-      const items = Array.from(list.querySelectorAll('li'));
-      if (items.length === 0) { list.remove(); return; }
-      const isNav = items.every(li => {
-        const text = (li.textContent ?? '').trim();
-        return li.querySelectorAll('img').length === 0
-          && li.querySelectorAll('a').length >= 1
-          && text.length < 40;
-      });
-      if (isNav) list.remove();
+      const totalText = (list.textContent ?? '').trim().length;
+      if (!totalText) { list.remove(); return; }
+      let linkText = 0;
+      list.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').trim().length; });
+      const density = linkText / totalText;
+      if (density > 0.75 && !list.querySelector('img')) list.remove();
     });
 
     const contentHtml = contentDoc.body.innerHTML.trim();
