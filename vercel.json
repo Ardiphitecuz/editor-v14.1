@@ -1,27 +1,65 @@
 {
   "functions": {
-    "api/fetch-content.js": { "memory": 1024, "maxDuration": 30 },
-    "api/rss.js":           { "memory": 512,  "maxDuration": 15 },
-    "api/proxy.js":         { "memory": 512,  "maxDuration": 15 }
+    "api/fetch-content.js": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "api/rss.js": {
+      "memory": 512,
+      "maxDuration": 15
+    },
+    "api/proxy.js": {
+      "memory": 512,
+      "maxDuration": 15
+    },
+    "api/og.js": {
+      "memory": 256,
+      "maxDuration": 10
+    }
   },
   "rewrites": [
-    { "source": "/api/fetch-content", "destination": "/api/fetch-content" },
-    { "source": "/api/rss",           "destination": "/api/rss" },
-    { "source": "/api/proxy",         "destination": "/api/proxy" },
-    { "source": "/(.*)",              "destination": "/index.html" }
+    {
+      "source": "/api/fetch-content",
+      "destination": "/api/fetch-content"
+    },
+    {
+      "source": "/api/rss",
+      "destination": "/api/rss"
+    },
+    {
+      "source": "/api/proxy",
+      "destination": "/api/proxy"
+    },
+    {
+      "source": "/api/og",
+      "destination": "/api/og"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin",  "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS" }
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET,OPTIONS"
+        }
       ]
     },
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
       ]
     }
   ]
