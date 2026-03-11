@@ -215,11 +215,12 @@ export function ArticlePage() {
         originalUrl: rawArticle.originalUrl,
         content: result.content,
         summary: result.summary ?? rawArticle.summary,
-        image: result.image?.startsWith("http") ? result.image : rawArticle.image,
         contentHtml: result.contentHtml,
         rssContentSufficient: true,
         readTime: Math.max(1, wordCount),
-        _fullFetched: true, // tandai sudah di-fetch penuh, tidak perlu fetch lagi
+        _fullFetched: true,
+        // JANGAN TIMPA gambar jika hasil scraping memberikan gambar kosong/invalid
+        image: (result.image && result.image.startsWith('http')) ? result.image : rawArticle.image
       } as any;
       setDisplayArticle(updated);
       articleStore.updateById(rawArticle!.id, updated);

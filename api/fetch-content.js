@@ -13,17 +13,20 @@ export const config = { maxDuration: 30 };
 const NOISE_PATTERN = /\b(sidebar|widget|related|recommend|rekomendasi|artikel[\s_-]terkait|baca[\s_-]juga|lihat[\s_-]juga|more[\s_-]post|also[\s_-]read|you[\s_-]may|share|social|comment|disqus|newsletter|subscribe|advertisement|sponsor|banner|promo|popular|trending|tag[\s_-]list|breadcrumb|pagination|post[\s_-]nav|author[\s_-]box|author[\s_-]bio|byline|related[\s_-]post|more[\s_-]from|read[\s_-]next|next[\s_-]article|prev[\s_-]article|floating|sticky[\s_-]bar|cookie|gdpr|popup|modal|overlay|entry[\s_-]meta|entry[\s_-]header|post[\s_-]meta|post[\s_-]header|post[\s_-]info|post[\s_-]category|cat[\s_-]links|post[\s_-]author|entry[\s_-]author|article[\s_-]header|article[\s_-]meta|article[\s_-]info|sharedaddy|jetpack|addtoany)\b/i;
 
 // ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────
+// PERBAIKAN: Menambahkan 'div', 'iframe', 'video', 'audio', 'source' agar embed dan struktur deteksi iklan tidak pecah
 const ALLOWED_TAGS = new Set([
   'p','h1','h2','h3','h4','h5','h6',
   'ul','ol','li','blockquote','pre','code',
   'strong','em','b','i','br',
   'a','img','figure','figcaption',
   'table','thead','tbody','tfoot','tr','th','td',
+  'div','iframe','video','audio','source' 
 ]);
 
 // Dibuang beserta seluruh isinya
+// PERBAIKAN: Mengeluarkan 'iframe', 'object', 'embed' agar video Youtube/Twitter tidak terhapus
 const REMOVE_WITH_CONTENT = new Set([
-  'script','style','noscript','iframe','object','embed',
+  'script','style','noscript',
   'form','input','button','select','textarea',
   'nav','header','footer','aside','menu','svg','canvas',
 ]);
@@ -75,26 +78,42 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
   el.removeAttribute('style');
 
   if (tag === 'img') {
-    // Prioritas: data-lazy-src > data-src > data-original > src
-    // Banyak situs lazy load menyimpan URL asli di data-* dan src berisi placeholder data:
     const lazySrc = el.getAttribute('data-lazy-src')
       || el.getAttribute('data-src')
       || el.getAttribute('data-original')
       || el.getAttribute('data-original-src')
       || el.getAttribute('data-hi-res-src');
     const rawSrc = el.getAttribute('src') || '';
-    // Gunakan lazySrc jika ada, fallback ke src hanya jika bukan data URI placeholder
     const src = lazySrc || (rawSrc.startsWith('data:') ? '' : rawSrc);
     if (!src || TRACKING_IMG.test(src)) { el.remove(); return; }
+    
+    // PERBAIKAN: Longgarkan filter tracking pixel (jangan hapus jika lebar 0 karena bisa jadi gambar lazyload asli)
     const w = parseInt(el.getAttribute('width') ?? '0');
     const h = parseInt(el.getAttribute('height') ?? '0');
-    if ((w > 0 && w <= 2) || (h > 0 && h <= 2)) { el.remove(); return; }
+    if ((w === 1 || w === 2) && (h === 1 || h === 2)) { el.remove(); return; }
+    
     const resolved = resolveUrl(src, baseUrl, pageUrl);
     if (!resolved) { el.remove(); return; }
     Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
     el.setAttribute('src', resolved);
     el.setAttribute('loading', 'lazy');
     el.setAttribute('alt', '');
+    return;
+  }
+
+  // PERBAIKAN: Izinkan dan pertahankan atribut penting untuk iframe dan video
+  if (['iframe', 'video', 'audio', 'source'].includes(tag)) {
+    const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+    const resolved = resolveUrl(src, baseUrl, pageUrl);
+    if (resolved) el.setAttribute('src', resolved);
+    
+    Array.from(el.attributes).forEach(a => {
+      const name = a.name.toLowerCase();
+      // Jangan hapus atribut penting embed
+      if (!['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'controls', 'poster'].includes(name)) {
+        el.removeAttribute(name);
+      }
+    });
     return;
   }
 
@@ -112,8 +131,11 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
   }
 
   if (/^h[1-6]$/.test(tag)) {
-    const text = (el.textContent ?? '').trim();
-    if (text.toLowerCase() === articleTitle || NOISE_TEXT_EXACT.test(text)) { el.remove(); return; }
+    const text = (el.textContent ?? '').trim().toLowerCase();
+    // PERBAIKAN: Hapus judul ganda dengan pendeteksian `includes` agar lebih toleran terhadap spasi ekstra
+    if (text === articleTitle || (text.length > 10 && (articleTitle.includes(text) || text.includes(articleTitle))) || NOISE_TEXT_EXACT.test(text)) { 
+      el.remove(); return; 
+    }
     if (tag === 'h1') {
       const h2 = contentDoc.createElement('h2');
       while (el.firstChild) h2.appendChild(el.firstChild);
@@ -128,7 +150,8 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
     if (NOISE_TEXT_EXACT.test(text)) { el.remove(); return; }
   }
 
-  if (!['img', 'a'].includes(tag)) {
+  // Hapus sisa atribut untuk tag selain img, a, dan media embed
+  if (!['img', 'a', 'iframe', 'video', 'audio', 'source'].includes(tag)) {
     Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
   }
 
@@ -176,7 +199,6 @@ export default async function handler(req, res) {
         }
       }
 
-      console.log(`[fetch-content] Direct blocked for ${targetUrl}, trying public proxies...`);
       for (const prefix of PUBLIC_PROXY_PREFIXES) {
         try {
           const proxyUrl = prefix + encodeURIComponent(targetUrl);
@@ -231,21 +253,15 @@ export default async function handler(req, res) {
     if (ogImgMatch) ogImage = resolveUrl(ogImgMatch[1], baseUrl, url);
 
     // ── Parse HTML dengan linkedom (ESM-native, pengganti jsdom) ──────────────
-    // linkedom: parseHTML(html) → { document }
-    // WAJIB: Readability membutuhkan document.URL — set via baseURI trick
     const { document } = parseHTML(html);
 
-    // Set baseURI agar Readability bisa resolve relative URL
-    // linkedom memakai document.baseURI dari <base href> atau bisa di-set manual
     const baseTag = document.createElement('base');
     baseTag.setAttribute('href', url);
     document.head?.appendChild(baseTag);
 
     // ── FASE 1: Hapus noise SEBELUM Readability ───────────────────────────────
-    // PENTING: noscript TIDAK dihapus di sini — banyak situs WordPress menyimpan
-    // gambar asli di dalam <noscript> sebagai fallback lazy load.
-    // Readability akan membongkar isinya, lalu sanitizeNode akan proses hasilnya.
-    ['script','style','iframe','ins','form','nav','header','footer','aside']
+    // PERBAIKAN: Keluarkan 'iframe' agar video tidak terhapus duluan
+    ['script','style','ins','form','nav','header','footer','aside']
       .forEach(tag => document.querySelectorAll(tag).forEach(el => el.remove()));
 
     document.querySelectorAll('[class],[id]').forEach(el => {
@@ -255,8 +271,6 @@ export default async function handler(req, res) {
     });
 
     // ── FASE 2: Readability dengan cloneNode + serializer DOM ─────────────────
-    // Sesuai docs Mozilla: pass document.cloneNode(true) agar DOM asli tidak dimodifikasi
-    // serializer: el => el → dapat DOM Element langsung (bukan string innerHTML)
     const documentClone = document.cloneNode(true);
     const reader = new Readability(documentClone, {
       charThreshold: 50,
@@ -269,7 +283,6 @@ export default async function handler(req, res) {
       return res.json({ success: false, error: 'Readability could not extract content', items: [] });
     }
 
-    // article.content = DOM Element (karena serializer: el => el)
     const contentElement = article.content;
     const contentDoc = contentElement.ownerDocument;
 
@@ -287,29 +300,32 @@ export default async function handler(req, res) {
     );
 
     // ── Post-pass: hapus elemen kosong ────────────────────────────────────────
-    contentElement.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6').forEach(el => {
-      if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
+    // PERBAIKAN: Jangan hapus div kosong jika di dalamnya ada iframe/video
+    contentElement.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,div').forEach(el => {
+      if (!el.querySelector('img,iframe,video') && !(el.textContent ?? '').trim()) el.remove();
     });
 
     // Post-pass: link density
+    // Sekarang fitur ini BERHASIL karena tag <div class="related-post"> tidak di-unwrap di tahap Sanitizer
     contentElement.querySelectorAll('ul,ol,p,div').forEach(el => {
       const totalText = (el.textContent ?? '').replace(/\s+/g, '').length;
       if (!totalText) { el.remove(); return; }
       let linkText = 0;
       el.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').replace(/\s+/g, '').length; });
       const density = linkText / totalText;
-      const threshold = (el.tagName === 'P' || el.tagName === 'DIV') ? 0.9 : 0.75;
-      if (density >= threshold && !el.querySelector('img')) el.remove();
+      const threshold = (el.tagName === 'P' || el.tagName === 'DIV') ? 0.85 : 0.75;
+      // Jangan hapus jika blok ini ternyata berisi media (gambar/video)
+      if (density >= threshold && !el.querySelector('img,iframe,video')) el.remove();
     });
 
-    // Post-pass: hapus <p> yang isinya hanya satu link
+    // Post-pass: hapus <p> yang isinya hanya satu link (biasanya baca juga)
     contentElement.querySelectorAll('p').forEach(p => {
       const anchors = p.querySelectorAll('a');
       if (anchors.length >= 1) {
         let linkTotal = 0;
         anchors.forEach(a => linkTotal += (a.textContent ?? '').trim().length);
         const outside = (p.textContent ?? '').trim().length - linkTotal;
-        if (outside <= 15) p.remove();
+        if (outside <= 15 && !p.querySelector('img,iframe,video')) p.remove();
       }
     });
 
