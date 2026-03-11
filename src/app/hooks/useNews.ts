@@ -79,6 +79,14 @@ export function useNews(): UseNewsState {
     return () => { mountedRef.current = false; };
   }, [load]);
 
+  // Live refresh setiap 5 menit di background
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (mountedRef.current) load(false); // silent refresh, tanpa clear cache
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [load]);
+
   useEffect(() => {
     return articleStore.subscribe(() => setArticles(articleStore.get()));
   }, []);

@@ -15,7 +15,7 @@ import type { NewsSource } from "./sourceManager";
 import {
   RSS2JSON, SERVER_RSS_PROXY, PUBLIC_PROXIES,
   TRACKING_IMG_URL,
-  hashId, decodeHtmlEntities, relTime, guessCategory,
+  hashId, decodeHtmlEntities, relTime, rawPubTimestamp, guessCategory,
   fallbackImg, sanitizeHtml, scoreContent, extractPlainParagraphs,
   extractFirstImageUrl, SUFFICIENT_THRESHOLD,
 } from "./fetcherUtils";
@@ -47,7 +47,7 @@ function buildFromRssContent(
 async function fetchRss2Json(feedUrl: string): Promise<any> {
   try {
     const res = await fetch(`${RSS2JSON}${encodeURIComponent(feedUrl)}&count=20`, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(30000), // timeout diperpanjang jadi 30 detik
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -98,14 +98,15 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
       category: cat,
       title,
       summary: parsed.content[0] || title,
-      content: parsed.content,
+      content: [], // Kosongkan agar tidak render paragraf saja
       source: source.name,
       sourceId: source.id,
       rssContentSufficient: parsed.sufficient,
       image: heroImage,
-      contentHtml: parsed.contentHtml || undefined,
+      contentHtml: parsed.contentHtml || undefined, // HTML hasil sanitasi
       readTime: Math.max(1, Math.ceil(scoreContent(parsed.contentHtml) / 1000)),
       publishedAt: relTime(item.pubDate),
+      pubTimestamp: rawPubTimestamp(item.pubDate),
       hot: i < 2,
       originalUrl: item.link || undefined,
     } as any;
@@ -196,14 +197,15 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
       category: cat,
       title,
       summary: parsed.content[0] || title,
-      content: parsed.content,
+      content: [], // Kosongkan agar tidak render paragraf saja
       source: srcName,
       sourceId: source.id,
       rssContentSufficient: parsed.sufficient,
       image: heroImage,
-      contentHtml: parsed.contentHtml || undefined,
+      contentHtml: parsed.contentHtml || undefined, // HTML hasil sanitasi
       readTime: Math.max(1, Math.ceil(scoreContent(parsed.contentHtml) / 1000)),
       publishedAt: relTime(pubDate),
+      pubTimestamp: rawPubTimestamp(pubDate),
       hot: i < 2,
       originalUrl: link || undefined,
     } as any;

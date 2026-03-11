@@ -28,7 +28,7 @@ const DEFAULT_SOURCES: NewsSource[] = [
     id: "yaraon",
     name: "やらおん！",
     url: "https://yaraon-blog.com/",
-    feedUrl: "https://yaraon-blog.com/feed",
+    feedUrl: "https://yaraon-blog.com/feed/",
     type: "rss",
     language: "ja",
     enabled: true,
@@ -55,7 +55,7 @@ export function getSources(): NewsSource[] {
         return {
           ...s,
           url: "https://yaraon-blog.com/",
-          feedUrl: "https://yaraon-blog.com/feed",
+          feedUrl: "https://yaraon-blog.com/feed/",
           rssContentSufficient: false,
         };
       }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   ArrowLeft, Clock, Share2, Bookmark, Sparkles,
-  RefreshCw, ExternalLink, Edit3, Languages,
+  RefreshCw, ExternalLink, Edit3, Languages, Copy, Check, X,
 } from "lucide-react";
 import { articleStore } from "../store/articleStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
@@ -30,18 +30,36 @@ async function gtranslate(text: string): Promise<string> {
   } catch { return text; }
 }
 
+// ── Translate contentHtml (ekstrak teks paragraf → translate → masukkan kembali)
+async function translateHtml(html: string): Promise<string> {
+  if (!html) return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const nodes = Array.from(doc.querySelectorAll("p, h2, h3, h4, li, figcaption, blockquote"));
+  if (nodes.length === 0) return html;
+  const originals = nodes.map(n => n.textContent?.trim() ?? "").filter(t => t.length > 3);
+  const translated = await Promise.allSettled(originals.map(t => gtranslate(t)));
+  let idx = 0;
+  for (const node of nodes) {
+    const orig = node.textContent?.trim() ?? "";
+    if (orig.length <= 3) continue;
+    const res = translated[idx++];
+    if (res.status === "fulfilled" && res.value && res.value !== orig) {
+      node.textContent = res.value;
+    }
+  }
+  return doc.body.innerHTML;
+}
+
 async function translateArticleContent(article: Article): Promise<Article> {
-  // Kumpulkan semua teks yang perlu ditranslate sekaligus
   const textsToTranslate: string[] = [
     article.title,
     article.summary ?? "",
     ...(article.content ?? []),
   ];
 
-  // Jika ada blocks, tambahkan teks dari blocks
   const blockTextIndices: number[] = [];
   if (article.blocks?.length) {
-    article.blocks.forEach((b, i) => {
+    article.blocks.forEach((b) => {
       if (b.type === 'text' && b.text) {
         blockTextIndices.push(textsToTranslate.length);
         textsToTranslate.push(b.text);
@@ -55,7 +73,6 @@ async function translateArticleContent(article: Article): Promise<Article> {
   const contentTranslated = rest.slice(0, article.content?.length ?? 0);
   const blockTexts = rest.slice(article.content?.length ?? 0);
 
-  // Rebuild blocks dengan teks yang sudah ditranslate
   let translatedBlocks = article.blocks;
   if (article.blocks?.length && blockTexts.length) {
     let btIdx = 0;
@@ -67,7 +84,18 @@ async function translateArticleContent(article: Article): Promise<Article> {
     });
   }
 
-  return { ...article, title, summary, content: contentTranslated, blocks: translatedBlocks };
+  // Juga translate contentHtml jika ada
+  const contentHtml = (article as any).contentHtml;
+  const translatedHtml = contentHtml ? await translateHtml(contentHtml) : undefined;
+
+  return {
+    ...article,
+    title,
+    summary,
+    content: contentTranslated,
+    blocks: translatedBlocks,
+    ...(translatedHtml ? { contentHtml: translatedHtml } : {}),
+  };
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -112,6 +140,9 @@ export function ArticlePage() {
   const [isTranslated, setIsTranslated] = useState(false);
   const [translateLoading, setTranslateLoading] = useState(false);
   const [translatedArticle, setTranslatedArticle] = useState<Article | null>(null);
+  // AI popup state
+  const [aiPopup, setAiPopup] = useState<Article | null>(null);
+  const [aiCopied, setAiCopied] = useState(false);
 
   const fetchedRef = useRef<string | null>(null);
 
@@ -128,18 +159,26 @@ export function ArticlePage() {
     if (!rawArticle || fetchedRef.current === rawArticle.id) return;
     fetchedRef.current = rawArticle.id;
 
-    // Jika sudah sufficient (RSS konten lengkap) ATAU tidak ada URL → tampilkan saja apa yang ada
-    if (rawArticle.rssContentSufficient || !originalUrl) return;
+    // Tidak ada URL asli → tidak bisa fetch lebih lanjut
+    if (!originalUrl) return;
 
-    // Konten RSS tidak cukup → fetch artikel penuh di background
-    // PENTING: jika sudah ada contentHtml dari RSS, jangan tampilkan loading skeleton
-    // (user sudah lihat konten RSS), fetch hanya untuk "upgrade" ke versi lebih lengkap
-    const hasRssContent = !!(rawArticle as any).contentHtml;
-    if (!hasRssContent) setContentLoading(true);
+    // SELALU coba fetch artikel penuh dari URL asli, kecuali:
+    // source secara eksplisit menandai kontennya sudah lengkap (rssContentSufficient dari config, bukan auto-flag)
+    // Catatan: rssContentSufficient yang di-set otomatis via scoreContent TIDAK dipercaya
+    // karena RSS teaser bisa saja sudah >800 char namun tetap hanya summary.
+    // Satu-satunya pengecualian adalah jika artikel ini sudah pernah di-fetch sebelumnya
+    // (ditandai dengan adanya contentHtml DAN rssContentSufficient = true secara bersamaan setelah fetch sukses)
+    const alreadyFullyFetched = (rawArticle as any).contentHtml && (rawArticle as any)._fullFetched === true;
+    if (alreadyFullyFetched) return;
+
+    // Tampilkan RSS content dulu sebagai preview (tanpa skeleton) sambil fetch di background
+    // Hanya tampilkan skeleton jika belum ada konten sama sekali
+    const hasAnyContent = !!(rawArticle as any).contentHtml || (rawArticle.content?.length ?? 0) > 0;
+    if (!hasAnyContent) setContentLoading(true);
 
     fetchArticleContent(originalUrl).then(result => {
       if (!result || (!result.contentHtml && !result.content.length)) {
-        // Fetch gagal — jika belum ada contentHtml sama sekali, buat dari summary
+        // Fetch gagal — buat minimal dari summary jika belum ada konten
         if (!(rawArticle as any).contentHtml && rawArticle.summary && rawArticle.summary !== rawArticle.title) {
           const updated: Article = {
             ...rawArticle,
@@ -151,26 +190,37 @@ export function ArticlePage() {
         return;
       }
 
-      // Hanya replace jika konten yang di-fetch lebih panjang dari RSS
-      const fetchedLen = result.contentHtml
-        ? result.contentHtml.replace(/<[^>]+>/g, ' ').trim().length
-        : result.content.join(' ').length;
-      const rssLen = ((rawArticle as any).contentHtml ?? '')
-        .replace(/<[^>]+>/g, ' ').trim().length;
+      // Hitung panjang konten (teks saja, tanpa tag)
+      const fetchedTextLen = (result.contentHtml ?? "")
+        .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().length;
+      const rssTextLen = ((rawArticle as any).contentHtml ?? "")
+        .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().length;
 
-      if (fetchedLen <= rssLen * 0.4) return; // fetch tidak lebih baik, skip
+      // Hitung jumlah gambar di hasil fetch (gambar itu nilai tambah, bukan hanya teks)
+      const fetchedImgCount = ((result.contentHtml ?? "").match(/<img[^>]+src=/gi) ?? []).length;
 
-      const wordCount = Math.ceil(fetchedLen / 5 / 200); // estimasi kata
+      // Replace RSS content jika:
+      // (a) Fetch lebih panjang dari RSS, ATAU
+      // (b) Fetch sama panjang tapi punya lebih banyak gambar, ATAU
+      // (c) RSS belum punya konten sama sekali
+      const rssHasNoContent = rssTextLen < 100;
+      const fetchIsBetter = fetchedTextLen > rssTextLen * 0.5; // toleransi 50%
+      const fetchHasImages = fetchedImgCount > 0 && rssTextLen < 3000; // upgrade jika ada gambar dan RSS belum sangat panjang
+
+      if (!rssHasNoContent && !fetchIsBetter && !fetchHasImages) return;
+
+      const wordCount = Math.ceil(fetchedTextLen / 5 / 200);
       const updated: Article = {
         ...rawArticle,
         originalUrl: rawArticle.originalUrl,
         content: result.content,
         summary: result.summary ?? rawArticle.summary,
         image: result.image?.startsWith("http") ? result.image : rawArticle.image,
-        contentHtml: (result as any).contentHtml,
-        rssContentSufficient: true, // mark sebagai sufficient setelah fetch berhasil
+        contentHtml: result.contentHtml,
+        rssContentSufficient: true,
         readTime: Math.max(1, wordCount),
-      };
+        _fullFetched: true, // tandai sudah di-fetch penuh, tidak perlu fetch lagi
+      } as any;
       setDisplayArticle(updated);
       articleStore.updateById(rawArticle!.id, updated);
     }).finally(() => setContentLoading(false));
@@ -196,18 +246,23 @@ export function ArticlePage() {
   async function handleAIRewrite() {
     if (!hasApiKey || !rawArticle) { setAiError("API key belum diset. Buka Pengaturan."); return; }
     const cached = getCachedRewrite(rawArticle.id);
-    if (cached && isAIMode) {
-      setDisplayArticle(rawArticle!);
-      setIsAIMode(false); return;
-    }
-    if (cached && !isAIMode) { setDisplayArticle(cached); setIsAIMode(true); return; }
+    if (cached) { setAiPopup(cached); return; }
     setAiLoading(true); setAiError(null);
     try {
       const rewritten = await rewriteArticleOnDemand((displayArticle ?? rawArticle)!);
-      setDisplayArticle(rewritten); setIsAIMode(true);
+      setAiPopup(rewritten);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Gagal menulis ulang");
     } finally { setAiLoading(false); }
+  }
+
+  function handleAICopyContent() {
+    if (!aiPopup) return;
+    const text = [aiPopup.title, "", ...(aiPopup.content ?? [])].join("\n\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setAiCopied(true);
+      setTimeout(() => setAiCopied(false), 2000);
+    });
   }
 
   function handleSave() {
@@ -343,33 +398,25 @@ export function ArticlePage() {
               {article.title}
             </h1>
 
-            {/* Summary */}
-            {article.summary && article.summary !== article.title && (
-              <p className="mt-4 p-4 rounded-xl"
-                style={{ fontSize: 14, color: "#555", lineHeight: "1.7", background: "#fff8f4", borderLeft: "3px solid " + catColor }}>
-                {article.summary}
-              </p>
-            )}
-
             <div className="my-5 border-t border-neutral-100" />
 
             {/* AI button */}
             {hasApiKey ? (
               <button onClick={handleAIRewrite} disabled={aiLoading}
                 className="w-full mb-5 flex items-center justify-between px-4 py-3.5 rounded-2xl active:opacity-80 disabled:opacity-60 transition-all"
-                style={{ background: isAIMode ? "linear-gradient(135deg,#7c3aed,#a78bfa)" : "linear-gradient(135deg,#ff742f,#ff9a5c)" }}>
+                style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)" }}>
                 <div className="flex items-center gap-3">
                   {aiLoading ? <RefreshCw size={16} className="text-white animate-spin" /> : <Sparkles size={16} className="text-white" />}
                   <div className="text-left">
                     <p style={{ fontSize: 13, fontWeight: 700, color: "white" }}>
-                      {aiLoading ? "Sedang menulis ulang..." : isAIMode ? "Lihat Artikel Asli" : "Buat Artikel dengan AI"}
+                      {aiLoading ? "Sedang menulis ulang..." : "Buat Artikel dengan AI"}
                     </p>
                     <p style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }}>
-                      {aiLoading ? "Mohon tunggu..." : isAIMode ? "Kembali ke sumber asli" : "Terjemahkan & tulis ulang ke Bahasa Indonesia"}
+                      {aiLoading ? "Mohon tunggu..." : "Terjemahkan & tulis ulang ke Bahasa Indonesia"}
                     </p>
                   </div>
                 </div>
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>{isAIMode ? "Asli" : "AI"}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>AI</span>
               </button>
             ) : (
               <button onClick={() => navigate("/pengaturan")}
@@ -393,13 +440,58 @@ export function ArticlePage() {
               </div>
             )}
 
-            {isAIMode && !aiLoading && (
-              <button onClick={() => navigate("/editor", { state: { titleHtml: article.title, bgUrl: article.image } })}
-                className="w-full mb-5 flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-transform active:scale-[0.99]"
-                style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", color: "white" }}>
-                <Edit3 size={16} />
-                <span style={{ fontSize: 14, fontWeight: 700 }}>Buat Post dari Artikel Ini</span>
-              </button>
+            {/* ── AI Result Popup ─────────────────────────────────────────── */}
+            {aiPopup && (
+              <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+                onClick={(e) => { if (e.target === e.currentTarget) setAiPopup(null); }}>
+                <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col"
+                  style={{ maxHeight: "85vh" }}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg,#7c3aed,#a78bfa)" }}>
+                        <Sparkles size={13} color="white" />
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: "#1a1a1a" }}>Hasil AI</span>
+                    </div>
+                    <button onClick={() => setAiPopup(null)} className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
+                      <X size={15} className="text-neutral-500" />
+                    </button>
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto px-5 pb-3">
+                    <h2 style={{ fontSize: 17, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.35, marginBottom: 12 }}>
+                      {aiPopup.title}
+                    </h2>
+                    <div className="flex flex-col gap-3">
+                      {(aiPopup.content ?? []).map((p, i) => (
+                        <p key={i} style={{ fontSize: 14, color: "#444", lineHeight: 1.75 }}>{p}</p>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Action buttons */}
+                  <div className="flex gap-3 px-5 py-4 border-t border-neutral-100 shrink-0">
+                    <button
+                      onClick={handleAICopyContent}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
+                      style={{ background: aiCopied ? "#22c55e" : "#f5f5f5", color: aiCopied ? "white" : "#333" }}>
+                      {aiCopied ? <Check size={15} /> : <Copy size={15} />}
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>{aiCopied ? "Tersalin!" : "Salin"}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAiPopup(null);
+                        navigate("/editor", { state: { titleHtml: aiPopup.title, bgUrl: article.image } });
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
+                      style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", color: "white" }}>
+                      <Edit3 size={15} />
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>Buat Post</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Article body */}
@@ -433,6 +525,14 @@ export function ArticlePage() {
                   .article-prose th { background: #f5f5f5; font-weight: 700; padding: 8px; border: 1px solid #e5e5e5; }
                   .article-prose td { padding: 7px 8px; border: 1px solid #e5e5e5; }
                   .article-prose br { display: block; content: ""; margin-top: 0.4em; }
+                  .article-prose [data-embed] { margin: 1.4em 0; }
+                  .article-prose [data-embed="youtube"],
+                  .article-prose [data-embed="instagram"],
+                  .article-prose [data-embed="tiktok"],
+                  .article-prose [data-embed="maps"] { border-radius: 14px; overflow: hidden; }
+                  .article-prose [data-embed="twitter"] { border-radius: 12px; }
+                  .article-prose [data-embed="spotify"],
+                  .article-prose [data-embed="soundcloud"] { border-radius: 12px; }
                 `}</style>
                 <div
                   className="article-prose"

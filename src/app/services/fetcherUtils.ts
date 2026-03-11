@@ -80,14 +80,25 @@ export function decodeHtmlEntities(s: string): string {
 }
 
 export function relTime(d: string): string {
-  const ms = Date.now() - new Date(d).getTime();
-  if (!ms || isNaN(ms)) return "Baru saja";
+  if (!d) return "";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "";
+  const ms = Date.now() - date.getTime();
   const m = Math.floor(ms / 60000), h = Math.floor(m / 60), day = Math.floor(h / 24);
-  if (m < 2) return "Baru saja";
+  if (m < 1) return "Baru saja";
   if (m < 60) return m + " menit lalu";
   if (h < 24) return h + " jam lalu";
   if (day < 7) return day + " hari lalu";
-  return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  // Untuk artikel lama: tampilkan tanggal dan jam persis sesuai sumber
+  return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: day > 365 ? "numeric" : undefined })
+    + " " + date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+}
+
+// rawPubDate: simpan timestamp Unix (ms) untuk sorting — jangan dikonversi ke string dulu
+export function rawPubTimestamp(d: string): number {
+  if (!d) return 0;
+  const t = new Date(d).getTime();
+  return isNaN(t) ? 0 : t;
 }
 
 export function guessCategory(title: string, tags: string[] = []): string {
@@ -106,7 +117,7 @@ export async function fetchWithFallback(url: string, ms = 12000): Promise<string
   // ① Server proxy
   try {
     const res = await fetch(SERVER_PROXY + encodeURIComponent(url), {
-      signal: AbortSignal.timeout(ms),
+      signal: AbortSignal.timeout(30000), // timeout diperpanjang jadi 30 detik
     });
     if (res.ok) {
       const text = await res.text();
@@ -208,11 +219,32 @@ export function sanitizeHtml(rawHtml: string, baseUrl: string): string {
       .join(", ");
   }
 
+    // Custom rule: hapus semua <img> yang muncul setelah <p>
+    function removeImagesAfterParagraph(doc: Document) {
+      // Temukan semua <p> di dokumen
+      const paragraphs = Array.from(doc.body.querySelectorAll('p'));
+      if (paragraphs.length === 0) return;
+      // Temukan semua <img> di dokumen
+      const images = Array.from(doc.body.querySelectorAll('img'));
+      images.forEach(img => {
+        // Cek apakah ada <p> sebelum <img> (secara urutan DOM)
+        let node = img.previousElementSibling;
+        while (node) {
+          if (node.tagName && node.tagName.toLowerCase() === 'p') {
+            img.remove();
+            break;
+          }
+          node = node.previousElementSibling;
+        }
+      });
+    }
   /**
    * E. Readability heuristic: apakah gambar ini termasuk konten artikel?
    * Gambar dianggap KONTEN jika:
    *   1. Ada di dalam <figure> (editorial intent jelas)
    *   2. Lebar/tinggi eksplisit >= 200px (gambar besar = ilustrasi konten)
+    // Hapus gambar setelah paragraf
+    removeImagesAfterParagraph(doc);
    *   3. Tidak ada dimensi eksplisit (ukuran alami dari sumber)
    */
   function isContentImage(el: Element): boolean {
@@ -364,26 +396,40 @@ export function sanitizeHtml(rawHtml: string, baseUrl: string): string {
  * proxyImgInHtml — ganti semua src/srcset gambar dalam HTML string dengan
  * URL proxy (/api/img?url=...) agar COEP tidak memblokir gambar cross-origin.
  * Dipanggil di ArticlePage sebelum dangerouslySetInnerHTML.
+ *
+ * PENTING: regex sebelumnya `(<img[^>]+\s)src=` TIDAK match `<img src=`
+ * (satu spasi antara "img" dan "src") karena [^>]+ butuh ≥1 karakter lalu \s lagi.
+ * Fix: gunakan lookahead/lookbehind sederhana — replace semua src= dalam <img> tag.
  */
 export function proxyImgInHtml(html: string): string {
   if (!html) return html;
-  // Proxy src
-  let result = html.replace(
-    /(<img[^>]+\s)src="(https?:\/\/[^"]+)"/gi,
-    (_, prefix, url) => `${prefix}src="/api/img?url=${encodeURIComponent(url)}"`
-  );
-  // Proxy srcset
-  result = result.replace(
-    /(<img[^>]+\s)srcset="([^"]+)"/gi,
-    (_, prefix, srcset) => {
-      const proxied = srcset.replace(
-        /(https?:\/\/[^\s,]+)/gi,
-        (u: string) => `/api/img?url=${encodeURIComponent(u)}`
-      );
-      return `${prefix}srcset="${proxied}"`;
-    }
-  );
-  return result;
+
+  return html.replace(/<img([^>]*)>/gi, (_fullTag: string, attrs: string) => {
+    // Proxy src (dengan leading whitespace)
+    let newAttrs = attrs.replace(
+      /(\s)src="(https?:\/\/[^"]+)"/gi,
+      (_m: string, space: string, url: string) =>
+        `${space}src="/api/img?url=${encodeURIComponent(url)}"`
+    );
+    // Proxy src tanpa leading whitespace (kasus pertama di attrs)
+    newAttrs = newAttrs.replace(
+      /^src="(https?:\/\/[^"]+)"/i,
+      (_m: string, url: string) =>
+        `src="/api/img?url=${encodeURIComponent(url)}"`
+    );
+    // Proxy srcset
+    newAttrs = newAttrs.replace(
+      /(\s)srcset="([^"]+)"/gi,
+      (_m: string, space: string, srcset: string) => {
+        const proxied = srcset.replace(
+          /(https?:\/\/[^\s,]+)/gi,
+          (u: string) => `/api/img?url=${encodeURIComponent(u)}`
+        );
+        return `${space}srcset="${proxied}"`;
+      }
+    );
+    return `<img${newAttrs}>`;
+  });
 }
 
 // ── Content scoring ───────────────────────────────────────────────────────────

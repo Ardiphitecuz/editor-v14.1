@@ -205,21 +205,23 @@ export function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [translatedTitles, setTranslatedTitles] = useState<Record<string, string>>({});
   const translatedIdsRef = useRef(new Set<string>());
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const { articles: fetchedArticles, loading, progressMsg, progressDone, progressTotal, errors, fromCache, refresh } = useNews();
   const allArticles = fetchedArticles;
   const hasArticles = allArticles.length > 0;
-  // Skeleton hanya saat pertama kali buka & belum ada artikel sama sekali
   const showSkeleton = loading && !hasArticles;
-  // Refresh bar tipis saat update di background (sudah ada artikel)
   const showRefreshBar = loading && hasArticles;
   const hasErrors = Object.keys(errors).length > 0;
+
+  // Reset page saat kategori / pencarian berubah
+  useEffect(() => { setPage(1); }, [activeCategory, searchQuery]);
 
   useEffect(() => {
     if (allArticles.length === 0) return;
     const untranslated = allArticles.filter(a => !translatedIdsRef.current.has(a.id));
     if (untranslated.length === 0) return;
-    // Mark all as queued immediately to prevent duplicate requests
     untranslated.forEach(a => translatedIdsRef.current.add(a.id));
     translateTitles(untranslated).then(map => {
       if (Object.keys(map).length > 0) setTranslatedTitles(prev => ({ ...prev, ...map }));
@@ -228,13 +230,22 @@ export function HomePage() {
 
   const getTitle = (a: Article) => translatedTitles[a.id] ?? a.title;
 
-  const featured = allArticles.filter(a => a.hot);
-  const trending = allArticles.filter(a => ["Trending", "Hot Topic"].includes(a.category)).slice(0, 6);
+  // Featured: 2 artikel terpopuler (hot) — artikel dengan pubTimestamp terbaru di antara hot
+  const featured = allArticles.filter(a => a.hot).slice(0, 2);
+  // Trending: kategori tertentu, diurutkan terbaru
+  const trending = allArticles
+    .filter(a => ["Trending", "Hot Topic"].includes(a.category))
+    .slice(0, 6);
+
   const filtered = allArticles.filter(a => {
     const matchCat = activeCategory === "Semua" || a.category === activeCategory;
     const matchSearch = !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.summary.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCat && matchSearch;
   });
+
+  // Pagination untuk "Semua Artikel"
+  const paginatedArticles = filtered.slice(0, page * PAGE_SIZE);
+  const hasMore = filtered.length > paginatedArticles.length;
 
   const heroArticle = featured[0] ?? allArticles[0];
   const sidebarArticles = allArticles.filter(a => a.id !== heroArticle?.id).slice(0, 6);
@@ -349,9 +360,15 @@ export function HomePage() {
                   </div>
                   <div>
                     <h2 className="mb-2" style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a" }}>Semua Artikel</h2>
-                    {allArticles.map(a => (
+                    {paginatedArticles.map(a => (
                       <ArticleCard key={a.id} article={a} onClick={() => goToArticle(a.id)} displayTitle={getTitle(a)} />
                     ))}
+                    {hasMore && (
+                      <button onClick={() => setPage(p => p + 1)}
+                        className="w-full py-3 mt-2 rounded-xl text-[#ff742f] font-bold text-sm border border-[#ff742f] hover:bg-[#fff8f4] transition-colors">
+                        Muat lebih banyak ({filtered.length - paginatedArticles.length} tersisa)
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -411,9 +428,15 @@ export function HomePage() {
                 </div>
                 <div className="pt-6 px-4">
                   <h2 className="mb-1" style={{ fontSize: 16, fontWeight: 800, color: "#1a1a1a" }}>Semua Artikel</h2>
-                  {allArticles.map(a => (
+                  {paginatedArticles.map(a => (
                     <ArticleCard key={a.id} article={a} onClick={() => goToArticle(a.id)} displayTitle={getTitle(a)} />
                   ))}
+                  {hasMore && (
+                    <button onClick={() => setPage(p => p + 1)}
+                      className="w-full py-3 mt-2 rounded-xl text-[#ff742f] font-bold text-sm border border-[#ff742f] hover:bg-[#fff8f4] transition-colors">
+                      Muat lebih banyak ({filtered.length - paginatedArticles.length} tersisa)
+                    </button>
+                  )}
                 </div>
               </div>
             </>

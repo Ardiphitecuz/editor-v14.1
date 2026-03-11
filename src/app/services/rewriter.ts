@@ -288,17 +288,32 @@ export async function rewriteArticleOnDemand(
 
   const parts: string[] = [`Judul Asli: ${article.title}`];
   
-  // Ambil teks dari blocks (lebih lengkap) atau content[]
+  // Ambil teks dari blocks (lebih lengkap) atau content[] atau contentHtml
   const bodyText = (() => {
     if (article.blocks && article.blocks.length > 0) {
-      return article.blocks
+      const txt = article.blocks
         .filter(b => b.type === 'text' && b.text && b.text !== article.title)
         .map(b => b.text!)
         .join('\n\n');
+      if (txt.length > 50) return txt;
     }
-    return (article.content ?? [])
-      .filter(c => c !== article.title)
-      .join('\n\n');
+    if ((article.content ?? []).length > 0) {
+      const txt = (article.content ?? [])
+        .filter(c => c !== article.title)
+        .join('\n\n');
+      if (txt.length > 50) return txt;
+    }
+    // Fallback: ekstrak teks dari contentHtml (untuk artikel yang hanya punya contentHtml)
+    const html = (article as any).contentHtml ?? '';
+    if (html) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const text = Array.from(doc.querySelectorAll('p, h2, h3, li'))
+        .map(el => el.textContent?.trim())
+        .filter(Boolean)
+        .join('\n\n');
+      return text;
+    }
+    return '';
   })();
 
   if (bodyText.length > 0) {

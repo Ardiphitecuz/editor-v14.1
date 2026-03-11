@@ -116,10 +116,9 @@ export async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<
     const href = (a as HTMLAnchorElement).href;
     const cat = guessCategory(title);
 
-    // Prioritas: gambar terdekat di DOM > og:image homepage > kosong (no-image)
-    // TIDAK pakai fallback splash — lebih jujur ke user
+    // Hanya gambar dari container artikel, jika tidak ada biarkan kosong
     const nearbyImg = findNearbyImage(a, rawUrl);
-    const image = nearbyImg ?? ogImage ?? "";
+    const image = nearbyImg || "";
 
     return {
       id: hashId(href || title),

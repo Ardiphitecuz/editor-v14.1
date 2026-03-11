@@ -335,7 +335,16 @@ export function EditorPage() {
 
   useEffect(() => { currentBgTRef.current = bgT; }, [bgT]);
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
-  useEffect(() => { if (editorRef.current) editorRef.current.innerHTML = INIT_TITLE; }, []);
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = INIT_TITLE;
+      setTitleHtml(INIT_TITLE);
+    }
+    // Jika datang dari ArticlePage (ada titleHtml), langsung buka panel Konten
+    if (locationState?.titleHtml) {
+      setActiveTab("content");
+    }
+  }, []);
 
   const updateFormatState = useCallback(() => { setIsBoldActive(document.queryCommandState("bold")); setIsItalicActive(document.queryCommandState("italic")); }, []);
   const handleEditorInput = useCallback(() => { if (editorRef.current) setTitleHtml(editorRef.current.innerHTML); updateFormatState(); }, [updateFormatState]);
