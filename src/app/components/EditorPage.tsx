@@ -474,6 +474,12 @@ export function EditorPage() {
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [showTextEditPopup, setShowTextEditPopup] = useState(false);
   const [showSplitAngleSlider, setShowSplitAngleSlider] = useState(false);
+  const [showBgSubBubbles, setShowBgSubBubbles] = useState(false);
+  const [showBgSub2Bubbles, setShowBgSub2Bubbles] = useState(false);
+  const [showBg2UrlPopup, setShowBg2UrlPopup] = useState(false);
+  const [bg2UrlInput, setBg2UrlInput] = useState("");
+  const [bg2UrlLoading, setBg2UrlLoading] = useState(false);
+  const [bg2UrlErr, setBg2UrlErr] = useState<string | null>(null);
 
   // Refs
   const editorRef = useRef<HTMLDivElement>(null);
@@ -484,7 +490,7 @@ export function EditorPage() {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
-  const pinchRef = useRef<{ startDist: number; startScale1: number; startScale2: number } | null>(null);
+  const pinchRef = useRef<{ startDist: number; startScale1: number; startScale2: number; touchedBg?: 1 | 2 } | null>(null);
   const currentBgTRef = useRef(DEFAULT_BG_TRANSFORM);
   const currentBg2TRef = useRef(DEFAULT_BG_TRANSFORM);
   const cardDimRef = useRef({ w: POST_W, h: POST_H });
@@ -531,7 +537,24 @@ export function EditorPage() {
     }
   };
 
-  useEffect(() => { currentBgTRef.current = bgT; }, [bgT]);
+  // Fix mobile: prevent auto-zoom on input focus, disable page scroll
+  useEffect(() => {
+    if (isDesktop) return;
+    // Prevent iOS auto-zoom on input focus
+    const existing = document.querySelector('meta[name="viewport"]');
+    const content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+    if (existing) existing.setAttribute("content", content);
+    else { const m = document.createElement("meta"); m.name = "viewport"; m.content = content; document.head.appendChild(m); }
+    // Prevent body scroll
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.width = "";
+    };
+  }, [isDesktop]);
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
   useEffect(() => { cardDimRef.current = { w: CARD_W, h: CARD_H }; }, [CARD_W, CARD_H]);
   // Auto-sync zoom target when selection changes
@@ -628,14 +651,23 @@ export function EditorPage() {
         e.preventDefault();
         const getD = (t: TouchList) => Math.sqrt((t[0].clientX - t[1].clientX) ** 2 + (t[0].clientY - t[1].clientY) ** 2);
         const dist = getD(e.touches);
+        const rect = previewContainerRef.current?.getBoundingClientRect();
+        // Determine which BG to zoom: based on where first finger is
+        const midX = rect ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : 0;
+        const rectMidX = rect ? rect.left + rect.width / 2 : 0;
+        const touchedBg: 1 | 2 = (bgMode === "collage" && midX > rectMidX) ? 2 : 1;
         if (!pinchRef.current) {
-          pinchRef.current = { startDist: dist, startScale1: currentBgTRef.current.scale, startScale2: currentBg2TRef.current.scale };
+          pinchRef.current = { startDist: dist, startScale1: currentBgTRef.current.scale, startScale2: currentBg2TRef.current.scale, touchedBg };
         } else {
           const r = dist / pinchRef.current.startDist;
-          const s1 = pinchRef.current.startScale1;
-          const s2 = pinchRef.current.startScale2;
-          setBgT(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s1 * r)) }));
-          setBg2T(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s2 * r)) }));
+          if (pinchRef.current.touchedBg === 1 || bgMode !== "collage") {
+            const s1 = pinchRef.current.startScale1;
+            setBgT(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s1 * r)) }));
+          }
+          if (pinchRef.current.touchedBg === 2 && bgMode === "collage") {
+            const s2 = pinchRef.current.startScale2;
+            setBg2T(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s2 * r)) }));
+          }
         }
         return;
       }
@@ -946,6 +978,20 @@ export function EditorPage() {
       setSourceUrlLoading(false); setSourceUrlInput(""); setShowSourcePopup(false);
     };
     img.onerror = () => { setSourceUrlLoading(false); setSourceUrlErr("Gagal memuat gambar dari URL ini."); };
+    img.crossOrigin = "anonymous"; img.src = url;
+  };
+
+  const applyBg2Url = () => {
+    const url = bg2UrlInput.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) { setBg2UrlErr("URL harus diawali https://"); return; }
+    setBg2UrlLoading(true); setBg2UrlErr(null);
+    const img = new Image();
+    img.onload = () => {
+      setBg2Src(url); setBg2T({ ...DEFAULT_BG_TRANSFORM });
+      setBg2UrlLoading(false); setBg2UrlInput(""); setShowBg2UrlPopup(false);
+    };
+    img.onerror = () => { setBg2UrlLoading(false); setBg2UrlErr("Gagal memuat gambar dari URL ini."); };
     img.crossOrigin = "anonymous"; img.src = url;
   };
 
@@ -1280,6 +1326,69 @@ export function EditorPage() {
           );
         }
 
+        // ── Smooth vertical slider component for mobile ──
+        const VerticalSlider = ({ value, min, max, height, onChange, onClose, label, color = "#ff742f" }: {
+          value: number; min: number; max: number; height: number;
+          onChange: (v: number) => void; onClose: () => void; label: string; color?: string;
+        }) => {
+          const trackRef = useRef<HTMLDivElement>(null);
+          const isDragging = useRef(false);
+          const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+
+          const getValueFromEvent = (clientY: number) => {
+            const rect = trackRef.current?.getBoundingClientRect();
+            if (!rect) return value;
+            const relY = clientY - rect.top;
+            const ratio = 1 - Math.max(0, Math.min(1, relY / rect.height));
+            return Math.round(min + ratio * (max - min));
+          };
+
+          const onPointerDown = (e: React.PointerEvent) => {
+            e.preventDefault(); e.stopPropagation();
+            isDragging.current = true;
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+            onChange(getValueFromEvent(e.clientY));
+          };
+          const onPointerMove = (e: React.PointerEvent) => {
+            if (!isDragging.current) return;
+            e.preventDefault();
+            onChange(getValueFromEvent(e.clientY));
+          };
+          const onPointerUp = (e: React.PointerEvent) => {
+            isDragging.current = false;
+            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+          };
+
+          return (
+            <div className="zoom-slide flex flex-col items-center gap-1.5 pointer-events-auto" style={{ height: height + 72 }}
+              onClick={e => e.stopPropagation()}>
+              <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}>
+                <X size={11} className="text-white/80" />
+              </button>
+              <div className="px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0"
+                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.75)" }}>
+                {value}{label === "SPLIT" ? "°" : "%"}
+              </div>
+              {/* Track */}
+              <div ref={trackRef} className="relative rounded-full cursor-pointer shrink-0"
+                style={{ width: 20, height, background: "rgba(255,255,255,0.15)", touchAction: "none" }}
+                onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+                {/* Fill */}
+                <div className="absolute bottom-0 left-0 right-0 rounded-full transition-none"
+                  style={{ height: `${pct}%`, background: color }} />
+                {/* Thumb */}
+                <div className="absolute left-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-white shadow-lg"
+                  style={{ bottom: `calc(${pct}% - 12px)`, background: color, boxShadow: "0 2px 10px rgba(0,0,0,0.4)" }} />
+              </div>
+              <div className="px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0"
+                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color }}>
+                {label}
+              </div>
+            </div>
+          );
+        };
+
         return (
           /* ── MOBILE LAYOUT ── */
           <>
@@ -1295,25 +1404,8 @@ export function EditorPage() {
               }
               .bubble-pop { animation: bubblePop 0.22s cubic-bezier(0.34,1.56,0.64,1) both; }
               .zoom-slide { animation: zoomSlideIn 0.2s ease both; }
-              .vtslider {
-                -webkit-appearance: none;
-                writing-mode: vertical-lr;
-                direction: rtl;
-                width: 4px;
-                border-radius: 99px;
-                outline: none;
-                cursor: pointer;
-              }
-              .vtslider::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                width: 24px; height: 24px;
-                border-radius: 50%;
-                background: #ff742f;
-                border: 3px solid rgba(255,255,255,0.9);
-                box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-                cursor: grab;
-              }
-              .vtslider::-webkit-slider-runnable-track { width: 4px; border-radius: 99px; }
+              * { -webkit-user-select: none; user-select: none; }
+              input, textarea { -webkit-user-select: text; user-select: text; }
             `}</style>
 
             {/* ── SOURCE URL POPUP ── */}
@@ -1325,7 +1417,7 @@ export function EditorPage() {
                   style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
                   onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between">
-                    <span className="text-white font-bold text-sm">Link Gambar BG</span>
+                    <span className="text-white font-bold text-sm">Gambar via Link</span>
                     <button onClick={() => setShowSourcePopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
                   </div>
                   <p className="text-white/40 text-xs -mt-1">Domain akan otomatis mengisi kolom Sumber.</p>
@@ -1334,7 +1426,8 @@ export function EditorPage() {
                     <input type="url" value={sourceUrlInput}
                       onChange={e => { setSourceUrlInput(e.target.value); setSourceUrlErr(null); }}
                       onKeyDown={e => { if (e.key === "Enter") applySourceUrl(); }}
-                      placeholder="https://..." className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-white/25" autoFocus />
+                      placeholder="https://..." className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-white/25" autoFocus
+                      style={{ fontSize: 16 }} />
                   </div>
                   {sourceUrlErr && <p className="text-red-400 text-xs">{sourceUrlErr}</p>}
                   <button onClick={applySourceUrl} disabled={sourceUrlLoading || !sourceUrlInput.trim()}
@@ -1346,22 +1439,50 @@ export function EditorPage() {
               </div>
             )}
 
-            {/* ── LABEL PICKER POPUP ── */}
-            {showLabelPicker && (
-              <div className="fixed inset-0 z-[100] flex items-end justify-center pb-24"
-                style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
-                onClick={() => setShowLabelPicker(false)}>
-                <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+            {/* ── BG2 URL POPUP ── */}
+            {showBg2UrlPopup && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+                onClick={() => setShowBg2UrlPopup(false)}>
+                <div className="w-full max-w-sm rounded-2xl p-5 flex flex-col gap-3 shadow-2xl"
                   style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
                   onClick={e => e.stopPropagation()}>
-                  <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-                    <span className="text-white/50 text-xs font-semibold uppercase tracking-wider">Pilih Label</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">Gambar Kedua via Link</span>
+                    <button onClick={() => setShowBg2UrlPopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
+                  </div>
+                  <div className="flex gap-2 items-center rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                    <Link size={13} className="text-white/40 shrink-0" />
+                    <input type="url" value={bg2UrlInput}
+                      onChange={e => { setBg2UrlInput(e.target.value); setBg2UrlErr(null); }}
+                      onKeyDown={e => { if (e.key === "Enter") applyBg2Url(); }}
+                      placeholder="https://..." className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-white/25" autoFocus
+                      style={{ fontSize: 16 }} />
+                  </div>
+                  {bg2UrlErr && <p className="text-red-400 text-xs">{bg2UrlErr}</p>}
+                  <button onClick={applyBg2Url} disabled={bg2UrlLoading || !bg2UrlInput.trim()}
+                    className="w-full py-2.5 rounded-xl text-white text-sm font-bold transition disabled:opacity-40"
+                    style={{ background: "#ff742f" }}>
+                    {bg2UrlLoading ? "Memuat..." : "Terapkan"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {showLabelPicker && (
+              <div className="fixed inset-0 z-[100] flex items-end justify-center pb-24 px-4"
+                style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
+                onClick={() => setShowLabelPicker(false)}>
+                <div className="w-64 rounded-2xl overflow-hidden shadow-2xl"
+                  style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+                    <span className="text-white/50 text-xs font-semibold uppercase tracking-wider">Label</span>
                     <button onClick={() => setShowLabelPicker(false)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)" }}><X size={11} className="text-white" /></button>
                   </div>
                   <div className="grid grid-cols-2 gap-0 pb-2">
                     {LABEL_OPTIONS.map(opt => (
                       <button key={opt} onClick={() => { setLabel(opt); setShowLabelPicker(false); }}
-                        className="px-4 py-3 text-left text-sm font-semibold transition flex items-center gap-2"
+                        className="px-3 py-2.5 text-left text-xs font-semibold transition flex items-center gap-1.5"
                         style={{ color: label === opt ? "#ff742f" : "rgba(255,255,255,0.8)", background: label === opt ? "rgba(255,116,47,0.12)" : "transparent" }}>
                         {label === opt && <div className="w-1.5 h-1.5 rounded-full bg-[#ff742f] shrink-0" />}
                         {opt}
@@ -1480,19 +1601,21 @@ export function EditorPage() {
                         action: () => applyFormat("italic"),
                         active: isItalicActive
                       },
-                      {
-                        icon: <ImagePlus size={17} />,
-                        action: () => setShowSourcePopup(true)
-                      },
                     ],
                     background: [
                       {
                         icon: <ImagePlus size={17} />,
-                        action: () => fileInputRef.current?.click()
+                        action: () => setShowBgSubBubbles(p => !p),
+                        active: showBgSubBubbles
                       },
+                      ...(bgMode === "collage" ? [{
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="13" y="3" width="9" height="18" rx="2"/><path d="M13 8l-4 4 4 4"/></svg>,
+                        action: () => setShowBgSub2Bubbles((p: boolean) => !p),
+                        active: showBgSub2Bubbles
+                      }] : []),
                       {
                         icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="9" height="18" rx="2"/><rect x="13" y="3" width="9" height="18" rx="2"/></svg>,
-                        action: () => setBgMode(p => p === "collage" ? "single" : "collage"),
+                        action: () => { setBgMode(p => p === "collage" ? "single" : "collage"); setShowBgSubBubbles(false); },
                         active: bgMode === "collage"
                       },
                       ...(bgMode === "collage" ? [{
@@ -1537,42 +1660,63 @@ export function EditorPage() {
                       style={{ opacity: bgDragActive ? 0.1 : 1, transition: "opacity 0.18s ease" }}
                       onClick={e => e.stopPropagation()}>
                       {items.map((b, i) => (
-                        <button key={i} className="bubble-pop w-11 h-11 rounded-full flex items-center justify-center transition active:scale-90"
-                          style={{ animationDelay: `${i * 0.04}s`, ...glassStyle(b.danger, b.active) }}
-                          onClick={(e) => { e.stopPropagation(); b.action(); }}>
-                          {b.icon}
-                        </button>
+                        <div key={i} className="relative flex items-center gap-2">
+                          <button className="bubble-pop w-11 h-11 rounded-full flex items-center justify-center transition active:scale-90"
+                            style={{ animationDelay: `${i * 0.04}s`, ...glassStyle(b.danger, b.active) }}
+                            onClick={(e) => { e.stopPropagation(); b.action(); }}>
+                            {b.icon}
+                          </button>
+                          {/* Sub-bubbles for BG1 add button */}
+                          {mobileBubbleTab === "background" && i === 0 && showBgSubBubbles && (
+                            <div className="flex gap-2 items-center">
+                              <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
+                                style={{ animationDelay: "0.05s", ...glassStyle() }}
+                                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); setShowBgSubBubbles(false); }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                              </button>
+                              <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
+                                style={{ animationDelay: "0.1s", ...glassStyle() }}
+                                onClick={(e) => { e.stopPropagation(); setShowSourcePopup(true); setShowBgSubBubbles(false); }}>
+                                <Link size={16} />
+                              </button>
+                            </div>
+                          )}
+                          {/* Sub-bubbles for BG2 add button (collage mode) */}
+                          {mobileBubbleTab === "background" && i === 1 && bgMode === "collage" && showBgSub2Bubbles && (
+                            <div className="flex gap-2 items-center">
+                              <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
+                                style={{ animationDelay: "0.05s", ...glassStyle() }}
+                                onClick={(e) => { e.stopPropagation(); file2InputRef.current?.click(); setShowBgSub2Bubbles(false); }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                              </button>
+                              <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
+                                style={{ animationDelay: "0.1s", ...glassStyle() }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Open a separate BG2 URL popup by reusing source popup with a flag
+                                  setShowBg2UrlPopup(true); setShowBgSub2Bubbles(false);
+                                }}>
+                                <Link size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   );
                 })()}
 
-                {/* ── SPLIT ANGLE INLINE SLIDER ── (shown above bubbles when collage mode) */}
+                {/* ── SPLIT ANGLE INLINE SLIDER ── */}
                 {showSplitAngleSlider && bgMode === "collage" && (
-                  <div className="zoom-slide absolute left-16 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-auto"
-                    style={{ height: PREVIEW_H * 0.5 }}
+                  <div className="absolute left-16 top-1/2 -translate-y-1/2 z-30"
                     onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setShowSplitAngleSlider(false)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center"
-                      style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}>
-                      <X size={11} className="text-white/80" />
-                    </button>
-                    <div className="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                      style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }}>
-                      {splitAngle}°
-                    </div>
-                    <input type="range" className="vtslider"
-                      min={-30} max={30} step={1} value={splitAngle}
-                      onChange={e => setSplitAngle(Number(e.target.value))}
-                      style={{
-                        height: PREVIEW_H * 0.35,
-                        background: `linear-gradient(to top, #ff742f ${((splitAngle + 30) / 60) * 100}%, rgba(255,255,255,0.2) ${((splitAngle + 30) / 60) * 100}%)`,
-                      }}
+                    <VerticalSlider
+                      value={splitAngle} min={-30} max={30}
+                      height={Math.round(PREVIEW_H * 0.38)}
+                      onChange={setSplitAngle}
+                      onClose={() => setShowSplitAngleSlider(false)}
+                      label="SPLIT"
                     />
-                    <div className="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                      style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "#ff742f" }}>
-                      SPLIT
-                    </div>
                   </div>
                 )}
 
@@ -1598,30 +1742,16 @@ export function EditorPage() {
                     if (isSticker) { updateSticker(zoomTarget, { size: Math.max(50, Math.min(900, (v / 100) * 300)) }); return; }
                     if (isText) { updateText(zoomTarget, { fontSize: Math.max(20, Math.min(300, (v / 100) * 80)) }); return; }
                   };
-                  const val = getVal();
-                  const pct = ((val - zMin) / (zMax - zMin)) * 100;
                   return (
-                    <div className="zoom-slide absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1.5 z-30 pointer-events-auto"
-                      style={{ height: PREVIEW_H * 0.62 }}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 z-30"
                       onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setShowZoomSlider(false)}
-                        className="w-7 h-7 rounded-full flex items-center justify-center"
-                        style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}>
-                        <X size={11} className="text-white/80" />
-                      </button>
-                      <div className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white/70"
-                        style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)" }}>
-                        {val}%
-                      </div>
-                      <input type="range" className="vtslider"
-                        min={zMin} max={zMax} step={1} value={val}
-                        onChange={e => setVal(Number(e.target.value))}
-                        style={{ height: PREVIEW_H * 0.44, background: `linear-gradient(to top, #ff742f ${pct}%, rgba(255,255,255,0.2) ${pct}%)` }}
+                      <VerticalSlider
+                        value={getVal()} min={zMin} max={zMax}
+                        height={Math.round(PREVIEW_H * 0.5)}
+                        onChange={setVal}
+                        onClose={() => setShowZoomSlider(false)}
+                        label="ZOOM"
                       />
-                      <div className="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                        style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "#ff742f" }}>
-                        ZOOM
-                      </div>
                     </div>
                   );
                 })()}
@@ -1641,10 +1771,13 @@ export function EditorPage() {
                           setActiveTab(null);
                           setShowZoomSlider(false);
                           setShowSplitAngleSlider(false);
+                          setShowBgSubBubbles(false);
                         } else {
                           setMobileBubbleTab(t.id);
                           setActiveTab(t.id);
                           setShowSplitAngleSlider(false);
+                          setShowBgSubBubbles(false);
+                          setShowBgSub2Bubbles(false);
                           if (t.id === "background") { setZoomTarget("bg1"); setShowZoomSlider(true); }
                           else if (t.id === "stickers") { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } else setShowZoomSlider(false); }
                           else if (t.id === "texts") { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } else setShowZoomSlider(false); }
