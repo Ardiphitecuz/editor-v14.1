@@ -21,22 +21,33 @@ export default async function handler(req, res) {
     const baseUrl = pageUrl.origin;
     const isJapaneseSite = /\.jp(\/|$)/.test(url) || /[\u3040-\u30ff\u4e00-\u9faf]/.test(url);
 
-    // ── Fetch HTML dengan beberapa User-Agent fallback ─────────────────────────
+    // ── Fetch HTML: direct + public proxy fallback ───────────────────────────
+    // Beberapa site memblokir IP datacenter Vercel.
+    // Jika semua direct attempt gagal, coba lewat public CORS proxy
+    // agar tetap diproses Readability di server (bukan fallback ke browser).
+    const PUBLIC_PROXY_PREFIXES = [
+      'https://api.allorigins.win/raw?url=',
+      'https://corsproxy.io/?',
+      'https://api.codetabs.com/v1/proxy?quest=',
+    ];
+
     const fetchWithFallback = async (targetUrl) => {
       const baseHeaders = {
         'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
         'Accept-Encoding': 'gzip, deflate, br',
         'Cache-Control': 'no-cache',
       };
-      const attempts = [
-        { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36', 'Accept-Language': isJapaneseSite ? 'ja-JP,ja;q=0.9' : 'es-ES,es;q=0.9,en;q=0.8', 'Referer': baseUrl },
+
+      // ① Direct fetch dengan 3 User-Agent
+      const directAttempts = [
+        { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36', 'Accept-Language': isJapaneseSite ? 'ja-JP,ja;q=0.9' : 'id-ID,id;q=0.9,en;q=0.8', 'Referer': baseUrl },
         { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', 'Accept-Language': 'en-US,en;q=0.9' },
         { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
       ];
-      for (const extraHeaders of attempts) {
+      for (const extraHeaders of directAttempts) {
         try {
           const r = await axios.get(targetUrl, {
-            timeout: 15000,
+            timeout: 12000,
             responseType: 'arraybuffer',
             headers: { ...baseHeaders, ...extraHeaders },
             maxRedirects: 5,
@@ -44,11 +55,40 @@ export default async function handler(req, res) {
           if (r.status === 200) return r;
         } catch (e) {
           const s = e.response?.status;
-          if (s === 403 || s === 429 || s === 503) continue;
-          throw e;
+          if (s === 403 || s === 429 || s === 503 || s === 401) continue;
+          // Network error / timeout — lanjut ke proxy
         }
       }
-      throw new Error(`Semua attempt gagal untuk ${targetUrl}`);
+
+      // ② Public proxy fallback — tetap di server, tetap pakai Readability
+      console.log(`[fetch-content] Direct blocked for ${targetUrl}, trying public proxies...`);
+      for (const prefix of PUBLIC_PROXY_PREFIXES) {
+        try {
+          const proxyUrl = prefix + encodeURIComponent(targetUrl);
+          const r = await axios.get(proxyUrl, {
+            timeout: 15000,
+            responseType: 'arraybuffer',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'text/html,*/*;q=0.8',
+            },
+            maxRedirects: 3,
+          });
+          if (r.status === 200) {
+            // allorigins kadang wrap dalam JSON: {"contents":"...","status":{...}}
+            const preview = new TextDecoder('utf-8', { fatal: false }).decode(r.data.slice(0, 100));
+            if (preview.trimStart().startsWith('{') && prefix.includes('allorigins')) {
+              const json = JSON.parse(new TextDecoder('utf-8').decode(r.data));
+              const htmlText = json.contents ?? '';
+              const buf = new TextEncoder().encode(htmlText);
+              r.data = buf;
+            }
+            return r;
+          }
+        } catch { continue; }
+      }
+
+      throw new Error(`Semua fetch attempt gagal untuk ${targetUrl}`);
     };
 
     const response = await fetchWithFallback(url);

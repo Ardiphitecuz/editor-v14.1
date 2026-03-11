@@ -438,9 +438,11 @@ export async function fetchArticleContent(
   if (!url || !/^https?:\/\//i.test(url)) return null;
 
   // ① Server-side Readability (hasil terbaik)
+  // fetch-content.js sudah punya fallback ke public proxy jika site blokir Vercel,
+  // jadi kita beri timeout lebih panjang dan jangan terlalu cepat menyerah
   try {
     const res = await fetch("/api/fetch-content?url=" + encodeURIComponent(url), {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(28000), // naik dari 15s → 28s (beri waktu proxy)
     });
     if (res.ok) {
       const data = await res.json();
@@ -453,9 +455,10 @@ export async function fetchArticleContent(
         };
       }
     }
-  } catch { /* lanjut ke browser fallback */ }
+  } catch { /* timeout atau network error → browser fallback */ }
 
-  // ② Browser DOMParser fallback
+  // ② Browser DOMParser fallback — HANYA jika server benar-benar tidak bisa dicapai
+  // (bukan karena site blokir, karena itu sudah ditangani di server via proxy)
   try {
     const html = await fetchWithFallback(url, 12000);
     const doc = new DOMParser().parseFromString(html, "text/html");
