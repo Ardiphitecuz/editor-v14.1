@@ -402,34 +402,8 @@ export function sanitizeHtml(rawHtml: string, baseUrl: string): string {
  * Fix: gunakan lookahead/lookbehind sederhana — replace semua src= dalam <img> tag.
  */
 export function proxyImgInHtml(html: string): string {
-  if (!html) return html;
-
-  return html.replace(/<img([^>]*)>/gi, (_fullTag: string, attrs: string) => {
-    // Proxy src (dengan leading whitespace)
-    let newAttrs = attrs.replace(
-      /(\s)src="(https?:\/\/[^"]+)"/gi,
-      (_m: string, space: string, url: string) =>
-        `${space}src="/api/img?url=${encodeURIComponent(url)}"`
-    );
-    // Proxy src tanpa leading whitespace (kasus pertama di attrs)
-    newAttrs = newAttrs.replace(
-      /^src="(https?:\/\/[^"]+)"/i,
-      (_m: string, url: string) =>
-        `src="/api/img?url=${encodeURIComponent(url)}"`
-    );
-    // Proxy srcset
-    newAttrs = newAttrs.replace(
-      /(\s)srcset="([^"]+)"/gi,
-      (_m: string, space: string, srcset: string) => {
-        const proxied = srcset.replace(
-          /(https?:\/\/[^\s,]+)/gi,
-          (u: string) => `/api/img?url=${encodeURIComponent(u)}`
-        );
-        return `${space}srcset="${proxied}"`;
-      }
-    );
-    return `<img${newAttrs}>`;
-  });
+  // Langsung kembalikan html asli tanpa di-replace ke /api/img
+  return html ?? '';
 }
 
 // ── Content scoring ───────────────────────────────────────────────────────────

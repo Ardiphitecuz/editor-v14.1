@@ -11,11 +11,9 @@ import { proxyImgInHtml } from "../services/fetcherUtils";
 import type { Article } from "../data/articles";
 
 // ── Image proxy — semua gambar cross-origin diload via server agar COEP tidak blokir
+// ── Image proxy DIMATIKAN — muat gambar langsung
 function proxyImg(src: string): string {
-  if (!src) return src;
-  // Jika sudah lokal atau data URI, tidak perlu proxy
-  if (src.startsWith('/') || src.startsWith('data:')) return src;
-  return '/api/img?url=' + encodeURIComponent(src);
+  return src ?? '';
 }
 
 // ── Google Translate helper ──────────────────────────────────────────────────

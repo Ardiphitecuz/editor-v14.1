@@ -4,7 +4,7 @@
  */
 export function proxyImg(src: string | undefined | null): string {
   if (!src || src.startsWith('/') || src.startsWith('data:') || src.startsWith('blob:')) {
-    return src ?? '';
+      return src ?? ''; // Keeping this line as is for context
   }
-  return '/api/img?url=' + encodeURIComponent(src);
+    return src ?? ''; // Updated to return the original URL directly
 }
