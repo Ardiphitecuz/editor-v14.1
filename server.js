@@ -603,26 +603,51 @@ app.get('/api/img', async (req, res) => {
     if (!url) return res.status(400).send('URL required');
 
     const parsed = new URL(url);
-    const response = await axios.get(url, axiosConfig(url, {
-      timeout: 10000,
-      responseType: 'stream',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': parsed.origin,
-        'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
-      },
-      maxRedirects: 5,
-    }));
+    const isHttps = url.startsWith('https://');
+    const agent = isHttps ? httpsAgent : undefined;
 
-    const ct = response.headers['content-type'] ?? 'image/jpeg';
-    res.setHeader('Content-Type', ct);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // agar gambar lolos COEP
-    response.data.pipe(res);
+    // Coba berbagai Referer agar tidak diblokir hotlink protection
+    const attempts = [
+      { 'Referer': parsed.origin, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
+      { 'Referer': url, 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
+      { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    ];
+
+    let lastError;
+    for (const headers of attempts) {
+      try {
+        const response = await axios.get(url, {
+          timeout: 8000,
+          responseType: 'stream',
+          headers: {
+            'Accept': 'image/webp,image/avif,image/*,*/*;q=0.8',
+            ...headers,
+          },
+          maxRedirects: 5,
+          ...(agent ? { httpsAgent: agent } : {}),
+        });
+
+        const ct = response.headers['content-type'] ?? 'image/jpeg';
+        if (!ct.includes('image') && !ct.includes('octet')) {
+          // Bukan gambar, skip
+          continue;
+        }
+        res.setHeader('Content-Type', ct);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        response.data.pipe(res);
+        return;
+      } catch (err) {
+        lastError = err;
+        const status = err.response?.status;
+        if (status !== 403 && status !== 429 && status !== 401) throw err;
+      }
+    }
+    throw lastError;
   } catch (error) {
     console.error('[img proxy]', error.message);
-    res.status(500).send('Image fetch failed');
+    res.status(404).send('Image not available');
   }
 });
 

@@ -511,6 +511,7 @@ export function ArticlePage() {
                   .article-prose h3 { font-size: 16px; font-weight: 700; color: #1a1a1a; line-height: 1.4; margin: 1.2em 0 0.4em; }
                   .article-prose h4, .article-prose h5, .article-prose h6 { font-size: 14px; font-weight: 700; color: #333; margin: 1em 0 0.3em; }
                   .article-prose img { width: 100%; max-width: 100%; border-radius: 14px; margin: 1.2em 0; object-fit: cover; display: block; }
+                  .article-prose img.img-error { display: none !important; }
                   .article-prose figure { margin: 1.2em 0; }
                   .article-prose figcaption { font-size: 12px; color: #888; text-align: center; margin-top: -0.6em; margin-bottom: 0.8em; font-style: italic; }
                   .article-prose blockquote { border-left: 3px solid #ff742f; padding: 0.6em 1em; margin: 1em 0; background: #fff8f4; border-radius: 0 8px 8px 0; color: #555; font-style: italic; }
@@ -536,6 +537,27 @@ export function ArticlePage() {
                 `}</style>
                 <div
                   className="article-prose"
+                  ref={el => {
+                    if (!el) return;
+                    // Tambahkan onerror handler ke semua gambar di konten
+                    el.querySelectorAll('img').forEach(img => {
+                      if (!img.dataset.errored) {
+                        img.onerror = () => {
+                          img.dataset.errored = '1';
+                          // Coba load langsung tanpa proxy dulu
+                          const proxied = img.src;
+                          const orig = proxied.includes('/api/img?url=')
+                            ? decodeURIComponent(proxied.split('/api/img?url=')[1])
+                            : null;
+                          if (orig && img.src !== orig) {
+                            img.src = orig;
+                          } else {
+                            img.classList.add('img-error');
+                          }
+                        };
+                      }
+                    });
+                  }}
                   dangerouslySetInnerHTML={{ __html: proxyImgInHtml((article as any).contentHtml) }}
                 />
               </>

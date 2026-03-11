@@ -198,11 +198,23 @@ function normalizeItem(item) {
     mimeType: e.type || '',
   }));
 
+  // Fix: ambil URL thumbnail dengan aman dari berbagai format
+  function safeThumbUrl(t) {
+    if (!t) return null;
+    if (typeof t === 'string') return t;
+    if (t.$?.url) return t.$.url;
+    if (t.url) return t.url;
+    return null;
+  }
+
+  const thumbUrl = safeThumbUrl(mediaThumb);
+
   return {
     title: { value: item.title || '' },
     links: item.link ? [{ href: item.link }] : [],
     link: item.link || '',
-    description: { value: item.contentSnippet || item.summary || '' },
+    // Fix: pakai content:encoded juga agar gambar inline bisa diekstrak
+    description: { value: item['content:encoded'] || item.contentSnippet || item.summary || item.content || '' },
     content: { value: item['content:encoded'] || item.content || '' },
     published: item.isoDate || item.pubDate ? new Date(item.isoDate || item.pubDate) : null,
     updated: item.isoDate ? new Date(item.isoDate) : null,
@@ -215,7 +227,7 @@ function normalizeItem(item) {
       url: m.$.url || m.url || '',
       medium: m.$.medium || m.medium || '',
     })),
-    'media:thumbnail': mediaThumb ? { url: mediaThumb.$.url || mediaThumb } : null,
+    'media:thumbnail': thumbUrl ? { url: thumbUrl } : null,
     'media:group': mediaGroup || null,
     'media:description': { value: item['media:description'] || '' },
     'media:community': item['media:community'] || null,
@@ -436,7 +448,9 @@ export async function fetchRSSLinks({ urls, limit = 12, pioneer = false }) {
         items: rss_items
           .map(p => p.value)
           .filter(x => x)
-          .filter(x => x.published && (new Date(x.published) > LAST_MONTH))
+          // Jangan buang item tanpa published — pakai tanggal sekarang sebagai fallback
+          .map(x => x.published ? x : { ...x, published: new Date() })
+          .filter(x => new Date(x.published) > LAST_MONTH)
           .sort((a, b) => (b.images?.length - a.images?.length) || (new Date(b.published) - new Date(a.published))),
       };
 

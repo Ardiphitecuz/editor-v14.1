@@ -80,8 +80,24 @@ function normalizeItem(item: NewsroomItem, feed: NewsroomFeed, idx: number): Art
     publishedAt = pubDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
   }
 
-  // Image: gunakan yang pertama dari array
-  const image = item.images?.[0] || '';
+  // Image: cari dari berbagai sumber, prioritas terbaik dulu
+  let image = '';
+
+  // 1. Dari images[] yang sudah diproses engine (media:content, media:thumbnail, og:image)
+  if (item.images?.length) {
+    image = item.images.find(u => u && u.startsWith('http') && !u.includes('favicon')) || item.images[0] || '';
+  }
+
+  // 2. Fallback: ekstrak <img> dari description/content HTML
+  if (!image && item.description) {
+    const imgMatch = item.description.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch?.[1]) image = imgMatch[1];
+  }
+
+  // 3. Gunakan favicon jika semua gagal (sudah pasti ada dari engine)
+  if (!image && item.images?.length) {
+    image = item.images[0]; // termasuk favicon fallback dari engine
+  }
 
   // Source label: ambil dari host link
   let sourceName = '';
