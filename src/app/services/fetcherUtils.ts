@@ -402,7 +402,7 @@ export function sanitizeHtml(rawHtml: string, baseUrl: string): string {
  * Fix: gunakan lookahead/lookbehind sederhana — replace semua src= dalam <img> tag.
  */
 export function proxyImgInHtml(html: string): string {
-  // Langsung kembalikan html asli tanpa di-replace ke /api/img
+  // Proxy dimatikan: kembalikan html asli tanpa modifikasi
   return html ?? '';
 }
 
@@ -607,4 +607,5 @@ export async function fetchArticleContent(
     const content = extractPlainParagraphs(contentHtml);
     return { content, contentHtml: contentHtml || undefined, summary: content[0] };
   } catch { return null; }
+  
 }

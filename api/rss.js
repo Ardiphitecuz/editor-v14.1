@@ -1,4 +1,5 @@
-import axios from 'axios';
+// api/rss.js
+export const config = { maxDuration: 15 };
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,32 +11,26 @@ export default async function handler(req, res) {
 
   try {
     const targetUrl = new URL(url);
-    const response = await axios.get(url, {
-      timeout: 10000,
-      responseType: 'text',
+    const response = await fetch(url, {
+      method: 'GET',
       headers: {
-        // Menyamar sebagai Browser Chrome versi terbaru dari Windows
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-        'Referer': targetUrl.origin, // Pura-pura datang dari halaman depan situs mereka sendiri
-        'Cache-Control': 'no-cache'
-      },
-      maxRedirects: 5,
+        'Referer': targetUrl.origin,
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+      }
     });
-    
-    res.setHeader('Content-Type', response.headers['content-type'] ?? 'text/xml');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    return res.send(response.data);
 
-  } catch (error) {
-    // Tangani error jika tetap diblokir Cloudflare agar tidak menyebabkan 500 Internal Server Error
-    const statusCode = error.response?.status || 400;
-    console.error(`RSS Fetch Error (${url}):`, error.message);
+    const text = await response.text();
     
-    return res.status(statusCode).json({ 
-      success: false, 
-      error: `Diblokir oleh sumber (HTTP ${statusCode}): ${error.message}` 
-    });
+    // Jika diblokir (403), Vercel tidak akan error 500, melainkan mengembalikan pesan aslinya
+    if (!response.ok) {
+      return res.status(response.status).send(text);
+    }
+
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'text/xml');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.status(200).send(text);
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 }

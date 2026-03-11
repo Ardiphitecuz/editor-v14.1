@@ -13,7 +13,9 @@ import type { Article } from "../data/articles";
 // ── Image proxy — semua gambar cross-origin diload via server agar COEP tidak blokir
 // ── Image proxy DIMATIKAN — muat gambar langsung
 function proxyImg(src: string): string {
-  return src ?? '';
+  if (!src) return src;
+  if (src.startsWith('/') || src.startsWith('data:')) return src;
+  return '/api/img?url=' + encodeURIComponent(src);
 }
 
 // ── Google Translate helper ──────────────────────────────────────────────────

@@ -1,64 +1,27 @@
 {
   "functions": {
-    "api/fetch-content.js": {
-      "memory": 1024,
-      "maxDuration": 30
-    },
-    "api/feeds.js": {
-      "memory": 1024,
-      "maxDuration": 30
-    },
-    "api/rss.js": {
-      "memory": 512,
-      "maxDuration": 15
-    },
-    "api/proxy.js": {
-      "memory": 512,
-      "maxDuration": 15
-    },
-    "api/og.js": {
-      "memory": 256,
-      "maxDuration": 10
-    }
+    "api/fetch-content.js": { "memory": 1024, "maxDuration": 30 },
+    "api/feeds.js": { "memory": 1024, "maxDuration": 30 },
+    "api/rss.js": { "memory": 512, "maxDuration": 15 },
+    "api/proxy.js": { "memory": 512, "maxDuration": 15 },
+    "api/og.js": { "memory": 256, "maxDuration": 10 },
+    "api/img.js": { "memory": 512, "maxDuration": 15 }
   },
   "rewrites": [
-    {
-      "source": "/api/fetch-content",
-      "destination": "/api/fetch-content"
-    },
-    {
-      "source": "/api/feeds",
-      "destination": "/api/feeds"
-    },
-    {
-      "source": "/api/rss",
-      "destination": "/api/rss"
-    },
-    {
-      "source": "/api/proxy",
-      "destination": "/api/proxy"
-    },
-    {
-      "source": "/api/og",
-      "destination": "/api/og"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/fetch-content", "destination": "/api/fetch-content" },
+    { "source": "/api/feeds", "destination": "/api/feeds" },
+    { "source": "/api/rss", "destination": "/api/rss" },
+    { "source": "/api/proxy", "destination": "/api/proxy" },
+    { "source": "/api/og", "destination": "/api/og" },
+    { "source": "/api/img", "destination": "/api/img" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET,POST,OPTIONS"
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" }
       ]
     }
   ]
