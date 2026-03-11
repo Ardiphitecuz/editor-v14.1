@@ -1,11 +1,9 @@
 /**
  * Background content + thumbnail prefetcher.
- * 
+ *
  * Dua mode:
- * 1. prefetchThumbnails — hanya ambil og:image untuk artikel yang gambarnya fallback
- *    Ringan, jalankan untuk semua artikel di halaman utama
+ * 1. prefetchThumbnails — ambil og:image via /api/og (ringan, tanpa Readability)
  * 2. prefetchArticleContents — fetch konten lengkap untuk artikel pertama
- *    Berat, jalankan hanya untuk beberapa artikel teratas
  */
 import { fetchArticleContent } from "./newsFetcher";
 import { articleStore } from "../store/articleStore";
@@ -21,8 +19,9 @@ function isFallbackImage(img: string | undefined): boolean {
   return img.includes(FALLBACK_HOST);
 }
 
-// ── 1. Prefetch thumbnail saja (og:image) ────────────────────────────────────
-// Panggil untuk semua artikel — ringan karena hanya baca og:image dari server
+// ── 1. Prefetch thumbnail via /api/og (ringan, hanya baca meta tag) ──────────
+// Pakai /api/og bukan fetchArticleContent — jauh lebih cepat karena hanya fetch
+// 50KB pertama halaman untuk baca og:image, tanpa Readability/linkedom sama sekali
 export async function prefetchThumbnails(articles: Article[], concurrency = 4): Promise<void> {
   const needsThumb = articles.filter(a =>
     a.originalUrl &&
@@ -33,37 +32,24 @@ export async function prefetchThumbnails(articles: Article[], concurrency = 4): 
   if (needsThumb.length === 0) return;
   needsThumb.forEach(a => thumbPrefetched.add(a.id));
 
-  // Proses dalam batch kecil agar tidak banjir request
   for (let i = 0; i < needsThumb.length; i += concurrency) {
     const batch = needsThumb.slice(i, i + concurrency);
     await Promise.allSettled(batch.map(async (art) => {
       try {
-        const result = await fetchArticleContent(art.originalUrl!);
-        if (!result) return;
-
-        // Update gambar dan summary jika lebih baik
-        const newImage = result.image?.startsWith("http") ? result.image : null;
-        const newContentHtml = (result as any).contentHtml;
-        if (!newImage && !newContentHtml) return;
-
-        const updated: Article = {
-          ...art,
-          ...(newImage ? { image: newImage } : {}),
-          ...(newContentHtml && !art.rssContentSufficient ? {
-            contentHtml: newContentHtml,
-            summary: result.summary ?? art.summary,
-            rssContentSufficient: true,
-          } : {}),
-        };
-        articleStore.updateById(art.id, updated);
-        prefetchedIds.add(art.id); // tandai juga sebagai konten sudah prefetch
+        const res = await fetch("/api/og?url=" + encodeURIComponent(art.originalUrl!), {
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const newImage = data.image?.startsWith("http") ? data.image : null;
+        if (!newImage) return;
+        articleStore.updateById(art.id, { ...art, image: newImage });
       } catch {
-        thumbPrefetched.delete(art.id); // boleh retry nanti
+        thumbPrefetched.delete(art.id);
       }
     }));
-    // Jeda antar batch agar tidak overload server
     if (i + concurrency < needsThumb.length) {
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 200));
     }
   }
 }

@@ -72,9 +72,17 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
   el.removeAttribute('style');
 
   if (tag === 'img') {
-    const src = el.getAttribute('src') || el.getAttribute('data-lazy-src')
-      || el.getAttribute('data-original') || el.getAttribute('data-src') || '';
-    if (!src || src.startsWith('data:') || TRACKING_IMG.test(src)) { el.remove(); return; }
+    // Prioritas: data-lazy-src > data-src > data-original > src
+    // Banyak situs lazy load menyimpan URL asli di data-* dan src berisi placeholder data:
+    const lazySrc = el.getAttribute('data-lazy-src')
+      || el.getAttribute('data-src')
+      || el.getAttribute('data-original')
+      || el.getAttribute('data-original-src')
+      || el.getAttribute('data-hi-res-src');
+    const rawSrc = el.getAttribute('src') || '';
+    // Gunakan lazySrc jika ada, fallback ke src hanya jika bukan data URI placeholder
+    const src = lazySrc || (rawSrc.startsWith('data:') ? '' : rawSrc);
+    if (!src || TRACKING_IMG.test(src)) { el.remove(); return; }
     const w = parseInt(el.getAttribute('width') ?? '0');
     const h = parseInt(el.getAttribute('height') ?? '0');
     if ((w > 0 && w <= 2) || (h > 0 && h <= 2)) { el.remove(); return; }
@@ -231,7 +239,10 @@ export default async function handler(req, res) {
     document.head?.appendChild(baseTag);
 
     // ── FASE 1: Hapus noise SEBELUM Readability ───────────────────────────────
-    ['script','style','noscript','iframe','ins','form','nav','header','footer','aside']
+    // PENTING: noscript TIDAK dihapus di sini — banyak situs WordPress menyimpan
+    // gambar asli di dalam <noscript> sebagai fallback lazy load.
+    // Readability akan membongkar isinya, lalu sanitizeNode akan proses hasilnya.
+    ['script','style','iframe','ins','form','nav','header','footer','aside']
       .forEach(tag => document.querySelectorAll(tag).forEach(el => el.remove()));
 
     document.querySelectorAll('[class],[id]').forEach(el => {

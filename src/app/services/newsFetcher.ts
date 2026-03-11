@@ -761,6 +761,37 @@ async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<Article
   const hostname = new URL(rawUrl).hostname;
   const seen = new Set<string>();
 
+  // Coba ambil og:image dari halaman index sebagai thumbnail default sumber
+  const sourceOgImage = (() => {
+    const m =
+      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']{10,})["']/i) ??
+      html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+property=["']og:image["']/i);
+    if (!m) return null;
+    let u = m[1].trim();
+    if (u.startsWith("//")) return "https:" + u;
+    if (u.startsWith("/")) return new URL(rawUrl).origin + u;
+    return u.startsWith("http") ? u : null;
+  })();
+
+  // Coba cari thumbnail tiap artikel dari elemen terdekat (<img> di sekitar link)
+  function findNearbyImage(anchor: Element): string | null {
+    // Cek parent container — biasanya <article>, <li>, <div class="card"> dll
+    const container = anchor.closest("article, li, .card, .item, .post, .entry, [class*='card'], [class*='item'], [class*='post'], [class*='article']")
+      ?? anchor.parentElement?.parentElement;
+    if (!container) return null;
+    const img = container.querySelector("img[src], img[data-src], img[data-lazy-src]");
+    if (!img) return null;
+    const src = img.getAttribute("data-lazy-src")
+      ?? img.getAttribute("data-src")
+      ?? img.getAttribute("src") ?? "";
+    if (!src || src.startsWith("data:") || TRACKING_IMG_URL.test(src)) return null;
+    // Resolve ke absolut
+    try {
+      const resolved = new URL(src, rawUrl).href;
+      return resolved.startsWith("http") ? resolved.replace("http://", "https://") : null;
+    } catch { return null; }
+  }
+
   const links = Array.from(doc.querySelectorAll("a[href]"))
     .filter(a => {
       const href = (a as HTMLAnchorElement).href;
@@ -780,6 +811,9 @@ async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<Article
     const title = (a.textContent ?? "").trim();
     const href = (a as HTMLAnchorElement).href;
     const cat = guessCategory(title);
+    // Prioritas thumbnail: gambar di sekitar link > og:image halaman index > fallback
+    const nearbyImg = findNearbyImage(a);
+    const image = nearbyImg ?? sourceOgImage ?? fallbackImg(cat);
     return {
       id: hashId(href || title),
       category: cat,
@@ -787,7 +821,7 @@ async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<Article
       summary: title,
       content: [],
       source: source.name,
-      image: fallbackImg(cat),
+      image,
       readTime: 3,
       publishedAt: "Baru saja",
       hot: i < 2,
