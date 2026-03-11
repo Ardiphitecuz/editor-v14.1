@@ -38,7 +38,7 @@ const DEFAULT_BG_TRANSFORM: BgTransform = { x: 0, y: 0, scale: 1.0 };
 interface Sticker {
   id: string; src: string;
   x: number; y: number; size: number; rotation: number;
-  shape: "original" | "circle";
+  shape: "original" | "circle" | "square";
   outlineColor: string; outlineWidth: number; shadowBlur: number;
 }
 interface ExtraText {
@@ -52,7 +52,7 @@ type SidebarTab = "content" | "background" | "stickers" | "texts";
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
 // ── Components Helper ────────────────────────────────────────────────────────
-function BgUrlInput({ placeholder, onApply }: { placeholder: string; onApply: (url: string) => void }) {
+function BgUrlInput({ placeholder, onApply, onSourceApply }: { placeholder: string; onApply: (url: string) => void; onSourceApply?: (domain: string) => void }) {
   const [val, setVal] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,8 +63,14 @@ function BgUrlInput({ placeholder, onApply }: { placeholder: string; onApply: (u
     if (!/^https?:\/\//i.test(url)) { setErr("URL harus diawali https://"); return; }
     setLoading(true); setErr(null);
     const img = new Image();
-    img.onload = () => { setLoading(false); onApply(url); setVal(""); };
+    img.onload = () => {
+      setLoading(false); onApply(url); setVal("");
+      if (onSourceApply) {
+        try { const domain = new URL(url).hostname.replace(/^www\./, ""); onSourceApply(domain); } catch {}
+      }
+    };
     img.onerror = () => { setLoading(false); setErr("Gagal memuat gambar."); };
+    img.crossOrigin = "anonymous";
     img.src = url;
   }
 
@@ -112,10 +118,36 @@ function Overlay({ cardW, cardH, stickers, extraTexts, selectedStickerId, select
     <>
       {stickers.map((s: any) => {
         const isSel = selectedStickerId === s.id;
+        const isCircle = s.shape === "circle";
+        const isSquare = s.shape === "square";
+        const borderRadius = isCircle ? "50%" : isSquare ? "12px" : 0;
+        const strokeShadow = s.outlineWidth > 0 ? `inset 0 0 0 ${s.outlineWidth}px ${s.outlineColor}` : "";
+        const selBoxShadow = isSel
+          ? `0 0 0 3px #ff742f${strokeShadow ? `, ${strokeShadow}` : ""}`
+          : strokeShadow || undefined;
+        const selFilter = isSel
+          ? `drop-shadow(0 0 4px #ff742f)${s.shadowBlur > 0 ? ` drop-shadow(0 4px ${s.shadowBlur}px rgba(0,0,0,0.65))` : ""}`
+          : s.shadowBlur > 0 ? `drop-shadow(0 4px ${s.shadowBlur}px rgba(0,0,0,0.65))` : "none";
+        const canInteract = !!(onStickerTouch || onStickerMouseDown);
+
         return (
-          <div key={s.id} style={{ position: "absolute", left: (s.x / 100) * cardW - s.size / 2, top: (s.y / 100) * cardH - s.size / 2, width: s.size, height: s.size, zIndex: 5, transform: `rotate(${s.rotation}deg)`, filter: s.shadowBlur > 0 ? `drop-shadow(0 4px ${s.shadowBlur}px rgba(0,0,0,0.65))` : "none", borderRadius: s.shape === "circle" ? "50%" : 0, overflow: s.shape === "circle" ? "hidden" : "visible", outline: isSel ? "4px solid #ff742f" : s.outlineWidth > 0 ? `${s.outlineWidth}px solid ${s.outlineColor}` : "none", pointerEvents: (onStickerTouch || onStickerMouseDown) ? "auto" : "none", touchAction: "none" }}
-            onTouchStart={onStickerTouch ? (e) => { e.stopPropagation(); onStickerTouch(s.id, e); } : undefined} onMouseDown={onStickerMouseDown ? (e) => { e.stopPropagation(); onStickerMouseDown(s.id, e); } : undefined}>
-            <img alt="" src={s.src} style={{ width: "100%", height: "100%", objectFit: s.shape === "circle" ? "cover" : "contain" }} />
+          // outer wrapper: position + rotate. NO overflow:hidden here so handle is visible
+          <div key={s.id} style={{ position: "absolute", left: (s.x / 100) * cardW - s.size / 2, top: (s.y / 100) * cardH - s.size / 2, width: s.size, height: s.size, zIndex: 5, transform: `rotate(${s.rotation}deg)`, pointerEvents: canInteract ? "auto" : "none", touchAction: "none" }}
+            onTouchStart={onStickerTouch ? (e) => { e.stopPropagation(); onStickerTouch(s.id, "move", e); } : undefined}
+            onMouseDown={onStickerMouseDown ? (e) => { e.stopPropagation(); onStickerMouseDown(s.id, "move", e); } : undefined}>
+            {/* inner clip div */}
+            <div style={{ width: "100%", height: "100%", borderRadius, overflow: (isCircle || isSquare) ? "hidden" : "visible", ...(isCircle || isSquare ? { boxShadow: selBoxShadow } : { filter: selFilter }) }}>
+              <img alt="" src={s.src} style={{ width: "100%", height: "100%", objectFit: (isCircle || isSquare) ? "cover" : "contain", display: "block" }} />
+            </div>
+            {/* rotate/scale handle — bottom-right corner, outside clip */}
+            {isSel && canInteract && (
+              <div
+                style={{ position: "absolute", bottom: -14, right: -14, width: 28, height: 28, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 10, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.25)" }}
+                onTouchStart={(e) => { e.stopPropagation(); if (onStickerTouch) onStickerTouch(s.id, "transform", e); }}
+                onMouseDown={(e) => { e.stopPropagation(); if (onStickerMouseDown) onStickerMouseDown(s.id, "transform", e); }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+              </div>
+            )}
           </div>
         );
       })}
@@ -164,21 +196,28 @@ function NotifBadge({ label }: { label: string }) {
 
 // ── Card Components ──────────────────────────────────────────────────────────
 function PostCard(props: any) {
-  const { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId } = props;
+  const { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, onTitleChange } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
   return (
     <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: POST_W, height: POST_H }}>
-      <style>{`.pc-title strong,.pc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.pc-title em,.pc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}`}</style>
+      <style>{`.pc-title strong,.pc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.pc-title em,.pc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}.pc-title[contenteditable]:focus{outline:none;}.pc-title[contenteditable]{cursor:text;}`}</style>
       {interactive && (<><div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", zIndex: 20, left: 0, top: 0, width: bgMode === "collage" ? "50%" : "100%", height: "100%", cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />
         {bgMode === "collage" && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(2, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(2, e) : undefined} style={{ position: "absolute", zIndex: 20, right: 0, top: 0, width: "50%", height: "100%", cursor: bgDragActive === 2 ? "grabbing" : "grab", touchAction: "none" }} />}</>)}
       <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={POST_W} cardH={POST_H} />
       <Overlay cardW={POST_W} cardH={POST_H} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
       <div style={{ position: "absolute", left: 0, top: 1600, width: "100%", height: POST_H - 1600, zIndex: 3, background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", left: "50%", bottom: 469, transform: "translateX(-50%)", width: 1563, zIndex: 6, pointerEvents: "none", display: "flex", flexDirection: "column", gap: 85 }}>
+      <div style={{ position: "absolute", left: "50%", bottom: 469, transform: "translateX(-50%)", width: 1563, zIndex: 6, pointerEvents: interactive ? "auto" : "none", display: "flex", flexDirection: "column", gap: 85 }}>
         <NotifBadge label={label} />
-        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}>
+        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
           <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} /><img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}><div className="pc-title" style={{ fontFamily: FONT_BOLD, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: titleHtml }} /></div>
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}>
+            <div className="pc-title" contentEditable={interactive} suppressContentEditableWarning
+              onInput={interactive && onTitleChange ? (e) => onTitleChange((e.target as HTMLDivElement).innerHTML) : undefined}
+              style={{ fontFamily: FONT_BOLD, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden" }}
+              dangerouslySetInnerHTML={interactive ? undefined : { __html: titleHtml }}>
+              {interactive ? undefined : null}
+            </div>
+          </div>
         </div>
       </div>
       <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 6, pointerEvents: "none" }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
@@ -239,6 +278,111 @@ function VideoCard(props: any) {
   );
 }
 
+// ── Crop Modal ───────────────────────────────────────────────────────────────
+function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "original"|"square"|"circle"; onDone: (cropped: string) => void; onClose: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0, size: 100 }); // % of rendered image
+  const [dragging, setDragging] = useState<"move"|"resize"|null>(null);
+  const dragStart = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const i = new Image(); i.onload = () => {
+      setImg(i);
+      const minD = Math.min(i.width, i.height);
+      setCrop({ x: (i.width - minD) / 2, y: (i.height - minD) / 2, size: minD });
+    }; i.src = src;
+  }, [src]);
+
+  // draw preview
+  useEffect(() => {
+    if (!img || !canvasRef.current) return;
+    const cvs = canvasRef.current;
+    const ctx = cvs.getContext("2d")!;
+    const D = 240;
+    cvs.width = D; cvs.height = D;
+    ctx.clearRect(0, 0, D, D);
+    ctx.save();
+    if (shape === "circle") { ctx.beginPath(); ctx.arc(D/2, D/2, D/2, 0, Math.PI*2); ctx.clip(); }
+    else if (shape === "square") { ctx.beginPath(); const r = 16; ctx.moveTo(r,0); ctx.lineTo(D-r,0); ctx.arcTo(D,0,D,r,r); ctx.lineTo(D,D-r); ctx.arcTo(D,D,D-r,D,r); ctx.lineTo(r,D); ctx.arcTo(0,D,0,D-r,r); ctx.lineTo(0,r); ctx.arcTo(0,0,r,0,r); ctx.clip(); }
+    ctx.drawImage(img, crop.x, crop.y, crop.size, crop.size, 0, 0, D, D);
+    ctx.restore();
+  }, [img, crop, shape]);
+
+  const imgDisplay = img ? Math.min(300, img.width) : 300;
+  const imgScale = img ? imgDisplay / img.width : 1;
+
+  const startInteract = (e: React.MouseEvent | React.TouchEvent, mode: "move"|"resize") => {
+    e.preventDefault(); e.stopPropagation();
+    const pt = "touches" in e ? e.touches[0] : e;
+    setDragging(mode);
+    dragStart.current = { cx: pt.clientX, cy: pt.clientY, crop: { ...crop } };
+  };
+
+  useEffect(() => {
+    if (!img) return;
+    const move = (cx: number, cy: number) => {
+      if (!dragging || !dragStart.current) return;
+      const dx = (cx - dragStart.current.cx) / imgScale;
+      const dy = (cy - dragStart.current.cy) / imgScale;
+      const { crop: c0 } = dragStart.current;
+      if (dragging === "move") {
+        setCrop({ ...c0, x: Math.max(0, Math.min(img.width - c0.size, c0.x + dx)), y: Math.max(0, Math.min(img.height - c0.size, c0.y + dy)) });
+      } else {
+        const ns = Math.max(40, Math.min(Math.min(img.width - c0.x, img.height - c0.y), c0.size + Math.max(dx, dy)));
+        setCrop({ ...c0, size: ns });
+      }
+    };
+    const onMM = (e: MouseEvent) => move(e.clientX, e.clientY);
+    const onTM = (e: TouchEvent) => { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); };
+    const onEnd = () => setDragging(null);
+    document.addEventListener("mousemove", onMM); document.addEventListener("mouseup", onEnd);
+    document.addEventListener("touchmove", onTM, { passive: false }); document.addEventListener("touchend", onEnd);
+    return () => { document.removeEventListener("mousemove", onMM); document.removeEventListener("mouseup", onEnd); document.removeEventListener("touchmove", onTM); document.removeEventListener("touchend", onEnd); };
+  }, [dragging, img, imgScale]);
+
+  const handleApply = () => {
+    if (!img) return;
+    const out = document.createElement("canvas"); out.width = crop.size; out.height = crop.size;
+    const ctx = out.getContext("2d")!; ctx.drawImage(img, crop.x, crop.y, crop.size, crop.size, 0, 0, crop.size, crop.size);
+    onDone(out.toDataURL("image/png"));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold text-neutral-900">Crop Stiker</span>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"><X size={14}/></button>
+        </div>
+        {/* Image with crop overlay */}
+        {img && (
+          <div ref={containerRef} className="relative overflow-hidden rounded-xl bg-neutral-100 mx-auto" style={{ width: imgDisplay, height: imgDisplay * (img.height / img.width) }}>
+            <img src={src} style={{ width: imgDisplay, height: "auto", display: "block", userSelect: "none", pointerEvents: "none" }} draggable={false} />
+            {/* crop rect */}
+            <div style={{ position: "absolute", left: crop.x * imgScale, top: crop.y * imgScale, width: crop.size * imgScale, height: crop.size * imgScale, border: "2px solid #ff742f", borderRadius: shape==="circle"?"50%": shape==="square"?"8px":0, boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)", cursor: dragging==="move"?"grabbing":"grab", touchAction:"none" }}
+              onMouseDown={(e) => startInteract(e, "move")} onTouchStart={(e) => startInteract(e, "move")}>
+              {/* resize handle */}
+              <div style={{ position:"absolute", right:-8, bottom:-8, width:18, height:18, background:"#ff742f", borderRadius:"50%", border:"2px solid white", cursor:"se-resize", touchAction:"none" }}
+                onMouseDown={(e) => startInteract(e, "resize")} onTouchStart={(e) => startInteract(e, "resize")} />
+            </div>
+          </div>
+        )}
+        {/* Preview */}
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-neutral-400 shrink-0">Preview:</span>
+          <canvas ref={canvasRef} className="rounded-lg" style={{ width: 60, height: 60, imageRendering: "crisp-edges" }} />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-neutral-200 text-sm font-semibold text-neutral-500">Batal</button>
+          <button onClick={handleApply} className="flex-1 py-2.5 rounded-xl bg-[#ff742f] text-white text-sm font-bold">Terapkan</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // EDITOR PAGE (MAIN REVISION)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -256,7 +400,7 @@ export function EditorPage() {
 
   const [label, setLabel]           = useState("Discuss");
   const [titleHtml, setTitleHtml]   = useState(INIT_TITLE);
-  const [source, setSource]         = useState("X.com/@Lynn6Thorex");
+  const [source, setSource]         = useState("");
 
   const [bgMode, setBgMode]         = useState<BgMode>("single");
   const [bgSrc, setBgSrc]           = useState<string>(locationState?.bgUrl ?? DEFAULT_BG);
@@ -271,9 +415,21 @@ export function EditorPage() {
   const [extraTexts, setExtraTexts]               = useState<ExtraText[]>([]);
   const [selectedTextId, setSelectedTextId]       = useState<string | null>(null);
   const [downloading, setDownloading]             = useState(false);
-  const [renderProgress, setRenderProgress]       = useState(0); // 0-100 for progress bar
+  const [renderProgress, setRenderProgress]       = useState(0);
   const [snapIndicator, setSnapIndicator] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const [bgDragActive, setBgDragActive] = useState<1 | 2 | null>(null);
+  const [cropStickerId, setCropStickerId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  // Responsive: detect desktop (≥1024px)
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Formatting state
   const [isBoldActive, setIsBoldActive] = useState(false);
@@ -290,6 +446,7 @@ export function EditorPage() {
   const pinchRef = useRef<{ startDist: number; startScale1: number; startScale2: number } | null>(null);
   const currentBgTRef = useRef(DEFAULT_BG_TRANSFORM);
   const currentBg2TRef = useRef(DEFAULT_BG_TRANSFORM);
+  const cardDimRef = useRef({ w: POST_W, h: POST_H });
   
   // Specific refs for video export
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -335,6 +492,7 @@ export function EditorPage() {
 
   useEffect(() => { currentBgTRef.current = bgT; }, [bgT]);
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
+  useEffect(() => { cardDimRef.current = { w: CARD_W, h: CARD_H }; }, [CARD_W, CARD_H]);
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = INIT_TITLE;
@@ -367,26 +525,88 @@ export function EditorPage() {
 
   const snapBgAxis = (v: number) => Math.abs(v) < 40 ? { val: 0, snapped: true } : { val: v, snapped: false };
   const activeDrag = useRef<any>(null);
-  const startDrag = useCallback((target: any, clientX: number, clientY: number) => { activeDrag.current = { target, lastX: clientX, lastY: clientY }; if (target.type === "bg") setBgDragActive(target.which); }, []);
-  
+  const startDrag = useCallback((target: any, clientX: number, clientY: number) => {
+    activeDrag.current = { target, lastX: clientX, lastY: clientY, startX: clientX, startY: clientY };
+    if (target.type === "bg") setBgDragActive(target.which);
+  }, []);
+
   useEffect(() => {
-    const onMove = (cx: number, cy: number) => { if (!activeDrag.current) return; const sc = previewRef.current ? previewRef.current.getBoundingClientRect().width / CARD_W : 1; const dx = (cx - activeDrag.current.lastX) / sc, dy = (cy - activeDrag.current.lastY) / sc; const { target } = activeDrag.current;
-      if (target.type === "bg") { const setter = target.which === 1 ? setBgT : setBg2T; setter(p => { const rx = snapBgAxis(p.x + dx), ry = snapBgAxis(p.y + dy); setSnapIndicator({ x: rx.snapped, y: ry.snapped }); return { ...p, x: rx.val, y: ry.val }; }); }
-      else if (target.type === "sticker") setStickers(p => p.map(s => s.id !== target.id ? s : { ...s, x: s.x + (dx/CARD_W)*100, y: s.y + (dy/CARD_H)*100 }));
-      else setExtraTexts(p => p.map(t => t.id !== target.id ? t : { ...t, x: t.x + (dx/CARD_W)*100, y: t.y + (dy/CARD_H)*100 }));
-      activeDrag.current.lastX = cx; activeDrag.current.lastY = cy;
+    const getPreviewScale = () => previewRef.current ? previewRef.current.getBoundingClientRect().width / CARD_W : 1;
+
+    const onMove = (cx: number, cy: number) => {
+      if (!activeDrag.current) return;
+      const sc = getPreviewScale();
+      const dx = (cx - activeDrag.current.lastX) / sc;
+      const dy = (cy - activeDrag.current.lastY) / sc;
+      const { target } = activeDrag.current;
+
+      if (target.type === "bg") {
+        const setter = target.which === 1 ? setBgT : setBg2T;
+        setter(p => { const rx = snapBgAxis(p.x + dx), ry = snapBgAxis(p.y + dy); setSnapIndicator({ x: rx.snapped, y: ry.snapped }); return { ...p, x: rx.val, y: ry.val }; });
+      } else if (target.type === "sticker" && target.mode === "move") {
+        const { w, h } = cardDimRef.current;
+        setStickers(p => p.map(s => s.id !== target.id ? s : { ...s, x: Math.max(0, Math.min(100, s.x + (dx / w) * 100)), y: Math.max(0, Math.min(100, s.y + (dy / h) * 100)) }));
+      } else if (target.type === "sticker" && target.mode === "transform") {
+        // compute center of sticker in screen coords
+        setStickers(p => p.map(s => {
+          if (s.id !== target.id) return s;
+          const previewRect = previewRef.current?.getBoundingClientRect();
+          if (!previewRect) return s;
+          const centerScreenX = previewRect.left + (s.x / 100) * previewRect.width;
+          const centerScreenY = previewRect.top + (s.y / 100) * previewRect.height;
+          // distance from center to current and previous pointer
+          const prevDist = Math.sqrt((activeDrag.current.lastX - centerScreenX) ** 2 + (activeDrag.current.lastY - centerScreenY) ** 2);
+          const currDist = Math.sqrt((cx - centerScreenX) ** 2 + (cy - centerScreenY) ** 2);
+          const scaleFactor = prevDist > 5 ? currDist / prevDist : 1;
+          const prevAngle = Math.atan2(activeDrag.current.lastY - centerScreenY, activeDrag.current.lastX - centerScreenX) * 180 / Math.PI;
+          const currAngle = Math.atan2(cy - centerScreenY, cx - centerScreenX) * 180 / Math.PI;
+          const dAngle = currAngle - prevAngle;
+          return { ...s, size: Math.max(50, Math.min(900, s.size * scaleFactor)), rotation: s.rotation + dAngle };
+        }));
+      } else if (target.type === "text") {
+        const { w, h } = cardDimRef.current;
+        setExtraTexts(p => p.map(t => t.id !== target.id ? t : { ...t, x: t.x + (dx / w) * 100, y: t.y + (dy / h) * 100 }));
+      }
+      activeDrag.current.lastX = cx;
+      activeDrag.current.lastY = cy;
     };
-    const onEnd = () => { activeDrag.current = null; setBgDragActive(null); setSnapIndicator({x:false,y:false}); pinchRef.current = null; };
-    const onTouchMove = (e: TouchEvent) => { if (e.touches.length === 2) { e.preventDefault(); if (!pinchRef.current) { const getD = (t:TouchList)=>Math.sqrt((t[0].clientX-t[1].clientX)**2+(t[0].clientY-t[1].clientY)**2); pinchRef.current = { startDist: getD(e.touches), startScale1: currentBgTRef.current.scale, startScale2: currentBg2TRef.current.scale }; } else { const dist = Math.sqrt((e.touches[0].clientX-e.touches[1].clientX)**2+(e.touches[0].clientY-e.touches[1].clientY)**2); const r = dist / pinchRef.current.startDist; setBgT(p=>({...p, scale: Math.max(0.3,Math.min(3, pinchRef.current!.startScale1*r))})); setBg2T(p=>({...p, scale: Math.max(0.3,Math.min(3, pinchRef.current!.startScale2*r))})); } return; } if (activeDrag.current) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); } };
-    const onMouseMove = (e: MouseEvent) => { if(activeDrag.current) { e.preventDefault(); onMove(e.clientX, e.clientY); } };
-    document.addEventListener("touchmove", onTouchMove, { passive: false }); document.addEventListener("touchend", onEnd); document.addEventListener("mousemove", onMouseMove); document.addEventListener("mouseup", onEnd);
-    return () => { document.removeEventListener("touchmove", onTouchMove); document.removeEventListener("touchend", onEnd); document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onEnd); };
+
+    const onEnd = () => { activeDrag.current = null; setBgDragActive(null); setSnapIndicator({ x: false, y: false }); pinchRef.current = null; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const getD = (t: TouchList) => Math.sqrt((t[0].clientX - t[1].clientX) ** 2 + (t[0].clientY - t[1].clientY) ** 2);
+        const dist = getD(e.touches);
+        if (!pinchRef.current) {
+          pinchRef.current = { startDist: dist, startScale1: currentBgTRef.current.scale, startScale2: currentBg2TRef.current.scale };
+        } else {
+          const r = dist / pinchRef.current.startDist;
+          const s1 = pinchRef.current.startScale1;
+          const s2 = pinchRef.current.startScale2;
+          setBgT(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s1 * r)) }));
+          setBg2T(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s2 * r)) }));
+        }
+        return;
+      }
+      if (activeDrag.current) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }
+    };
+    const onMouseMove = (e: MouseEvent) => { if (activeDrag.current) { e.preventDefault(); onMove(e.clientX, e.clientY); } };
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
   }, []);
 
   const handleBgTouch = useCallback((which: 1|2, e: React.TouchEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
   const handleBgMouse = useCallback((which: 1|2, e: React.MouseEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.clientX, e.clientY); }, [startDrag]);
-  const handleStickerTouch = useCallback((id: string, e: React.TouchEvent) => { e.preventDefault(); setSelectedStickerId(id); setActiveTab("stickers"); startDrag({ type: "sticker", id }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
-  const handleStickerMouse = useCallback((id: string, e: React.MouseEvent) => { e.preventDefault(); setSelectedStickerId(id); setActiveTab("stickers"); startDrag({ type: "sticker", id }, e.clientX, e.clientY); }, [startDrag]);
+  const handleStickerTouch = useCallback((id: string, mode: string, e: React.TouchEvent) => { e.preventDefault(); setSelectedStickerId(id); setActiveTab("stickers"); startDrag({ type: "sticker", id, mode }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
+  const handleStickerMouse = useCallback((id: string, mode: string, e: React.MouseEvent) => { e.preventDefault(); setSelectedStickerId(id); setActiveTab("stickers"); startDrag({ type: "sticker", id, mode }, e.clientX, e.clientY); }, [startDrag]);
   const handleTextTouch = useCallback((id: string, e: React.TouchEvent) => { e.preventDefault(); setSelectedTextId(id); setActiveTab("texts"); startDrag({ type: "text", id }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
   const handleTextMouse = useCallback((id: string, e: React.MouseEvent) => { e.preventDefault(); setSelectedTextId(id); setActiveTab("texts"); startDrag({ type: "text", id }, e.clientX, e.clientY); }, [startDrag]);
 
@@ -637,11 +857,9 @@ export function EditorPage() {
   };
 
   const handleDownload = async () => {
-    if (template === "video") {
-        await handleExportVideo();
-        return;
-    }
-    // IMAGE EXPORT
+    if (!source.trim()) { showToast("⚠️ Isi sumber gambar terlebih dahulu"); return; }
+    if (label === "Discuss" && !titleHtml.trim()) { showToast("⚠️ Isi judul terlebih dahulu"); return; }
+    if (template === "video") { await handleExportVideo(); return; }
     if (!hiddenCardRef.current) return; setDownloading(true);
     try {
       const el = hiddenCardRef.current; el.style.visibility = "visible"; el.style.zIndex = "9999";
@@ -655,8 +873,13 @@ export function EditorPage() {
 
   const PREVIEW_W = 340; const PREVIEW_H = Math.round(PREVIEW_W * (CARD_H / CARD_W)); const scale = PREVIEW_W / CARD_W;
   const commonProps = { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts };
+  const handleInlineTitleChange = useCallback((html: string) => {
+    setTitleHtml(html);
+    // sync panel editor if open
+    if (editorRef.current && editorRef.current.innerHTML !== html) editorRef.current.innerHTML = html;
+  }, []);
   const renderCard = (interactive: boolean) => {
-    const p = interactive ? { ...commonProps, snapIndicator, bgDragActive, onBgTouch: handleBgTouch, onBgMouseDown: handleBgMouse, onStickerTouch: handleStickerTouch, onStickerMouseDown: handleStickerMouse, onTextTouch: handleTextTouch, onTextMouseDown: handleTextMouse, selectedStickerId, selectedTextId } : commonProps;
+    const p = interactive ? { ...commonProps, snapIndicator, bgDragActive, onBgTouch: handleBgTouch, onBgMouseDown: handleBgMouse, onStickerTouch: handleStickerTouch, onStickerMouseDown: handleStickerMouse, onTextTouch: handleTextTouch, onTextMouseDown: handleTextMouse, selectedStickerId, selectedTextId, onTitleChange: handleInlineTitleChange } : commonProps;
     return template === "post" ? <PostCard {...p} /> : <VideoCard {...p} videoSrc={videoSrc} videoRef={videoRef} overlayRef={overlayRef} />;
   };
 
@@ -718,102 +941,293 @@ export function EditorPage() {
         </div>
       </header>
 
-      {/* ── PREVIEW ── */}
-      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden pt-14 pb-24" onClick={() => setActiveTab(null)}>
-        <div className="relative shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]" 
-             style={{ 
-               width: PREVIEW_W, 
-               height: PREVIEW_H, 
-               transform: activeTab ? "translateY(-22vh) scale(0.85)" : "translateY(0) scale(1)",
-               transformOrigin: "center center"
-             }}>
-          <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
-            {renderCard(true)}
-          </div>
-        </div>
-        {!activeTab && <div className="absolute bottom-28 px-4 py-2 bg-black/5 backdrop-blur rounded-full text-[10px] font-medium text-neutral-500 pointer-events-none">Cubit layar untuk zoom · Seret untuk geser</div>}
-      </div>
+      {/* ── PANEL CONTENT BUILDER ── rendered once to preserve refs/state */}
+      {(() => {
+        const panelInner = (isMobile: boolean) => (
+          <>
+            {/* Header */}
+            <div className="h-11 flex items-center justify-between px-5 border-b border-neutral-100 shrink-0">
+              <div className="text-sm font-bold text-neutral-800 flex items-center gap-2">
+                {activeTab && <span className="text-[#ff742f]">{TABS.find(t => t.id === activeTab)?.icon}</span>}
+                {activeTab && TABS.find(t => t.id === activeTab)?.label}
+              </div>
+              <button className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 hover:bg-neutral-200 transition" onClick={(e) => { e.stopPropagation(); setActiveTab(null); }}><X size={13}/></button>
+            </div>
 
-      {/* ── FLOATING NAV ── */}
-      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-full px-2 py-2 flex items-center gap-1 transition-all duration-300 ${activeTab ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100"}`}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={(e) => { e.stopPropagation(); setActiveTab(t.id); }} className="flex flex-col items-center justify-center w-16 h-12 rounded-full hover:bg-neutral-50 transition gap-1 group">
-            <div className="text-neutral-400 group-hover:text-[#ff742f] transition">{t.icon}</div>
-            <span className="text-[9px] font-bold text-neutral-400 group-hover:text-[#ff742f] transition">{t.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* ── BOTTOM SHEET CONTENT (INLINED) ── */}
-      <div className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-[0_-4px_30px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out flex flex-col ${activeTab ? "translate-y-0" : "translate-y-[100%]"}`} style={{ height: "45vh" }}>
-        <div className="h-12 flex items-center justify-between px-6 border-b border-neutral-100 shrink-0" onClick={() => setActiveTab(null)}>
-          <div className="text-xs font-bold text-neutral-900 flex items-center gap-2">
-             {activeTab && TABS.find(t => t.id === activeTab)?.icon} 
-             {activeTab && TABS.find(t => t.id === activeTab)?.label}
-          </div>
-          <button className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"><X size={14}/></button>
-        </div>
-        
-        {/* PANEL CONTENT - DI-RENDER LANGSUNG AGAR STATE AMAN */}
-        <div className="flex-1 overflow-y-auto p-5 pb-20 flex flex-col gap-5">
-            {activeTab === "content" && (
+            <div className={`flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 ${isMobile ? "pb-8" : "pb-4"}`}>
+              {/* ── CONTENT ── */}
+              {activeTab === "content" && (
                 <>
-                <div><label className="text-xs text-neutral-400 font-medium mb-1.5 block">Label</label><div className="relative"><select className="w-full bg-neutral-50 border-none rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 appearance-none focus:ring-2 focus:ring-[#ff742f]" value={label} onChange={(e) => setLabel(e.target.value)}>{LABEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}</select><ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" /></div></div>
-                <div><label className="text-xs text-neutral-400 font-medium mb-1.5 block">Judul</label>
-                    <div className="flex gap-2 mb-2">{["bold","italic"].map(c => <button key={c} onMouseDown={(e)=>{e.preventDefault(); applyFormat(c as any)}} className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${((c==="bold"?isBoldActive:isItalicActive))?"bg-neutral-800 text-white":"bg-neutral-100 text-neutral-500"}`}>{c==="bold"?<Bold size={14}/>:<Italic size={14}/>}</button>)}</div>
-                    <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyUp={updateFormatState} onMouseUp={updateFormatState} className="w-full min-h-[80px] bg-neutral-50 rounded-xl px-3 py-3 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff742f]" style={{lineHeight:1.6}} />
-                </div>
-                <div><label className="text-xs text-neutral-400 font-medium mb-1.5 block">Sumber</label><input className="w-full bg-neutral-50 rounded-xl px-3 py-2.5 text-sm text-neutral-700 focus:ring-[#ff742f]" value={source} onChange={(e) => setSource(e.target.value)} /></div>
-                {template === "video" && <button onClick={() => videoInputRef.current?.click()} className="w-full py-3 border border-dashed border-neutral-300 rounded-xl text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f]">{videoSrc ? "Ganti Video" : "Upload Video"}</button>}
-                </>
-            )}
-            {activeTab === "background" && (
-                <>
-                {!videoSrc && <div className="flex bg-neutral-100 p-1 rounded-xl">{["single","collage"].map((m) => <button key={m} onClick={() => setBgMode(m as any)} className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition ${bgMode === m ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>{m === "single" ? "1 Gambar" : "2 Gambar"}</button>)}</div>}
-                <div className="space-y-4">
-                    <div>
-                        <div className="text-xs font-semibold text-neutral-900 mb-2">{videoSrc ? "Video" : "Gambar Utama"}</div>
-                        {!videoSrc && <div className="flex gap-2 mb-3"><button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2.5 border border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-[#ff742f]">Upload</button><div className="flex-1"><BgUrlInput placeholder="Link..." onApply={(u) => { setBgSrc(u); setBgT({...DEFAULT_BG_TRANSFORM}); }} /></div></div>}
-                        <Slider label="Zoom" value={Math.round(bgT.scale*100)} min={30} max={300} onChange={(v)=>setBgT(p=>({...p, scale:v/100}))} suffix="%" />
+                  {/* Label chips */}
+                  <div>
+                    <label className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2 block">Label</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {LABEL_OPTIONS.map(o => (
+                        <button key={o} onClick={() => setLabel(o)}
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold transition border ${label===o ? "bg-[#ff742f] text-white border-[#ff742f]" : "bg-neutral-50 text-neutral-500 border-neutral-200 hover:border-[#ff742f] hover:text-[#ff742f]"}`}>
+                          {o}
+                        </button>
+                      ))}
                     </div>
-                    {bgMode === "collage" && !videoSrc && (
-                        <div>
-                        <div className="text-xs font-semibold text-neutral-900 mb-2">Gambar Kedua</div>
-                        <div className="flex gap-2 mb-3"><button onClick={() => file2InputRef.current?.click()} className="flex-1 py-2.5 border border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-[#ff742f]">Upload</button><div className="flex-1"><BgUrlInput placeholder="Link..." onApply={(u) => { setBg2Src(u); setBg2T({...DEFAULT_BG_TRANSFORM}); }} /></div></div>
-                        <Slider label="Zoom" value={Math.round(bg2T.scale*100)} min={30} max={300} onChange={(v)=>setBg2T(p=>({...p, scale:v/100}))} suffix="%" />
-                        <div className="mt-3"><Slider label="Kemiringan" value={splitAngle} min={-30} max={30} onChange={setSplitAngle} suffix="°" /></div>
+                  </div>
+                  {/* Title — note about inline edit */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider">Judul</label>
+                      <div className="flex gap-1">
+                        {["bold","italic"].map(c => (
+                          <button key={c} onMouseDown={(e)=>{e.preventDefault(); applyFormat(c as any)}}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition text-[11px] ${c==="bold"?isBoldActive:isItalicActive ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-500"}`}>
+                            {c==="bold"?<Bold size={12}/>:<Italic size={12}/>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyUp={updateFormatState} onMouseUp={updateFormatState}
+                      className="w-full min-h-[64px] bg-neutral-50 rounded-xl px-3 py-2.5 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff742f]"
+                      style={{lineHeight:1.6}} />
+                    <p className="text-[10px] text-neutral-400 mt-1.5 flex items-center gap-1">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      Ketuk judul di preview untuk edit langsung
+                    </p>
+                  </div>
+                  {/* Source */}
+                  <div>
+                    <label className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2 block">Sumber</label>
+                    <input className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff742f] ${!source.trim() ? "bg-red-50 ring-1 ring-red-200 placeholder-red-300" : "bg-neutral-50"}`}
+                      placeholder="Wajib diisi..." value={source} onChange={(e) => setSource(e.target.value)} />
+                  </div>
+                  {template === "video" && (
+                    <button onClick={() => videoInputRef.current?.click()} className="w-full py-3 border border-dashed border-neutral-300 rounded-xl text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f]">
+                      {videoSrc ? "Ganti Video" : "Upload Video"}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* ── BACKGROUND ── */}
+              {activeTab === "background" && (
+                <>
+                  {!videoSrc && (
+                    <div className="flex bg-neutral-100 p-1 rounded-xl">
+                      {["single","collage"].map(m => (
+                        <button key={m} onClick={() => setBgMode(m as any)}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition ${bgMode===m ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
+                          {m==="single" ? "1 Gambar" : "2 Gambar"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2">{videoSrc ? "Video" : "Gambar Utama"}</p>
+                    {!videoSrc && (
+                      <div className="flex gap-2 mb-3">
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2 border border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
+                          📁 Upload
+                        </button>
+                        <div className="flex-1">
+                          <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBgSrc(u); setBgT({...DEFAULT_BG_TRANSFORM}); }} onSourceApply={(d) => { if (!source.trim()) setSource(d); }} />
                         </div>
+                      </div>
                     )}
+                    <Slider label="Zoom" value={Math.round(bgT.scale*100)} min={30} max={300} onChange={(v)=>setBgT(p=>({...p, scale:v/100}))} suffix="%" />
+                  </div>
+                  {bgMode === "collage" && !videoSrc && (
+                    <div>
+                      <p className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2">Gambar Kedua</p>
+                      <div className="flex gap-2 mb-3">
+                        <button onClick={() => file2InputRef.current?.click()} className="flex-1 py-2 border border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
+                          📁 Upload
+                        </button>
+                        <div className="flex-1">
+                          <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBg2Src(u); setBg2T({...DEFAULT_BG_TRANSFORM}); }} />
+                        </div>
+                      </div>
+                      <Slider label="Zoom" value={Math.round(bg2T.scale*100)} min={30} max={300} onChange={(v)=>setBg2T(p=>({...p, scale:v/100}))} suffix="%" />
+                      <div className="mt-3"><Slider label="Kemiringan" value={splitAngle} min={-30} max={30} onChange={setSplitAngle} suffix="°" /></div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── STICKERS ── */}
+              {activeTab === "stickers" && (
+                <>
+                  <button onClick={() => stickerInputRef.current?.click()} className="w-full py-3 bg-[#ff742f]/10 text-[#ff742f] rounded-xl text-sm font-bold flex items-center justify-center gap-2 border-2 border-dashed border-[#ff742f]/30">
+                    <Plus size={16}/> Upload Stiker
+                  </button>
+                  {stickers.length > 0 && (
+                    <div className="grid grid-cols-5 gap-2">
+                      {stickers.map(s => (
+                        <button key={s.id} onClick={() => setSelectedStickerId(s.id)}
+                          className={`aspect-square rounded-xl relative overflow-hidden bg-neutral-100 transition ${selectedStickerId===s.id ? "ring-2 ring-[#ff742f] ring-offset-1" : ""}`}>
+                          <img src={s.src} className="w-full h-full object-cover"/>
+                          <button onClick={(e)=>{e.stopPropagation();deleteSticker(s.id)}} className="absolute top-0 right-0 p-0.5 bg-black/60 text-white rounded-bl"><X size={9}/></button>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {stickers.find(s=>s.id===selectedStickerId) && (() => {
+                    const sel = stickers.find(s=>s.id===selectedStickerId)!;
+                    return (
+                      <div className="bg-neutral-50 rounded-2xl p-3 space-y-3">
+                        {/* Shape */}
+                        <div>
+                          <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider block mb-2">Bentuk Frame</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => updateSticker(selectedStickerId!, {shape:"original"})}
+                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape==="original" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape==="original"?"white":"#aaa"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                            </button>
+                            <button onClick={() => updateSticker(selectedStickerId!, {shape:"square"})}
+                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape==="square" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape==="square"?"white":"#aaa"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+                            </button>
+                            <button onClick={() => updateSticker(selectedStickerId!, {shape:"circle"})}
+                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape==="circle" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape==="circle"?"white":"#aaa"} strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                        {/* Crop */}
+                        <button onClick={() => setCropStickerId(selectedStickerId)}
+                          className="w-full py-2 bg-white border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 flex items-center justify-center gap-1.5 hover:border-[#ff742f] hover:text-[#ff742f] transition">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+                          Crop Gambar
+                        </button>
+                        {/* Stroke */}
+                        <div>
+                          <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider block mb-2">Stroke / Border</span>
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={sel.outlineColor} onChange={(e)=>updateSticker(selectedStickerId!, {outlineColor:e.target.value})} className="w-9 h-9 rounded-xl border-none cursor-pointer shrink-0 p-0.5 bg-white border border-neutral-200" />
+                            <input type="range" min={0} max={40} value={sel.outlineWidth} onChange={(e)=>updateSticker(selectedStickerId!, {outlineWidth:Number(e.target.value)})} className="flex-1 accent-[#ff742f]" />
+                            <span className="text-[11px] text-neutral-400 tabular-nums w-8 text-right font-medium">{sel.outlineWidth}px</span>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 text-center pt-1">Seret stiker · Handle 🟠 untuk ukuran & putar</p>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* ── TEXTS ── */}
+              {activeTab === "texts" && (
+                <>
+                  <button onClick={addExtraText} className="w-full py-3 bg-[#ff742f]/10 text-[#ff742f] rounded-xl text-sm font-bold flex items-center justify-center gap-2 border-2 border-dashed border-[#ff742f]/30">
+                    <Plus size={16}/> Tambah Teks
+                  </button>
+                  <div className="space-y-2">
+                    {extraTexts.map(t => (
+                      <div key={t.id} onClick={()=>setSelectedTextId(t.id)}
+                        className={`p-3 rounded-xl border-2 flex items-center gap-3 bg-white transition ${selectedTextId===t.id ? "border-[#ff742f]" : "border-neutral-100"}`}>
+                        <span className="text-[10px] font-bold text-neutral-300 uppercase shrink-0">T</span>
+                        <input value={t.text} onChange={(e)=>updateText(t.id, {text:e.target.value})} className="flex-1 text-sm bg-transparent outline-none font-medium"/>
+                        <button onClick={()=>deleteText(t.id)} className="text-neutral-300 hover:text-red-400 transition"><Trash2 size={14}/></button>
+                      </div>
+                    ))}
+                  </div>
+                  {extraTexts.find(t=>t.id===selectedTextId) && (
+                    <div className="bg-neutral-50 rounded-2xl p-3 space-y-3">
+                      <div className="flex gap-2">
+                        <input type="color" value={extraTexts.find(t=>t.id===selectedTextId)!.color} onChange={(e)=>updateText(selectedTextId!, {color:e.target.value})} className="w-9 h-9 rounded-xl border border-neutral-200 p-0.5"/>
+                        <button onClick={()=>updateText(selectedTextId!, {fontWeight: extraTexts.find(t=>t.id===selectedTextId)!.fontWeight==="bold"?"normal":"bold"})}
+                          className={`px-3 rounded-xl border text-xs font-bold transition ${extraTexts.find(t=>t.id===selectedTextId)!.fontWeight==="bold" ? "bg-neutral-800 text-white border-neutral-800" : "bg-white text-neutral-500 border-neutral-200"}`}>
+                          Bold
+                        </button>
+                      </div>
+                      <Slider label="Ukuran" value={extraTexts.find(t=>t.id===selectedTextId)!.fontSize} min={20} max={300} onChange={(v)=>updateText(selectedTextId!, {fontSize:v})} />
+                      <Slider label="Rotasi" value={extraTexts.find(t=>t.id===selectedTextId)!.rotation} min={-180} max={180} onChange={(v)=>updateText(selectedTextId!, {rotation:v})} suffix="°" />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        );
+
+        const navButtons = (vertical: boolean) => TABS.map(t => (
+          <button key={t.id} onClick={(e) => { e.stopPropagation(); setActiveTab(activeTab === t.id ? null : t.id); }}
+            className={`flex flex-col items-center justify-center rounded-full hover:bg-neutral-50 transition gap-1 group
+              ${vertical ? "w-12 h-12" : "w-16 h-12"}
+              ${activeTab === t.id ? "bg-[#ff742f]/8" : ""}
+            `}>
+            <div className={`transition ${activeTab === t.id ? "text-[#ff742f]" : "text-neutral-400 group-hover:text-[#ff742f]"}`}>{t.icon}</div>
+            <span className={`text-[9px] font-bold transition ${activeTab === t.id ? "text-[#ff742f]" : "text-neutral-400 group-hover:text-[#ff742f]"}`}>{t.label}</span>
+          </button>
+        ));
+
+        if (isDesktop) {
+          return (
+            /* ── DESKTOP LAYOUT: centered flex row [nav] [preview] [panel] ── */
+            <div className="flex-1 flex items-center justify-center pt-14 overflow-hidden">
+              <div className="flex items-center gap-4">
+                {/* Left floating vertical nav pill */}
+                <div className="bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] rounded-2xl px-2 py-3 flex flex-col items-center gap-1 shrink-0">
+                  {navButtons(true)}
                 </div>
-                </>
-            )}
-            {activeTab === "stickers" && (
-                <>
-                <button onClick={() => stickerInputRef.current?.click()} className="w-full py-3 bg-[#ff742f]/10 text-[#ff742f] rounded-xl text-sm font-bold flex items-center justify-center gap-2"><Plus size={16}/> Upload Stiker</button>
-                {stickers.length > 0 && <div className="grid grid-cols-4 gap-2">{stickers.map((s,i) => <button key={s.id} onClick={() => setSelectedStickerId(s.id)} className={`aspect-square rounded-xl border-2 flex items-center justify-center relative overflow-hidden bg-white ${selectedStickerId===s.id?"border-[#ff742f]":"border-transparent"}`}><img src={s.src} className="w-full h-full object-cover"/><button onClick={(e)=>{e.stopPropagation();deleteSticker(s.id)}} className="absolute top-0 right-0 p-1 bg-black/50 text-white"><X size={10}/></button></button>)}</div>}
-                {stickers.find(s=>s.id===selectedStickerId) && (
-                    <div className="bg-neutral-50 p-3 rounded-xl space-y-3">
-                        <Slider label="Ukuran" value={stickers.find(s=>s.id===selectedStickerId)!.size} min={50} max={600} onChange={(v)=>updateSticker(selectedStickerId!, {size:v})} />
-                        <Slider label="Rotasi" value={stickers.find(s=>s.id===selectedStickerId)!.rotation} min={-180} max={180} onChange={(v)=>updateSticker(selectedStickerId!, {rotation:v})} suffix="°" />
-                    </div>
-                )}
-                </>
-            )}
-            {activeTab === "texts" && (
-                <>
-                <button onClick={addExtraText} className="w-full py-3 bg-[#ff742f]/10 text-[#ff742f] rounded-xl text-sm font-bold flex items-center justify-center gap-2"><Plus size={16}/> Tambah Teks</button>
-                {extraTexts.map((t) => <div key={t.id} onClick={()=>setSelectedTextId(t.id)} className={`p-3 rounded-xl border flex items-center gap-3 bg-white ${selectedTextId===t.id?"border-[#ff742f]":"border-neutral-100"}`}><span className="text-xs font-bold text-neutral-400 flex-shrink-0">Teks</span><input value={t.text} onChange={(e)=>updateText(t.id, {text:e.target.value})} className="flex-1 text-sm bg-transparent outline-none font-medium"/><button onClick={()=>deleteText(t.id)} className="text-neutral-300 hover:text-red-500"><Trash2 size={14}/></button></div>)}
-                {extraTexts.find(t=>t.id===selectedTextId) && (
-                    <div className="bg-neutral-50 p-3 rounded-xl space-y-3">
-                        <div className="flex gap-2"><input type="color" value={extraTexts.find(t=>t.id===selectedTextId)!.color} onChange={(e)=>updateText(selectedTextId!, {color:e.target.value})} className="w-8 h-8 rounded-lg border-none"/><button onClick={()=>updateText(selectedTextId!, {fontWeight: extraTexts.find(t=>t.id===selectedTextId)!.fontWeight==="bold"?"normal":"bold"})} className="px-3 rounded-lg bg-white border text-xs font-bold">Bold</button></div>
-                        <Slider label="Ukuran" value={extraTexts.find(t=>t.id===selectedTextId)!.fontSize} min={20} max={300} onChange={(v)=>updateText(selectedTextId!, {fontSize:v})} />
-                        <Slider label="Rotasi" value={extraTexts.find(t=>t.id===selectedTextId)!.rotation} min={-180} max={180} onChange={(v)=>updateText(selectedTextId!, {rotation:v})} suffix="°" />
-                    </div>
-                )}
-                </>
-            )}
+
+                {/* Preview card */}
+                <div className="relative shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden shrink-0" style={{ width: PREVIEW_W, height: PREVIEW_H }}>
+                  <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
+                    {renderCard(true)}
+                  </div>
+                </div>
+
+                {/* Right floating panel */}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] rounded-2xl flex flex-col overflow-hidden shrink-0 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                  style={{ width: activeTab ? 272 : 0, height: PREVIEW_H, opacity: activeTab ? 1 : 0, pointerEvents: activeTab ? "auto" : "none" }}
+                >
+                  {panelInner(false)}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          /* ── MOBILE LAYOUT: preview + fixed bottom nav + bottom sheet ── */
+          <>
+            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden pt-14 pb-24" onClick={() => setActiveTab(null)}>
+              <div className="relative shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                style={{ width: PREVIEW_W, height: PREVIEW_H, transform: activeTab ? "translateY(-22vh) scale(0.85)" : "translateY(0) scale(1)", transformOrigin: "center center" }}>
+                <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
+                  {renderCard(true)}
+                </div>
+              </div>
+              {!activeTab && <div className="absolute bottom-28 px-4 py-2 bg-black/5 backdrop-blur rounded-full text-[10px] font-medium text-neutral-500 pointer-events-none">Cubit layar untuk zoom · Seret untuk geser</div>}
+            </div>
+
+            {/* Mobile floating bottom nav */}
+            <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-full px-2 py-2 flex items-center gap-1 transition-all duration-300 ${activeTab ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100"}`}>
+              {navButtons(false)}
+            </div>
+
+            {/* Mobile bottom sheet — taller for better UX */}
+            <div onClick={(e) => e.stopPropagation()} className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-[0_-4px_30px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out flex flex-col ${activeTab ? "translate-y-0" : "translate-y-[100%]"}`} style={{ height: "58vh" }}>
+              {/* drag pill */}
+              <div className="flex justify-center pt-2.5 pb-1 shrink-0"><div className="w-10 h-1 bg-neutral-200 rounded-full" /></div>
+              {panelInner(true)}
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] bg-neutral-900 text-white text-sm font-semibold px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-[fadeInDown_0.2s_ease]">
+          {toast}
         </div>
-      </div>
+      )}
+
+      {/* ── CROP MODAL ── */}
+      {cropStickerId && (() => {
+        const s = stickers.find(st => st.id === cropStickerId);
+        if (!s) return null;
+        return <CropModal src={s.src} shape={s.shape} onDone={(cropped) => { updateSticker(cropStickerId, { src: cropped }); setCropStickerId(null); }} onClose={() => setCropStickerId(null)} />;
+      })()}
     </div>
   );
 }

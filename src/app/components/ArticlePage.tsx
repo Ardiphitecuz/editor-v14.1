@@ -483,7 +483,7 @@ export function ArticlePage() {
                     <button
                       onClick={() => {
                         setAiPopup(null);
-                        navigate("/editor", { state: { titleHtml: aiPopup.title, bgUrl: article.image } });
+                        navigate("/editor", { state: { aiTitle: aiPopup.title, bgUrl: article.image } });
                       }}
                       className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
                       style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", color: "white" }}>
