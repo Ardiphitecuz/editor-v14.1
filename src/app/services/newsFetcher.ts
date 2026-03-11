@@ -239,23 +239,30 @@ export function sanitizeRssHtml(rawHtml: string, baseUrl: string): string {
     if (!hasImg && !(el.textContent ?? "").trim()) el.remove();
   });
 
-  // Post-pass 1b: hapus list navigasi / menu sidebar
-  // Cara deteksi: hitung rasio teks yang berupa link (link density)
-  // Jika >80% teks di dalam <a> tag → ini navigasi, bukan konten
-  doc.body.querySelectorAll("ul, ol").forEach(list => {
-    const items = Array.from(list.querySelectorAll("li"));
-    if (items.length === 0) { list.remove(); return; }
-    // Hitung total teks dan teks yang ada di dalam link
-    const totalText = (list.textContent ?? "").trim().length;
-    if (totalText === 0) { list.remove(); return; }
+  // Post-pass 1b: hapus navigasi / link sampah berdasarkan link density
+  doc.body.querySelectorAll("ul, ol, p, div").forEach(el => {
+    const totalText = (el.textContent ?? "").replace(/\s+/g, "").length;
+    if (totalText === 0) { el.remove(); return; }
     let linkText = 0;
-    list.querySelectorAll("a").forEach(a => {
-      linkText += (a.textContent ?? "").trim().length;
+    el.querySelectorAll("a").forEach(a => {
+      linkText += (a.textContent ?? "").replace(/\s+/g, "").length;
     });
-    const linkDensity = totalText > 0 ? linkText / totalText : 0;
-    const hasImages = list.querySelector("img") !== null;
-    // Nav list: link density tinggi (>75%) dan tidak ada gambar
-    if (linkDensity > 0.75 && !hasImages) { list.remove(); }
+    const density = totalText > 0 ? linkText / totalText : 0;
+    const hasImages = el.querySelector("img") !== null;
+    // ul/ol: hapus jika >75% link; p/div: lebih ketat >90%
+    const threshold = (el.tagName === "P" || el.tagName === "DIV") ? 0.9 : 0.75;
+    if (density >= threshold && !hasImages) el.remove();
+  });
+
+  // Post-pass 1c: hapus <p> yang isinya hanya satu link ("Baca juga: X", "Sumber: X")
+  doc.body.querySelectorAll("p").forEach(p => {
+    const anchors = Array.from(p.querySelectorAll("a"));
+    if (anchors.length >= 1) {
+      let linkTotal = 0;
+      anchors.forEach(a => { linkTotal += (a.textContent ?? "").trim().length; });
+      const outside = (p.textContent ?? "").trim().length - linkTotal;
+      if (outside <= 15) p.remove(); // hanya "Baca juga: " di luar link
+    }
   });
 
   // Post-pass 2: wrap orphan text nodes (hasil unwrap div) ke dalam <p>
@@ -453,11 +460,16 @@ export async function fetchArticleContent(
     const html = await fetchWithFallback(url, 12000);
     const doc = new DOMParser().parseFromString(html, "text/html");
 
-    // Hapus noise struktural
+    // Hapus noise struktural — lebih agresif dari sebelumnya
     doc.querySelectorAll(
-      "script,style,noscript,iframe,nav,header,footer,aside," +
+      "script,style,noscript,iframe,nav,header,footer,aside,form,menu," +
       "[class*='sidebar'],[class*='related'],[class*='recommend']," +
-      "[id*='sidebar'],[id*='related'],[class*='ad-'],[id*='ad-']"
+      "[class*='widget'],[class*='comment'],[class*='share'],[class*='social']," +
+      "[class*='newsletter'],[class*='subscribe'],[class*='popup'],[class*='banner']," +
+      "[class*='ad-'],[class*='-ad'],[id*='sidebar'],[id*='related'],[id*='ad-']," +
+      "[class*='entry-meta'],[class*='post-meta'],[class*='post-author']," +
+      "[class*='cat-links'],[class*='post-category'],[class*='sharedaddy']," +
+      "[class*='navigation'],[class*='pagination'],[class*='breadcrumb']"
     ).forEach(el => el.remove());
 
     // Scoring: cari elemen dengan konten terbanyak (hitung p, li, blockquote)

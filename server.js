@@ -188,6 +188,16 @@ app.get('/api/fetch-content', async (req, res) => {
       return res.json({ success: false, error: 'Readability could not extract content', items: [] });
     }
 
+    // ── FASE 2.5: Hapus noise dari output Readability ────────────────────────
+    const contentDomPre = new JSDOM(article.content, { url });
+    const contentDocPre = contentDomPre.window.document;
+    contentDocPre.querySelectorAll('[class],[id]').forEach(el => {
+      const cls = el.getAttribute('class') ?? '';
+      const id  = el.getAttribute('id') ?? '';
+      if (NOISE_PATTERN.test(cls) || NOISE_PATTERN.test(id)) el.remove();
+    });
+    article.content = contentDocPre.body.innerHTML;
+
     // ── FASE 3: Sanitasi dengan pendekatan ALLOWLIST (Inoreader-style) ─────────
     // Prinsip: hapus SEMUA class/id/style, hanya izinkan tag tipografi editorial
     // Ini jauh lebih robust dari blocklist — iklan tidak bisa bersembunyi di nama class baru
@@ -311,14 +321,26 @@ app.get('/api/fetch-content', async (req, res) => {
       if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
     });
 
-    // Post-pass: hapus list navigasi berdasarkan link density
-    contentDoc.body.querySelectorAll('ul, ol').forEach(list => {
-      const totalText = (list.textContent ?? '').trim().length;
-      if (!totalText) { list.remove(); return; }
+    // Post-pass: hapus elemen navigasi berdasarkan link density
+    contentDoc.body.querySelectorAll('ul,ol,p,div').forEach(el => {
+      const totalText = (el.textContent ?? '').replace(/\s+/g, '').length;
+      if (!totalText) { el.remove(); return; }
       let linkText = 0;
-      list.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').trim().length; });
+      el.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').replace(/\s+/g, '').length; });
       const density = linkText / totalText;
-      if (density > 0.75 && !list.querySelector('img')) list.remove();
+      const threshold = (el.tagName === 'P' || el.tagName === 'DIV') ? 0.9 : 0.75;
+      if (density >= threshold && !el.querySelector('img')) el.remove();
+    });
+
+    // Post-pass: hapus <p> yang isinya HANYA satu link (baca juga / artikel lain)
+    contentDoc.body.querySelectorAll('p').forEach(p => {
+      const anchors = p.querySelectorAll('a');
+      if (anchors.length >= 1) {
+        let linkTotal = 0;
+        anchors.forEach(a => linkTotal += (a.textContent ?? '').trim().length);
+        const outside = (p.textContent ?? '').trim().length - linkTotal;
+        if (outside <= 15) p.remove();
+      }
     });
 
     const contentHtml = contentDoc.body.innerHTML.trim();

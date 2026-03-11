@@ -110,6 +110,18 @@ export default async function handler(req, res) {
       return res.json({ success: false, error: 'Readability could not extract content', items: [] });
     }
 
+    // ── FASE 2.5: Hapus noise dari output Readability ────────────────────────
+    // Readability kadang tetap meloloskan elemen ber-class noise dari dalam konten
+    const contentDomPre = new JSDOM(article.content, { url });
+    const contentDocPre = contentDomPre.window.document;
+    contentDocPre.querySelectorAll('[class],[id]').forEach(el => {
+      const cls = el.getAttribute('class') ?? '';
+      const id  = el.getAttribute('id') ?? '';
+      if (NOISE_PATTERN.test(cls) || NOISE_PATTERN.test(id)) el.remove();
+    });
+    // Ganti article.content dengan hasil cleaning
+    article.content = contentDocPre.body.innerHTML;
+
     // ── FASE 3: Allowlist sanitizer ────────────────────────────────────────────
     const ALLOWED_TAGS = new Set([
       'p','h1','h2','h3','h4','h5','h6',
@@ -211,14 +223,32 @@ export default async function handler(req, res) {
       if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
     });
 
-    // Post-pass: hapus list navigasi berdasarkan link density
-    contentDoc.body.querySelectorAll('ul,ol').forEach(list => {
-      const totalText = (list.textContent ?? '').trim().length;
-      if (!totalText) { list.remove(); return; }
+    // Post-pass: hapus elemen navigasi berdasarkan link density
+    // Cakupan: ul/ol (nav list), dan juga <p> yang isinya hampir semua link
+    contentDoc.body.querySelectorAll('ul,ol,p,div').forEach(el => {
+      const totalText = (el.textContent ?? '').replace(/\s+/g, '').length;
+      if (!totalText) { el.remove(); return; }
       let linkText = 0;
-      list.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').trim().length; });
+      el.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').replace(/\s+/g, '').length; });
       const density = linkText / totalText;
-      if (density > 0.75 && !list.querySelector('img')) list.remove();
+      // ul/ol: threshold 0.75 (nav list), p/div: threshold 0.9 (hampir semua link)
+      const threshold = (el.tagName === 'P' || el.tagName === 'DIV') ? 0.9 : 0.75;
+      if (density >= threshold && !el.querySelector('img')) el.remove();
+    });
+
+    // Post-pass: hapus <p> yang isinya HANYA satu link (baca juga / artikel lain)
+    contentDoc.body.querySelectorAll('p').forEach(p => {
+      const anchors = p.querySelectorAll('a');
+      const nonLinkText = (p.textContent ?? '')
+        .replace(/<[^>]+>/g, '') // strip tags
+        .trim();
+      // Jika hanya ada link dan teks di luar link sangat pendek (max 10 char prefix/suffix)
+      if (anchors.length >= 1) {
+        let linkTotal = 0;
+        anchors.forEach(a => linkTotal += (a.textContent ?? '').trim().length);
+        const outside = (p.textContent ?? '').trim().length - linkTotal;
+        if (outside <= 15) p.remove(); // hanya "Baca juga: " + link
+      }
     });
 
     const contentHtml = contentDoc.body.innerHTML.trim();
