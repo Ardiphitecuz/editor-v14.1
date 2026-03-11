@@ -1,13 +1,20 @@
 // api/fetch-content.js — Vercel Serverless Function
-// FIX: import statis di atas, 1x JSDOM instance, resolveUrl di scope module
+// Menggunakan @mozilla/readability sesuai dokumentasi resmi:
+// https://github.com/mozilla/readability
+//
+// Key points dari docs:
+// 1. Pass document.cloneNode(true) agar DOM asli tidak dimodifikasi
+// 2. Gunakan serializer: el => el untuk dapat DOM element langsung (bukan string)
+//    sehingga post-processing bisa dilakukan tanpa instansiasi JSDOM ketiga
+// 3. jsdom harus dibuat dengan { url } agar Readability bisa resolve relative URL
 
 import axios from 'axios';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 
-export const config = { maxDuration: 120 };
+export const config = { maxDuration: 30 };
 
-// ── Konstanta di scope module (tidak dibuat ulang tiap request) ───────────────
+// ── Konstanta di scope module ─────────────────────────────────────────────────
 const NOISE_PATTERN = /\b(sidebar|widget|related|recommend|rekomendasi|artikel[\s_-]terkait|baca[\s_-]juga|lihat[\s_-]juga|more[\s_-]post|also[\s_-]read|you[\s_-]may|share|social|comment|disqus|newsletter|subscribe|advertisement|sponsor|banner|promo|popular|trending|tag[\s_-]list|breadcrumb|pagination|post[\s_-]nav|author[\s_-]box|author[\s_-]bio|byline|related[\s_-]post|more[\s_-]from|read[\s_-]next|next[\s_-]article|prev[\s_-]article|floating|sticky[\s_-]bar|cookie|gdpr|popup|modal|overlay|entry[\s_-]meta|entry[\s_-]header|post[\s_-]meta|post[\s_-]header|post[\s_-]info|post[\s_-]category|cat[\s_-]links|post[\s_-]author|entry[\s_-]author|article[\s_-]header|article[\s_-]meta|article[\s_-]info|sharedaddy|jetpack|addtoany)\b/i;
 
 const ALLOWED_TAGS = new Set([
@@ -24,9 +31,9 @@ const REMOVE_WITH_CONTENT = new Set([
   'nav','header','footer','aside','menu','svg','canvas',
 ]);
 
-const TRACKING_IMG = /feedburner.com|doubleclick.net|google-analytics|googletagmanager|pixel.|1x1.|2x1.|tracking|analytics|stat.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\//i;
+const TRACKING_IMG = /feedburner\.com|doubleclick\.net|google-analytics|googletagmanager|pixel\.|1x1\.|2x1\.|tracking|analytics|stat\.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\//i;
 
-const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here).?$/i;
+const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here)\.?$/i;
 
 const PUBLIC_PROXY_PREFIXES = [
   'https://api.allorigins.win/raw?url=',
@@ -46,7 +53,7 @@ function resolveUrl(src, baseUrl, pageUrl) {
   try { return new URL(src, pageUrl).href; } catch { return src; }
 }
 
-// ── Sanitize node (recursive) ─────────────────────────────────────────────────
+// ── Sanitize node (recursive, bekerja langsung di DOM element dari Readability) ─
 function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
   if (node.nodeType === 8) { node.parentNode?.removeChild(node); return; }
   if (node.nodeType !== 1) return;
@@ -75,9 +82,11 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
     if (!src || src.startsWith('data:') || TRACKING_IMG.test(src)) { el.remove(); return; }
     const w = parseInt(el.getAttribute('width') ?? '0');
     const h = parseInt(el.getAttribute('height') ?? '0');
-    if ((w > 0 && w < 50) || (h > 0 && h < 50)) { el.remove(); return; }
+    if ((w > 0 && w <= 2) || (h > 0 && h <= 2)) { el.remove(); return; }
+    const resolved = resolveUrl(src, baseUrl, pageUrl);
+    if (!resolved) { el.remove(); return; }
     Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
-    el.setAttribute('src', resolveUrl(src, baseUrl, pageUrl));
+    el.setAttribute('src', resolved);
     el.setAttribute('loading', 'lazy');
     el.setAttribute('alt', '');
     return;
@@ -132,7 +141,7 @@ export default async function handler(req, res) {
 
     const pageUrl = new URL(url);
     const baseUrl = pageUrl.origin;
-    const isJapaneseSite = /.jp(\/|$)/.test(url) || /[\u3040-\u30ff\u4e00-\u9faf]/.test(url);
+    const isJapaneseSite = /\.jp(\/|$)/.test(url) || /[\u3040-\u30ff\u4e00-\u9faf]/.test(url);
 
     // ── Fetch HTML ─────────────────────────────────────────────────────────────
     const fetchWithFallback = async (targetUrl) => {
@@ -199,57 +208,79 @@ export default async function handler(req, res) {
       catch { html = new TextDecoder('utf-8').decode(response.data); }
     } else {
       const preliminary = new TextDecoder('utf-8', { fatal: false }).decode(response.data.slice(0, 2000));
-      const metaCharset = preliminary.match(/<meta\s+charset=["']?([^\s"'>]+)/i);
-      html = new TextDecoder(metaCharset?.[1] ?? 'utf-8', { fatal: false }).decode(response.data);
+      const metaCharset = preliminary.match(/<meta[^>]+charset=["']?([\w-]+)/i);
+      if (metaCharset) {
+        try { html = new TextDecoder(metaCharset[1]).decode(response.data); }
+        catch { html = new TextDecoder('utf-8', { fatal: false }).decode(response.data); }
+      } else {
+        html = new TextDecoder('utf-8', { fatal: false }).decode(response.data);
+      }
     }
 
-    const doc = new JSDOM(html, { url, runScripts: 'dangerously', resources: 'usable' }).window.document;
+    // ── og:image dari raw HTML (sebelum DOM parsing) ───────────────────────────
+    let ogImage = null;
+    const ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+      ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+    if (ogImgMatch) ogImage = resolveUrl(ogImgMatch[1], baseUrl, url);
 
-    // ── FASE 1: Pre-filter noise ────────────────────────────────────────────────
-    const REMOVE_TAGS_IMMEDIATELY = ['script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'img[width][height]:not([width="0"]):not([height="0"])'];
-    doc.querySelectorAll(REMOVE_TAGS_IMMEDIATELY.join(',')).forEach(el => el.remove());
+    // ── Buat JSDOM — WAJIB sertakan { url } agar Readability resolve relative URL ─
+    // Sesuai docs: "Remember to pass the page's URI as the url option in the JSDOM constructor"
+    const dom = new JSDOM(html, { url });
+    const document = dom.window.document;
 
-    doc.querySelectorAll('[class],[id]').forEach(el => {
+    // ── FASE 1: Hapus noise SEBELUM Readability ───────────────────────────────
+    ['script','style','noscript','iframe','ins','form','nav','header','footer','aside']
+      .forEach(tag => document.querySelectorAll(tag).forEach(el => el.remove()));
+
+    document.querySelectorAll('[class],[id]').forEach(el => {
       const cls = el.getAttribute('class') ?? '';
-      const id = el.getAttribute('id') ?? '';
+      const id  = el.getAttribute('id') ?? '';
       if (NOISE_PATTERN.test(cls) || NOISE_PATTERN.test(id)) el.remove();
     });
 
-    // ── FASE 2: Readability ────────────────────────────────────────────────────
-    const article = new Readability(doc, { charThreshold: 50, keepClasses: false }).parse();
-    if (!article?.content || article.textContent.trim().length < 100) {
-      return res.json({ success: false, error: 'Article not found or too short', items: [] });
+    // ── FASE 2: Readability dengan cloneNode + serializer DOM ─────────────────
+    // Sesuai docs:
+    // - "pass the clone of the document object" agar DOM asli tidak dimodifikasi
+    // - serializer: el => el  →  dapat DOM Element langsung, bukan string HTML
+    //   ini menghilangkan kebutuhan instansiasi JSDOM ketiga untuk post-processing
+    const documentClone = document.cloneNode(true);
+    const reader = new Readability(documentClone, {
+      charThreshold: 50,
+      keepClasses: false,
+      serializer: el => el,  // ← kunci: kembalikan DOM element, bukan innerHTML string
+    });
+    const article = reader.parse();
+
+    if (!article?.content || article.textContent.trim().length < 30) {
+      return res.json({ success: false, error: 'Readability could not extract content', items: [] });
     }
 
-    // ── Extract OG Image ───────────────────────────────────────────────────────
-    const ogImage = doc.querySelector("meta[property='og:image']")?.getAttribute('content')
-      || doc.querySelector("meta[name='twitter:image']")?.getAttribute('content')
-      || doc.querySelector("img[alt]")?.getAttribute('src')
-      || '';
+    // article.content sekarang adalah DOM Element (bukan string)
+    // karena serializer: el => el
+    const contentElement = article.content;
+    const contentDoc = contentElement.ownerDocument;
 
-    // ── FASE 3: Sanitize content ───────────────────────────────────────────────
-    const contentDoc = new JSDOM('').window.document;
-    contentDoc.body.innerHTML = article.content;
-
-    doc.querySelectorAll('[class],[id]').forEach(el => {
+    // ── FASE 3: Bersihkan noise dari output Readability ───────────────────────
+    contentElement.querySelectorAll('[class],[id]').forEach(el => {
       const cls = el.getAttribute('class') ?? '';
-      const id = el.getAttribute('id') ?? '';
+      const id  = el.getAttribute('id') ?? '';
       if (NOISE_PATTERN.test(cls) || NOISE_PATTERN.test(id)) el.remove();
     });
 
-    // Jalankan allowlist sanitizer
+    // ── FASE 4: Allowlist sanitizer (langsung di DOM dari Readability) ────────
     const articleTitle = (article.title ?? '').trim().toLowerCase();
-    Array.from(contentDoc.body.childNodes).forEach(node =>
+    Array.from(contentElement.childNodes).forEach(node =>
       sanitizeNode(node, contentDoc, baseUrl, url, articleTitle)
     );
 
     // ── Post-pass: hapus elemen kosong ────────────────────────────────────────
-    contentDoc.body.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6').forEach(el => {
+    contentElement.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6').forEach(el => {
       if (!el.querySelector('img') && !(el.textContent ?? '').trim()) el.remove();
     });
 
     // Post-pass: link density
-    contentDoc.body.querySelectorAll('ul,ol,p,div').forEach(el => {
+    contentElement.querySelectorAll('ul,ol,p,div').forEach(el => {
       const totalText = (el.textContent ?? '').replace(/\s+/g, '').length;
       if (!totalText) { el.remove(); return; }
       let linkText = 0;
@@ -259,8 +290,8 @@ export default async function handler(req, res) {
       if (density >= threshold && !el.querySelector('img')) el.remove();
     });
 
-    // Post-pass: hapus paragraf yang isinya hanya satu link
-    contentDoc.body.querySelectorAll('p').forEach(p => {
+    // Post-pass: hapus <p> yang isinya hanya satu link
+    contentElement.querySelectorAll('p').forEach(p => {
       const anchors = p.querySelectorAll('a');
       if (anchors.length >= 1) {
         let linkTotal = 0;
@@ -270,14 +301,15 @@ export default async function handler(req, res) {
       }
     });
 
-    const contentHtml = contentDoc.body.innerHTML.trim();
+    // ── Serialisasi akhir ─────────────────────────────────────────────────────
+    const contentHtml = contentElement.innerHTML.trim();
     if (!contentHtml) {
       return res.json({ success: false, error: 'No content after sanitization', items: [] });
     }
 
-    const plainText = (contentDoc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
-    const imgCount = contentDoc.body.querySelectorAll('img').length;
-    const txtCount = contentDoc.body.querySelectorAll('p,h2,h3,h4').length;
+    const plainText = (contentElement.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const imgCount = contentElement.querySelectorAll('img').length;
+    const txtCount = contentElement.querySelectorAll('p,h2,h3,h4').length;
     console.log(`[fetch-content] ${pageUrl.hostname} → ${txtCount} paragraf, ${imgCount} gambar`);
 
     return res.json({
