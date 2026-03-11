@@ -131,31 +131,21 @@ function Overlay({ cardW, cardH, stickers, extraTexts, selectedStickerId, select
         const canInteract = !!(onStickerTouch || onStickerMouseDown);
 
         return (
-          // outer wrapper: position + rotate. NO overflow:hidden here so handle is visible
           <div key={s.id} style={{ position: "absolute", left: (s.x / 100) * cardW - s.size / 2, top: (s.y / 100) * cardH - s.size / 2, width: s.size, height: s.size, zIndex: 5, transform: `rotate(${s.rotation}deg)`, pointerEvents: canInteract ? "auto" : "none", touchAction: "none" }}
             onTouchStart={onStickerTouch ? (e) => { e.stopPropagation(); onStickerTouch(s.id, "move", e); } : undefined}
             onMouseDown={onStickerMouseDown ? (e) => { e.stopPropagation(); onStickerMouseDown(s.id, "move", e); } : undefined}>
-            {/* inner clip div */}
             <div style={{ width: "100%", height: "100%", borderRadius, overflow: (isCircle || isSquare) ? "hidden" : "visible", ...(isCircle || isSquare ? { boxShadow: selBoxShadow } : { filter: selFilter }) }}>
               <img alt="" src={s.src} style={{ width: "100%", height: "100%", objectFit: (isCircle || isSquare) ? "cover" : "contain", display: "block" }} />
             </div>
-            {/* rotate/scale handle — bottom-right corner, outside clip */}
-            {isSel && canInteract && (
-              <div
-                style={{ position: "absolute", bottom: -14, right: -14, width: 28, height: 28, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 10, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.25)" }}
-                onTouchStart={(e) => { e.stopPropagation(); if (onStickerTouch) onStickerTouch(s.id, "transform", e); }}
-                onMouseDown={(e) => { e.stopPropagation(); if (onStickerMouseDown) onStickerMouseDown(s.id, "transform", e); }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
-              </div>
-            )}
           </div>
         );
       })}
       {extraTexts.map((t: any) => {
         const isSel = selectedTextId === t.id;
         return (
-          <div key={t.id} style={{ position: "absolute", left: `${t.x}%`, top: `${t.y}%`, zIndex: 5, transform: `translate(-50%, -50%) rotate(${t.rotation}deg)`, fontSize: t.fontSize, fontWeight: t.fontWeight, color: t.color, whiteSpace: "pre-wrap", textAlign: "center", fontFamily: FONT_BOLD, lineHeight: 1.2, filter: t.shadowBlur > 0 ? `drop-shadow(0 2px ${t.shadowBlur}px rgba(0,0,0,0.85))` : "none", outline: isSel ? "4px solid #ff742f" : "none", outlineOffset: "8px", borderRadius: "4px", pointerEvents: (onTextTouch || onTextMouseDown) ? "auto" : "none", touchAction: "none" }}
-            onTouchStart={onTextTouch ? (e) => { e.stopPropagation(); onTextTouch(t.id, e); } : undefined} onMouseDown={onTextMouseDown ? (e) => { e.stopPropagation(); onTextMouseDown(t.id, e); } : undefined}>
+          <div key={t.id} style={{ position: "absolute", left: `${t.x}%`, top: `${t.y}%`, zIndex: 5, transform: `translate(-50%, -50%) rotate(${t.rotation}deg)`, fontSize: t.fontSize, fontWeight: t.fontWeight, color: t.color, whiteSpace: "pre-wrap", textAlign: "center", fontFamily: FONT_BOLD, lineHeight: 1.2, filter: t.shadowBlur > 0 ? `drop-shadow(0 2px ${t.shadowBlur}px rgba(0,0,0,0.85))` : "none", outline: isSel ? "4px solid #ff742f" : "none", outlineOffset: "8px", borderRadius: "4px", pointerEvents: (onTextTouch || onTextMouseDown) ? "auto" : "none", touchAction: "none", userSelect: "none" }}
+            onTouchStart={onTextTouch ? (e) => { e.stopPropagation(); onTextTouch(t.id, "move", e); } : undefined}
+            onMouseDown={onTextMouseDown ? (e) => { e.stopPropagation(); onTextMouseDown(t.id, "move", e); } : undefined}>
             {t.text}
           </div>
         );
@@ -198,29 +188,67 @@ function NotifBadge({ label }: { label: string }) {
 function PostCard(props: any) {
   const { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, onTitleChange } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
+  const inlineTitleRef = useRef<HTMLDivElement>(null);
+
+  // Set initial content on mount only
+  useEffect(() => {
+    if (inlineTitleRef.current) inlineTitleRef.current.innerHTML = titleHtml;
+  }, []);
+
+  // Sync from outside ONLY when not actively editing (e.g. panel editor changed it)
+  useEffect(() => {
+    const el = inlineTitleRef.current;
+    if (!el || document.activeElement === el) return;
+    if (el.innerHTML !== titleHtml) el.innerHTML = titleHtml;
+  }, [titleHtml]);
+
   return (
     <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: POST_W, height: POST_H }}>
-      <style>{`.pc-title strong,.pc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.pc-title em,.pc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}.pc-title[contenteditable]:focus{outline:none;}.pc-title[contenteditable]{cursor:text;}`}</style>
-      {interactive && (<><div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", zIndex: 20, left: 0, top: 0, width: bgMode === "collage" ? "50%" : "100%", height: "100%", cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />
-        {bgMode === "collage" && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(2, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(2, e) : undefined} style={{ position: "absolute", zIndex: 20, right: 0, top: 0, width: "50%", height: "100%", cursor: bgDragActive === 2 ? "grabbing" : "grab", touchAction: "none" }} />}</>)}
+      <style>{`.pc-title strong,.pc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.pc-title em,.pc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}.pc-title:focus{outline:none;box-shadow:0 0 0 6px rgba(255,255,255,0.25);border-radius:8px;}`}</style>
       <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={POST_W} cardH={POST_H} />
-      <Overlay cardW={POST_W} cardH={POST_H} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
+
+      {/* BG drag zones — zIndex 2, only covering non-title area */}
+      {interactive && (
+        <>
+          <div onTouchStart={(e) => { e.stopPropagation(); onBgTouch?.(1, e); }} onMouseDown={(e) => onBgMouseDown?.(1, e)}
+            style={{ position: "absolute", zIndex: 2, left: 0, top: 0, width: bgMode === "collage" ? "50%" : "100%", height: "100%", cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />
+          {bgMode === "collage" && <div onTouchStart={(e) => { e.stopPropagation(); onBgTouch?.(2, e); }} onMouseDown={(e) => onBgMouseDown?.(2, e)}
+            style={{ position: "absolute", zIndex: 2, right: 0, top: 0, width: "50%", height: "100%", cursor: bgDragActive === 2 ? "grabbing" : "grab", touchAction: "none" }} />}
+        </>
+      )}
+
+      {/* Gradient overlay */}
       <div style={{ position: "absolute", left: 0, top: 1600, width: "100%", height: POST_H - 1600, zIndex: 3, background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", left: "50%", bottom: 469, transform: "translateX(-50%)", width: 1563, zIndex: 6, pointerEvents: interactive ? "auto" : "none", display: "flex", flexDirection: "column", gap: 85 }}>
-        <NotifBadge label={label} />
-        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-          <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} /><img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
+
+      {/* Stickers & extra texts */}
+      <Overlay cardW={POST_W} cardH={POST_H} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
+
+      {/* Title + badge — zIndex 6 same as identity bar, in natural stacking order */}
+      <div style={{ position: "absolute", left: "50%", bottom: 469, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85, pointerEvents: interactive ? "auto" : "none" }}>
+        <div style={{ pointerEvents: "none" }}><NotifBadge label={label} /></div>
+        {/* Title box — stopPropagation so tapping here doesn't trigger BG drag */}
+        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}
+          onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} />
+          <img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}>
-            <div className="pc-title" contentEditable={interactive} suppressContentEditableWarning
-              onInput={interactive && onTitleChange ? (e) => onTitleChange((e.target as HTMLDivElement).innerHTML) : undefined}
-              style={{ fontFamily: FONT_BOLD, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden" }}
-              dangerouslySetInnerHTML={interactive ? undefined : { __html: titleHtml }}>
-              {interactive ? undefined : null}
-            </div>
+            {/* Use ref-only, NO dangerouslySetInnerHTML to avoid re-render conflict with contentEditable */}
+            <div ref={inlineTitleRef} className="pc-title"
+              contentEditable={interactive}
+              suppressContentEditableWarning
+              onInput={onTitleChange ? (e) => onTitleChange((e.currentTarget as HTMLDivElement).innerHTML) : undefined}
+              style={{ fontFamily: FONT_BOLD, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden", cursor: interactive ? "text" : "default" }}
+            />
           </div>
         </div>
       </div>
-      <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 6, pointerEvents: "none" }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
+
+      {/* Identity bar — zIndex 6 */}
+      <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 6, pointerEvents: "none" }}>
+        <img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} />
+      </div>
+
+      {/* Source bar — zIndex 6 */}
       <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 6, display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", pointerEvents: "none" }}>
         <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
         <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{source}</span>
@@ -435,6 +463,18 @@ export function EditorPage() {
   const [isBoldActive, setIsBoldActive] = useState(false);
   const [isItalicActive, setIsItalicActive] = useState(false);
 
+  // Mobile UI state
+  const [mobileBubbleTab, setMobileBubbleTab] = useState<SidebarTab | null>(null);
+  const [showZoomSlider, setShowZoomSlider] = useState(false);
+  const [zoomTarget, setZoomTarget] = useState<"bg1" | "bg2" | string>("bg1");
+  const [showSourcePopup, setShowSourcePopup] = useState(false);
+  const [sourceUrlInput, setSourceUrlInput] = useState("");
+  const [sourceUrlLoading, setSourceUrlLoading] = useState(false);
+  const [sourceUrlErr, setSourceUrlErr] = useState<string | null>(null);
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [showTextEditPopup, setShowTextEditPopup] = useState(false);
+  const [showSplitAngleSlider, setShowSplitAngleSlider] = useState(false);
+
   // Refs
   const editorRef = useRef<HTMLDivElement>(null);
   const hiddenCardRef = useRef<HTMLDivElement>(null);
@@ -443,6 +483,7 @@ export function EditorPage() {
   const stickerInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ startDist: number; startScale1: number; startScale2: number } | null>(null);
   const currentBgTRef = useRef(DEFAULT_BG_TRANSFORM);
   const currentBg2TRef = useRef(DEFAULT_BG_TRANSFORM);
@@ -493,6 +534,9 @@ export function EditorPage() {
   useEffect(() => { currentBgTRef.current = bgT; }, [bgT]);
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
   useEffect(() => { cardDimRef.current = { w: CARD_W, h: CARD_H }; }, [CARD_W, CARD_H]);
+  // Auto-sync zoom target when selection changes
+  useEffect(() => { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } }, [selectedStickerId]);
+  useEffect(() => { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } }, [selectedTextId]);
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = INIT_TITLE;
@@ -547,25 +591,32 @@ export function EditorPage() {
         const { w, h } = cardDimRef.current;
         setStickers(p => p.map(s => s.id !== target.id ? s : { ...s, x: Math.max(0, Math.min(100, s.x + (dx / w) * 100)), y: Math.max(0, Math.min(100, s.y + (dy / h) * 100)) }));
       } else if (target.type === "sticker" && target.mode === "transform") {
-        // compute center of sticker in screen coords
         setStickers(p => p.map(s => {
           if (s.id !== target.id) return s;
-          const previewRect = previewRef.current?.getBoundingClientRect();
-          if (!previewRect) return s;
-          const centerScreenX = previewRect.left + (s.x / 100) * previewRect.width;
-          const centerScreenY = previewRect.top + (s.y / 100) * previewRect.height;
-          // distance from center to current and previous pointer
-          const prevDist = Math.sqrt((activeDrag.current.lastX - centerScreenX) ** 2 + (activeDrag.current.lastY - centerScreenY) ** 2);
-          const currDist = Math.sqrt((cx - centerScreenX) ** 2 + (cy - centerScreenY) ** 2);
-          const scaleFactor = prevDist > 5 ? currDist / prevDist : 1;
+          const rect = previewContainerRef.current?.getBoundingClientRect();
+          if (!rect) return s;
+          const centerScreenX = rect.left + (s.x / 100) * rect.width;
+          const centerScreenY = rect.top + (s.y / 100) * rect.height;
           const prevAngle = Math.atan2(activeDrag.current.lastY - centerScreenY, activeDrag.current.lastX - centerScreenX) * 180 / Math.PI;
           const currAngle = Math.atan2(cy - centerScreenY, cx - centerScreenX) * 180 / Math.PI;
           const dAngle = currAngle - prevAngle;
-          return { ...s, size: Math.max(50, Math.min(900, s.size * scaleFactor)), rotation: s.rotation + dAngle };
+          return { ...s, rotation: s.rotation + dAngle };
         }));
-      } else if (target.type === "text") {
+      } else if (target.type === "text" && target.mode === "move") {
         const { w, h } = cardDimRef.current;
         setExtraTexts(p => p.map(t => t.id !== target.id ? t : { ...t, x: t.x + (dx / w) * 100, y: t.y + (dy / h) * 100 }));
+      } else if (target.type === "text" && target.mode === "transform") {
+        setExtraTexts(p => p.map(t => {
+          if (t.id !== target.id) return t;
+          const rect = previewContainerRef.current?.getBoundingClientRect();
+          if (!rect) return t;
+          const centerScreenX = rect.left + (t.x / 100) * rect.width;
+          const centerScreenY = rect.top + (t.y / 100) * rect.height;
+          const prevAngle = Math.atan2(activeDrag.current.lastY - centerScreenY, activeDrag.current.lastX - centerScreenX) * 180 / Math.PI;
+          const currAngle = Math.atan2(cy - centerScreenY, cx - centerScreenX) * 180 / Math.PI;
+          const dAngle = currAngle - prevAngle;
+          return { ...t, rotation: t.rotation + dAngle };
+        }));
       }
       activeDrag.current.lastX = cx;
       activeDrag.current.lastY = cy;
@@ -605,10 +656,18 @@ export function EditorPage() {
 
   const handleBgTouch = useCallback((which: 1|2, e: React.TouchEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
   const handleBgMouse = useCallback((which: 1|2, e: React.MouseEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.clientX, e.clientY); }, [startDrag]);
-  const handleStickerTouch = useCallback((id: string, mode: string, e: React.TouchEvent) => { e.preventDefault(); setSelectedStickerId(id); setActiveTab("stickers"); startDrag({ type: "sticker", id, mode }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
-  const handleStickerMouse = useCallback((id: string, mode: string, e: React.MouseEvent) => { e.preventDefault(); setSelectedStickerId(id); setActiveTab("stickers"); startDrag({ type: "sticker", id, mode }, e.clientX, e.clientY); }, [startDrag]);
-  const handleTextTouch = useCallback((id: string, e: React.TouchEvent) => { e.preventDefault(); setSelectedTextId(id); setActiveTab("texts"); startDrag({ type: "text", id }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
-  const handleTextMouse = useCallback((id: string, e: React.MouseEvent) => { e.preventDefault(); setSelectedTextId(id); setActiveTab("texts"); startDrag({ type: "text", id }, e.clientX, e.clientY); }, [startDrag]);
+  const handleStickerTouch = useCallback((id: string, mode: string, e: React.TouchEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setSelectedStickerId(id);
+    startDrag({ type: "sticker", id, mode }, e.touches[0].clientX, e.touches[0].clientY);
+  }, [startDrag]);
+  const handleStickerMouse = useCallback((id: string, mode: string, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setSelectedStickerId(id);
+    startDrag({ type: "sticker", id, mode }, e.clientX, e.clientY);
+  }, [startDrag]);
+  const handleTextTouch = useCallback((id: string, mode: string, e: React.TouchEvent) => { e.preventDefault(); e.stopPropagation(); setSelectedTextId(id); startDrag({ type: "text", id, mode }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
+  const handleTextMouse = useCallback((id: string, mode: string, e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setSelectedTextId(id); startDrag({ type: "text", id, mode }, e.clientX, e.clientY); }, [startDrag]);
 
   // ── EXPORT VIDEO WITH FFMPEG ──
   const handleExportVideo = async () => {
@@ -871,12 +930,33 @@ export function EditorPage() {
   
   const handleReset = () => { setLabel("Discuss"); setTitleHtml(DEFAULT_TITLE_HTML); setBgSrc(DEFAULT_BG); setBgT({...DEFAULT_BG_TRANSFORM}); setStickers([]); setExtraTexts([]); if(editorRef.current) editorRef.current.innerHTML = DEFAULT_TITLE_HTML; };
 
+  const applySourceUrl = () => {
+    const url = sourceUrlInput.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) { setSourceUrlErr("URL harus diawali https://"); return; }
+    setSourceUrlLoading(true); setSourceUrlErr(null);
+    const img = new Image();
+    img.onload = () => {
+      setBgSrc(url); setBgT({ ...DEFAULT_BG_TRANSFORM });
+      try {
+        const u = new URL(url);
+        const domain = u.hostname.replace(/^www\./, "");
+        setSource(domain);
+      } catch {}
+      setSourceUrlLoading(false); setSourceUrlInput(""); setShowSourcePopup(false);
+    };
+    img.onerror = () => { setSourceUrlLoading(false); setSourceUrlErr("Gagal memuat gambar dari URL ini."); };
+    img.crossOrigin = "anonymous"; img.src = url;
+  };
+
   const PREVIEW_W = 340; const PREVIEW_H = Math.round(PREVIEW_W * (CARD_H / CARD_W)); const scale = PREVIEW_W / CARD_W;
   const commonProps = { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts };
   const handleInlineTitleChange = useCallback((html: string) => {
     setTitleHtml(html);
-    // sync panel editor if open
-    if (editorRef.current && editorRef.current.innerHTML !== html) editorRef.current.innerHTML = html;
+    // keep panel editor ref in sync without moving cursor
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.innerHTML = html;
+    }
   }, []);
   const renderCard = (interactive: boolean) => {
     const p = interactive ? { ...commonProps, snapIndicator, bgDragActive, onBgTouch: handleBgTouch, onBgMouseDown: handleBgMouse, onStickerTouch: handleStickerTouch, onStickerMouseDown: handleStickerMouse, onTextTouch: handleTextTouch, onTextMouseDown: handleTextMouse, selectedStickerId, selectedTextId, onTitleChange: handleInlineTitleChange } : commonProps;
@@ -954,52 +1034,52 @@ export function EditorPage() {
               <button className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 hover:bg-neutral-200 transition" onClick={(e) => { e.stopPropagation(); setActiveTab(null); }}><X size={13}/></button>
             </div>
 
-            <div className={`flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 ${isMobile ? "pb-8" : "pb-4"}`}>
+            <div className={`flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 ${isMobile ? "pb-6" : "pb-3"}`}>
               {/* ── CONTENT ── */}
               {activeTab === "content" && (
                 <>
-                  {/* Label chips */}
-                  <div>
-                    <label className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2 block">Label</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {LABEL_OPTIONS.map(o => (
-                        <button key={o} onClick={() => setLabel(o)}
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold transition border ${label===o ? "bg-[#ff742f] text-white border-[#ff742f]" : "bg-neutral-50 text-neutral-500 border-neutral-200 hover:border-[#ff742f] hover:text-[#ff742f]"}`}>
-                          {o}
-                        </button>
-                      ))}
+                  {/* Label — compact dropdown row */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-neutral-400 font-medium shrink-0 w-14">Label</span>
+                    <div className="relative flex-1">
+                      <select className="w-full bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2 text-sm font-semibold text-neutral-700 appearance-none focus:outline-none focus:ring-2 focus:ring-[#ff742f] focus:border-transparent pr-8"
+                        value={label} onChange={(e) => setLabel(e.target.value)}>
+                        {LABEL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
                     </div>
                   </div>
-                  {/* Title — note about inline edit */}
+
+                  {/* Judul */}
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider">Judul</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-neutral-400 font-medium">Judul</span>
                       <div className="flex gap-1">
-                        {["bold","italic"].map(c => (
-                          <button key={c} onMouseDown={(e)=>{e.preventDefault(); applyFormat(c as any)}}
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition text-[11px] ${c==="bold"?isBoldActive:isItalicActive ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-500"}`}>
-                            {c==="bold"?<Bold size={12}/>:<Italic size={12}/>}
+                        {(["bold","italic"] as const).map(c => (
+                          <button key={c} onMouseDown={(e)=>{e.preventDefault(); applyFormat(c)}}
+                            className={`w-6 h-6 rounded flex items-center justify-center transition ${c==="bold"?isBoldActive:isItalicActive ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-400 hover:text-neutral-700"}`}>
+                            {c==="bold"?<Bold size={11}/>:<Italic size={11}/>}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyUp={updateFormatState} onMouseUp={updateFormatState}
-                      className="w-full min-h-[64px] bg-neutral-50 rounded-xl px-3 py-2.5 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff742f]"
-                      style={{lineHeight:1.6}} />
-                    <p className="text-[10px] text-neutral-400 mt-1.5 flex items-center gap-1">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                      Ketuk judul di preview untuk edit langsung
-                    </p>
+                    <div ref={editorRef} contentEditable suppressContentEditableWarning
+                      onInput={handleEditorInput} onKeyUp={updateFormatState} onMouseUp={updateFormatState}
+                      className="w-full min-h-[52px] bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff742f] focus:border-transparent"
+                      style={{lineHeight:1.5}} />
                   </div>
-                  {/* Source */}
-                  <div>
-                    <label className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2 block">Sumber</label>
-                    <input className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff742f] ${!source.trim() ? "bg-red-50 ring-1 ring-red-200 placeholder-red-300" : "bg-neutral-50"}`}
+
+                  {/* Sumber */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-neutral-400 font-medium shrink-0 w-14">Sumber</span>
+                    <input
+                      className={`flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff742f] border ${!source.trim() ? "bg-red-50 border-red-200 placeholder-red-300" : "bg-neutral-50 border-neutral-200"}`}
                       placeholder="Wajib diisi..." value={source} onChange={(e) => setSource(e.target.value)} />
                   </div>
+
                   {template === "video" && (
-                    <button onClick={() => videoInputRef.current?.click()} className="w-full py-3 border border-dashed border-neutral-300 rounded-xl text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f]">
-                      {videoSrc ? "Ganti Video" : "Upload Video"}
+                    <button onClick={() => videoInputRef.current?.click()} className="w-full py-2 border border-dashed border-neutral-300 rounded-lg text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f] transition">
+                      {videoSrc ? "Ganti Video" : "+ Upload Video"}
                     </button>
                   )}
                 </>
@@ -1009,42 +1089,38 @@ export function EditorPage() {
               {activeTab === "background" && (
                 <>
                   {!videoSrc && (
-                    <div className="flex bg-neutral-100 p-1 rounded-xl">
+                    <div className="flex bg-neutral-100 p-0.5 rounded-lg">
                       {["single","collage"].map(m => (
                         <button key={m} onClick={() => setBgMode(m as any)}
-                          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition ${bgMode===m ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition ${bgMode===m ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
                           {m==="single" ? "1 Gambar" : "2 Gambar"}
                         </button>
                       ))}
                     </div>
                   )}
-                  <div>
-                    <p className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2">{videoSrc ? "Video" : "Gambar Utama"}</p>
+                  <div className="space-y-2.5">
+                    <p className="text-xs text-neutral-400 font-medium">{videoSrc ? "Video" : "Gambar Utama"}</p>
                     {!videoSrc && (
-                      <div className="flex gap-2 mb-3">
-                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2 border border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
+                      <div className="flex gap-2">
+                        <button onClick={() => fileInputRef.current?.click()} className="shrink-0 px-3 py-2 border border-dashed border-neutral-300 rounded-lg text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
                           📁 Upload
                         </button>
-                        <div className="flex-1">
-                          <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBgSrc(u); setBgT({...DEFAULT_BG_TRANSFORM}); }} onSourceApply={(d) => { if (!source.trim()) setSource(d); }} />
-                        </div>
+                        <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBgSrc(u); setBgT({...DEFAULT_BG_TRANSFORM}); }} onSourceApply={(d) => { setSource(d); }} />
                       </div>
                     )}
                     <Slider label="Zoom" value={Math.round(bgT.scale*100)} min={30} max={300} onChange={(v)=>setBgT(p=>({...p, scale:v/100}))} suffix="%" />
                   </div>
                   {bgMode === "collage" && !videoSrc && (
-                    <div>
-                      <p className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider mb-2">Gambar Kedua</p>
-                      <div className="flex gap-2 mb-3">
-                        <button onClick={() => file2InputRef.current?.click()} className="flex-1 py-2 border border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
+                    <div className="space-y-2.5 pt-1 border-t border-neutral-100">
+                      <p className="text-xs text-neutral-400 font-medium">Gambar Kedua</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => file2InputRef.current?.click()} className="shrink-0 px-3 py-2 border border-dashed border-neutral-300 rounded-lg text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
                           📁 Upload
                         </button>
-                        <div className="flex-1">
-                          <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBg2Src(u); setBg2T({...DEFAULT_BG_TRANSFORM}); }} />
-                        </div>
+                        <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBg2Src(u); setBg2T({...DEFAULT_BG_TRANSFORM}); }} />
                       </div>
                       <Slider label="Zoom" value={Math.round(bg2T.scale*100)} min={30} max={300} onChange={(v)=>setBg2T(p=>({...p, scale:v/100}))} suffix="%" />
-                      <div className="mt-3"><Slider label="Kemiringan" value={splitAngle} min={-30} max={30} onChange={setSplitAngle} suffix="°" /></div>
+                      <Slider label="Kemiringan" value={splitAngle} min={-30} max={30} onChange={setSplitAngle} suffix="°" />
                     </div>
                   )}
                 </>
@@ -1167,11 +1243,28 @@ export function EditorPage() {
                   {navButtons(true)}
                 </div>
 
-                {/* Preview card */}
-                <div className="relative shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden shrink-0" style={{ width: PREVIEW_W, height: PREVIEW_H }}>
-                  <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
-                    {renderCard(true)}
+                {/* Preview card + handle layer */}
+                <div className="relative shrink-0" style={{ width: PREVIEW_W, height: PREVIEW_H }}>
+                  <div ref={previewContainerRef} className="absolute inset-0 shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden">
+                    <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
+                      {renderCard(true)}
+                    </div>
                   </div>
+                  {/* Sticker handles — rendered outside overflow-hidden card */}
+                  {stickers.filter(s => s.id === selectedStickerId).map(s => {
+                    const cx = (s.x / 100) * PREVIEW_W;
+                    const cy = (s.y / 100) * PREVIEW_H;
+                    const displaySize = s.size * scale;
+                    const hx = cx + displaySize / 2 - 16;
+                    const hy = cy + displaySize / 2 - 16;
+                    return (
+                      <div key={s.id + "-handle"} style={{ position: "absolute", left: hx, top: hy, width: 32, height: 32, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 20, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.35)", transform: `rotate(${s.rotation}deg)` }}
+                        onTouchStart={(e) => { e.stopPropagation(); handleStickerTouch(s.id, "transform", e); }}
+                        onMouseDown={(e) => { e.stopPropagation(); handleStickerMouse(s.id, "transform", e); }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Right floating panel */}
@@ -1188,28 +1281,384 @@ export function EditorPage() {
         }
 
         return (
-          /* ── MOBILE LAYOUT: preview + fixed bottom nav + bottom sheet ── */
+          /* ── MOBILE LAYOUT ── */
           <>
-            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden pt-14 pb-24" onClick={() => setActiveTab(null)}>
-              <div className="relative shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
-                style={{ width: PREVIEW_W, height: PREVIEW_H, transform: activeTab ? "translateY(-22vh) scale(0.85)" : "translateY(0) scale(1)", transformOrigin: "center center" }}>
-                <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
-                  {renderCard(true)}
+            <style>{`
+              @keyframes bubblePop {
+                0% { transform: scale(0); opacity: 0; }
+                70% { transform: scale(1.1); opacity: 1; }
+                100% { transform: scale(1); opacity: 1; }
+              }
+              @keyframes zoomSlideIn {
+                0% { opacity: 0; transform: translateX(16px); }
+                100% { opacity: 1; transform: translateX(0); }
+              }
+              .bubble-pop { animation: bubblePop 0.22s cubic-bezier(0.34,1.56,0.64,1) both; }
+              .zoom-slide { animation: zoomSlideIn 0.2s ease both; }
+              .vtslider {
+                -webkit-appearance: none;
+                writing-mode: vertical-lr;
+                direction: rtl;
+                width: 4px;
+                border-radius: 99px;
+                outline: none;
+                cursor: pointer;
+              }
+              .vtslider::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 24px; height: 24px;
+                border-radius: 50%;
+                background: #ff742f;
+                border: 3px solid rgba(255,255,255,0.9);
+                box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+                cursor: grab;
+              }
+              .vtslider::-webkit-slider-runnable-track { width: 4px; border-radius: 99px; }
+            `}</style>
+
+            {/* ── SOURCE URL POPUP ── */}
+            {showSourcePopup && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+                onClick={() => setShowSourcePopup(false)}>
+                <div className="w-full max-w-sm rounded-2xl p-5 flex flex-col gap-3 shadow-2xl"
+                  style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">Link Gambar BG</span>
+                    <button onClick={() => setShowSourcePopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
+                  </div>
+                  <p className="text-white/40 text-xs -mt-1">Domain akan otomatis mengisi kolom Sumber.</p>
+                  <div className="flex gap-2 items-center rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                    <Link size={13} className="text-white/40 shrink-0" />
+                    <input type="url" value={sourceUrlInput}
+                      onChange={e => { setSourceUrlInput(e.target.value); setSourceUrlErr(null); }}
+                      onKeyDown={e => { if (e.key === "Enter") applySourceUrl(); }}
+                      placeholder="https://..." className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-white/25" autoFocus />
+                  </div>
+                  {sourceUrlErr && <p className="text-red-400 text-xs">{sourceUrlErr}</p>}
+                  <button onClick={applySourceUrl} disabled={sourceUrlLoading || !sourceUrlInput.trim()}
+                    className="w-full py-2.5 rounded-xl text-white text-sm font-bold transition disabled:opacity-40"
+                    style={{ background: "#ff742f" }}>
+                    {sourceUrlLoading ? "Memuat..." : "Terapkan"}
+                  </button>
                 </div>
               </div>
-              {!activeTab && <div className="absolute bottom-28 px-4 py-2 bg-black/5 backdrop-blur rounded-full text-[10px] font-medium text-neutral-500 pointer-events-none">Cubit layar untuk zoom · Seret untuk geser</div>}
-            </div>
+            )}
 
-            {/* Mobile floating bottom nav */}
-            <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-full px-2 py-2 flex items-center gap-1 transition-all duration-300 ${activeTab ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100"}`}>
-              {navButtons(false)}
-            </div>
+            {/* ── LABEL PICKER POPUP ── */}
+            {showLabelPicker && (
+              <div className="fixed inset-0 z-[100] flex items-end justify-center pb-24"
+                style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
+                onClick={() => setShowLabelPicker(false)}>
+                <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+                  style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+                    <span className="text-white/50 text-xs font-semibold uppercase tracking-wider">Pilih Label</span>
+                    <button onClick={() => setShowLabelPicker(false)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)" }}><X size={11} className="text-white" /></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-0 pb-2">
+                    {LABEL_OPTIONS.map(opt => (
+                      <button key={opt} onClick={() => { setLabel(opt); setShowLabelPicker(false); }}
+                        className="px-4 py-3 text-left text-sm font-semibold transition flex items-center gap-2"
+                        style={{ color: label === opt ? "#ff742f" : "rgba(255,255,255,0.8)", background: label === opt ? "rgba(255,116,47,0.12)" : "transparent" }}>
+                        {label === opt && <div className="w-1.5 h-1.5 rounded-full bg-[#ff742f] shrink-0" />}
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
-            {/* Mobile bottom sheet — taller for better UX */}
-            <div onClick={(e) => e.stopPropagation()} className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-[0_-4px_30px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out flex flex-col ${activeTab ? "translate-y-0" : "translate-y-[100%]"}`} style={{ height: "58vh" }}>
-              {/* drag pill */}
-              <div className="flex justify-center pt-2.5 pb-1 shrink-0"><div className="w-10 h-1 bg-neutral-200 rounded-full" /></div>
-              {panelInner(true)}
+            {/* ── TEXT EDIT POPUP ── */}
+            {showTextEditPopup && selectedTextId && (() => {
+              const t = extraTexts.find(x => x.id === selectedTextId);
+              if (!t) return null;
+              return (
+                <div className="fixed inset-0 z-[100] flex items-end justify-center pb-24"
+                  style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+                  onClick={() => setShowTextEditPopup(false)}>
+                  <div className="w-full max-w-sm rounded-2xl p-4 flex flex-col gap-3 shadow-2xl"
+                    style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
+                    onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold text-sm">Edit Teks</span>
+                      <button onClick={() => setShowTextEditPopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
+                    </div>
+                    <textarea value={t.text} onChange={e => updateText(t.id, { text: e.target.value })}
+                      rows={3} autoFocus
+                      className="w-full rounded-xl px-3 py-2.5 text-sm text-white resize-none focus:outline-none"
+                      style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }} />
+                    <div className="flex gap-2">
+                      <input type="color" value={t.color} onChange={e => updateText(t.id, { color: e.target.value })}
+                        className="w-10 h-10 rounded-xl cursor-pointer p-0.5" style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.14)" }} />
+                      <button onClick={() => updateText(t.id, { fontWeight: t.fontWeight === "bold" ? "normal" : "bold" })}
+                        className="px-4 h-10 rounded-xl text-xs font-bold transition"
+                        style={{ background: t.fontWeight === "bold" ? "#ff742f" : "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.14)" }}>
+                        Bold
+                      </button>
+                    </div>
+                    <button onClick={() => setShowTextEditPopup(false)}
+                      className="w-full py-2.5 rounded-xl text-white text-sm font-bold"
+                      style={{ background: "#ff742f" }}>Selesai</button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden pt-14 pb-6">
+
+              {/* Preview wrapper */}
+              <div className="relative" style={{ width: PREVIEW_W, height: PREVIEW_H }}>
+
+                {/* Preview card */}
+                <div ref={previewContainerRef} className="absolute inset-0 shadow-2xl shadow-neutral-200/50 rounded-lg overflow-hidden">
+                  <div ref={previewRef} style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CARD_W, height: CARD_H }}>
+                    {renderCard(true)}
+                  </div>
+                </div>
+
+                {/* Sticker rotate handles */}
+                {stickers.filter(s => s.id === selectedStickerId).map(s => {
+                  const cx = (s.x / 100) * PREVIEW_W;
+                  const cy = (s.y / 100) * PREVIEW_H;
+                  const displaySize = s.size * scale;
+                  const hx = cx + displaySize / 2 - 16;
+                  const hy = cy + displaySize / 2 - 16;
+                  return (
+                    <div key={s.id + "-rh"} style={{ position: "absolute", left: hx, top: hy, width: 32, height: 32, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 20, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
+                      onTouchStart={(e) => { e.stopPropagation(); handleStickerTouch(s.id, "transform", e); }}
+                      onMouseDown={(e) => { e.stopPropagation(); handleStickerMouse(s.id, "transform", e); }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+                    </div>
+                  );
+                })}
+
+                {/* Text rotate handles */}
+                {extraTexts.filter(t => t.id === selectedTextId).map(t => {
+                  const cx = (t.x / 100) * PREVIEW_W;
+                  const cy = (t.y / 100) * PREVIEW_H;
+                  const approxW = Math.min(t.fontSize * scale * t.text.length * 0.55, PREVIEW_W * 0.85);
+                  const approxH = t.fontSize * scale * 1.3;
+                  return (
+                    <div key={t.id + "-rh"} style={{ position: "absolute", left: cx + approxW / 2 - 16, top: cy + approxH / 2 - 16, width: 32, height: 32, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 20, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
+                      onTouchStart={(e) => { e.stopPropagation(); handleTextTouch(t.id, "transform", e); }}
+                      onMouseDown={(e) => { e.stopPropagation(); handleTextMouse(t.id, "transform", e); }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+                    </div>
+                  );
+                })}
+
+                {/* ── FLOATING BUBBLE MENUS — left edge of preview ── */}
+                {mobileBubbleTab && (() => {
+                  type BubbleItem = { icon: React.ReactNode; action: () => void; danger?: boolean; active?: boolean };
+                  const glassStyle = (danger?: boolean, active?: boolean) => ({
+                    background: danger ? "rgba(200,38,38,0.5)" : active ? "rgba(255,116,47,0.5)" : "rgba(20,20,20,0.45)",
+                    backdropFilter: "blur(18px)",
+                    WebkitBackdropFilter: "blur(18px)",
+                    border: `1.5px solid ${danger ? "rgba(255,100,100,0.3)" : active ? "rgba(255,160,80,0.4)" : "rgba(255,255,255,0.18)"}`,
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
+                    color: danger ? "#fca5a5" : "rgba(255,255,255,0.92)"
+                  });
+
+                  const configs: Record<SidebarTab, BubbleItem[]> = {
+                    content: [
+                      {
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+                        action: () => setShowLabelPicker(true),
+                        active: showLabelPicker
+                      },
+                      {
+                        icon: <Bold size={17} />,
+                        action: () => applyFormat("bold"),
+                        active: isBoldActive
+                      },
+                      {
+                        icon: <Italic size={17} />,
+                        action: () => applyFormat("italic"),
+                        active: isItalicActive
+                      },
+                      {
+                        icon: <ImagePlus size={17} />,
+                        action: () => setShowSourcePopup(true)
+                      },
+                    ],
+                    background: [
+                      {
+                        icon: <ImagePlus size={17} />,
+                        action: () => fileInputRef.current?.click()
+                      },
+                      {
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="9" height="18" rx="2"/><rect x="13" y="3" width="9" height="18" rx="2"/></svg>,
+                        action: () => setBgMode(p => p === "collage" ? "single" : "collage"),
+                        active: bgMode === "collage"
+                      },
+                      ...(bgMode === "collage" ? [{
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M8 6l4-4 4 4"/><path d="M8 18l4 4 4-4"/></svg>,
+                        action: () => setShowSplitAngleSlider(p => !p),
+                        active: showSplitAngleSlider
+                      }] : []),
+                    ],
+                    stickers: [
+                      {
+                        icon: <Plus size={17} />,
+                        action: () => stickerInputRef.current?.click()
+                      },
+                      ...(selectedStickerId ? [{
+                        icon: <Trash2 size={17} />,
+                        action: () => { deleteSticker(selectedStickerId); },
+                        danger: true
+                      }] : []),
+                    ],
+                    texts: [
+                      {
+                        icon: <Type size={17} />,
+                        action: () => addExtraText()
+                      },
+                      ...(selectedTextId ? [
+                        {
+                          icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+                          action: () => setShowTextEditPopup(true)
+                        },
+                        {
+                          icon: <Trash2 size={17} />,
+                          action: () => deleteText(selectedTextId),
+                          danger: true
+                        }
+                      ] : []),
+                    ],
+                  };
+
+                  const items = configs[mobileBubbleTab] ?? [];
+                  return (
+                    <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2.5 z-30 pointer-events-auto"
+                      style={{ opacity: bgDragActive ? 0.1 : 1, transition: "opacity 0.18s ease" }}
+                      onClick={e => e.stopPropagation()}>
+                      {items.map((b, i) => (
+                        <button key={i} className="bubble-pop w-11 h-11 rounded-full flex items-center justify-center transition active:scale-90"
+                          style={{ animationDelay: `${i * 0.04}s`, ...glassStyle(b.danger, b.active) }}
+                          onClick={(e) => { e.stopPropagation(); b.action(); }}>
+                          {b.icon}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* ── SPLIT ANGLE INLINE SLIDER ── (shown above bubbles when collage mode) */}
+                {showSplitAngleSlider && bgMode === "collage" && (
+                  <div className="zoom-slide absolute left-16 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-auto"
+                    style={{ height: PREVIEW_H * 0.5 }}
+                    onClick={e => e.stopPropagation()}>
+                    <button onClick={() => setShowSplitAngleSlider(false)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center"
+                      style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}>
+                      <X size={11} className="text-white/80" />
+                    </button>
+                    <div className="px-2 py-0.5 rounded-full text-[9px] font-bold"
+                      style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }}>
+                      {splitAngle}°
+                    </div>
+                    <input type="range" className="vtslider"
+                      min={-30} max={30} step={1} value={splitAngle}
+                      onChange={e => setSplitAngle(Number(e.target.value))}
+                      style={{
+                        height: PREVIEW_H * 0.35,
+                        background: `linear-gradient(to top, #ff742f ${((splitAngle + 30) / 60) * 100}%, rgba(255,255,255,0.2) ${((splitAngle + 30) / 60) * 100}%)`,
+                      }}
+                    />
+                    <div className="px-2 py-0.5 rounded-full text-[9px] font-bold"
+                      style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "#ff742f" }}>
+                      SPLIT
+                    </div>
+                  </div>
+                )}
+
+                {/* ── VERTICAL ZOOM SLIDER — right edge of preview ── */}
+                {showZoomSlider && (() => {
+                  const isSticker = stickers.some(s => s.id === zoomTarget);
+                  const isText = extraTexts.some(t => t.id === zoomTarget);
+                  const isBg = zoomTarget === "bg1" || zoomTarget === "bg2";
+                  const zMin = isBg ? 30 : 20;
+                  const zMax = isBg ? 300 : 200;
+                  const getVal = () => {
+                    if (zoomTarget === "bg1") return Math.round(bgT.scale * 100);
+                    if (zoomTarget === "bg2") return Math.round(bg2T.scale * 100);
+                    const s = stickers.find(s => s.id === zoomTarget);
+                    if (s) return Math.round((s.size / 300) * 100);
+                    const t = extraTexts.find(t => t.id === zoomTarget);
+                    if (t) return Math.round((t.fontSize / 80) * 100);
+                    return 100;
+                  };
+                  const setVal = (v: number) => {
+                    if (zoomTarget === "bg1") { setBgT(p => ({ ...p, scale: v / 100 })); return; }
+                    if (zoomTarget === "bg2") { setBg2T(p => ({ ...p, scale: v / 100 })); return; }
+                    if (isSticker) { updateSticker(zoomTarget, { size: Math.max(50, Math.min(900, (v / 100) * 300)) }); return; }
+                    if (isText) { updateText(zoomTarget, { fontSize: Math.max(20, Math.min(300, (v / 100) * 80)) }); return; }
+                  };
+                  const val = getVal();
+                  const pct = ((val - zMin) / (zMax - zMin)) * 100;
+                  return (
+                    <div className="zoom-slide absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1.5 z-30 pointer-events-auto"
+                      style={{ height: PREVIEW_H * 0.62 }}
+                      onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setShowZoomSlider(false)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center"
+                        style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}>
+                        <X size={11} className="text-white/80" />
+                      </button>
+                      <div className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white/70"
+                        style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                        {val}%
+                      </div>
+                      <input type="range" className="vtslider"
+                        min={zMin} max={zMax} step={1} value={val}
+                        onChange={e => setVal(Number(e.target.value))}
+                        style={{ height: PREVIEW_H * 0.44, background: `linear-gradient(to top, #ff742f ${pct}%, rgba(255,255,255,0.2) ${pct}%)` }}
+                      />
+                      <div className="px-2 py-0.5 rounded-full text-[9px] font-bold"
+                        style={{ background: "rgba(20,20,20,0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "#ff742f" }}>
+                        ZOOM
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── MOBILE BOTTOM NAV ── */}
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 px-2 py-2 rounded-full"
+                style={{ background: "rgba(255,255,255,0.75)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", boxShadow: "0 8px 32px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.4)" }}
+                onClick={e => e.stopPropagation()}>
+                {TABS.map(t => {
+                  const isActive = mobileBubbleTab === t.id;
+                  return (
+                    <button key={t.id}
+                      onClick={() => {
+                        if (isActive) {
+                          setMobileBubbleTab(null);
+                          setActiveTab(null);
+                          setShowZoomSlider(false);
+                          setShowSplitAngleSlider(false);
+                        } else {
+                          setMobileBubbleTab(t.id);
+                          setActiveTab(t.id);
+                          setShowSplitAngleSlider(false);
+                          if (t.id === "background") { setZoomTarget("bg1"); setShowZoomSlider(true); }
+                          else if (t.id === "stickers") { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } else setShowZoomSlider(false); }
+                          else if (t.id === "texts") { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } else setShowZoomSlider(false); }
+                          else setShowZoomSlider(false);
+                        }
+                      }}
+                      className="flex flex-col items-center justify-center rounded-full gap-0.5 w-14 h-12 transition-all"
+                      style={{ background: isActive ? "rgba(255,116,47,0.12)" : "transparent" }}>
+                      <div style={{ color: isActive ? "#ff742f" : "#9ca3af" }}>{t.icon}</div>
+                      <span className="text-[9px] font-bold" style={{ color: isActive ? "#ff742f" : "#9ca3af" }}>{t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </>
         );
