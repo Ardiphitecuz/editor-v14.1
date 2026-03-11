@@ -477,6 +477,7 @@ export function EditorPage() {
   const [showBgSubBubbles, setShowBgSubBubbles] = useState(false);
   const [showBgSub2Bubbles, setShowBgSub2Bubbles] = useState(false);
   const [showBg2UrlPopup, setShowBg2UrlPopup] = useState(false);
+  const [showSumberPopup, setShowSumberPopup] = useState(false);
   const [bg2UrlInput, setBg2UrlInput] = useState("");
   const [bg2UrlLoading, setBg2UrlLoading] = useState(false);
   const [bg2UrlErr, setBg2UrlErr] = useState<string | null>(null);
@@ -493,6 +494,7 @@ export function EditorPage() {
   const pinchRef = useRef<{ startDist: number; startScale1: number; startScale2: number; touchedBg?: 1 | 2 } | null>(null);
   const currentBgTRef = useRef(DEFAULT_BG_TRANSFORM);
   const currentBg2TRef = useRef(DEFAULT_BG_TRANSFORM);
+  const bgModeRef = useRef<BgMode>("single");
   const cardDimRef = useRef({ w: POST_W, h: POST_H });
   
   // Specific refs for video export
@@ -556,6 +558,7 @@ export function EditorPage() {
     };
   }, [isDesktop]);
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
+  useEffect(() => { bgModeRef.current = bgMode; }, [bgMode]);
   useEffect(() => { cardDimRef.current = { w: CARD_W, h: CARD_H }; }, [CARD_W, CARD_H]);
   // Auto-sync zoom target when selection changes
   useEffect(() => { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } }, [selectedStickerId]);
@@ -599,8 +602,10 @@ export function EditorPage() {
 
   useEffect(() => {
     const getPreviewScale = () => previewRef.current ? previewRef.current.getBoundingClientRect().width / CARD_W : 1;
+    let rafId: number | null = null;
+    let pendingCx = 0, pendingCy = 0;
 
-    const onMove = (cx: number, cy: number) => {
+    const applyMove = (cx: number, cy: number) => {
       if (!activeDrag.current) return;
       const sc = getPreviewScale();
       const dx = (cx - activeDrag.current.lastX) / sc;
@@ -620,9 +625,11 @@ export function EditorPage() {
           if (!rect) return s;
           const centerScreenX = rect.left + (s.x / 100) * rect.width;
           const centerScreenY = rect.top + (s.y / 100) * rect.height;
-          const prevAngle = Math.atan2(activeDrag.current.lastY - centerScreenY, activeDrag.current.lastX - centerScreenX) * 180 / Math.PI;
+          const prevAngle = Math.atan2(activeDrag.current!.lastY - centerScreenY, activeDrag.current!.lastX - centerScreenX) * 180 / Math.PI;
           const currAngle = Math.atan2(cy - centerScreenY, cx - centerScreenX) * 180 / Math.PI;
-          const dAngle = currAngle - prevAngle;
+          let dAngle = currAngle - prevAngle;
+          if (dAngle > 180) dAngle -= 360;
+          if (dAngle < -180) dAngle += 360;
           return { ...s, rotation: s.rotation + dAngle };
         }));
       } else if (target.type === "text" && target.mode === "move") {
@@ -635,9 +642,11 @@ export function EditorPage() {
           if (!rect) return t;
           const centerScreenX = rect.left + (t.x / 100) * rect.width;
           const centerScreenY = rect.top + (t.y / 100) * rect.height;
-          const prevAngle = Math.atan2(activeDrag.current.lastY - centerScreenY, activeDrag.current.lastX - centerScreenX) * 180 / Math.PI;
+          const prevAngle = Math.atan2(activeDrag.current!.lastY - centerScreenY, activeDrag.current!.lastX - centerScreenX) * 180 / Math.PI;
           const currAngle = Math.atan2(cy - centerScreenY, cx - centerScreenX) * 180 / Math.PI;
-          const dAngle = currAngle - prevAngle;
+          let dAngle = currAngle - prevAngle;
+          if (dAngle > 180) dAngle -= 360;
+          if (dAngle < -180) dAngle += 360;
           return { ...t, rotation: t.rotation + dAngle };
         }));
       }
@@ -645,28 +654,40 @@ export function EditorPage() {
       activeDrag.current.lastY = cy;
     };
 
-    const onEnd = () => { activeDrag.current = null; setBgDragActive(null); setSnapIndicator({ x: false, y: false }); pinchRef.current = null; };
+    const onMove = (cx: number, cy: number) => {
+      if (!activeDrag.current) return;
+      pendingCx = cx; pendingCy = cy;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        applyMove(pendingCx, pendingCy);
+      });
+    };
+
+    const onEnd = () => {
+      activeDrag.current = null; setBgDragActive(null); setSnapIndicator({ x: false, y: false }); pinchRef.current = null;
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    };
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         e.preventDefault();
         const getD = (t: TouchList) => Math.sqrt((t[0].clientX - t[1].clientX) ** 2 + (t[0].clientY - t[1].clientY) ** 2);
         const dist = getD(e.touches);
         const rect = previewContainerRef.current?.getBoundingClientRect();
-        // Determine which BG to zoom: based on where first finger is
-        const midX = rect ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : 0;
-        const rectMidX = rect ? rect.left + rect.width / 2 : 0;
-        const touchedBg: 1 | 2 = (bgMode === "collage" && midX > rectMidX) ? 2 : 1;
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const rectMidX = rect ? rect.left + rect.width / 2 : 9999;
+        const isCollage = bgModeRef.current === "collage";
+        const touchedBg: 1 | 2 = (isCollage && midX > rectMidX) ? 2 : 1;
         if (!pinchRef.current) {
           pinchRef.current = { startDist: dist, startScale1: currentBgTRef.current.scale, startScale2: currentBg2TRef.current.scale, touchedBg };
         } else {
           const r = dist / pinchRef.current.startDist;
-          if (pinchRef.current.touchedBg === 1 || bgMode !== "collage") {
-            const s1 = pinchRef.current.startScale1;
-            setBgT(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s1 * r)) }));
-          }
-          if (pinchRef.current.touchedBg === 2 && bgMode === "collage") {
+          if (pinchRef.current.touchedBg === 2 && isCollage) {
             const s2 = pinchRef.current.startScale2;
             setBg2T(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s2 * r)) }));
+          } else {
+            const s1 = pinchRef.current.startScale1;
+            setBgT(p => ({ ...p, scale: Math.max(0.3, Math.min(3, s1 * r)) }));
           }
         }
         return;
@@ -1332,57 +1353,57 @@ export function EditorPage() {
           onChange: (v: number) => void; onClose: () => void; label: string; color?: string;
         }) => {
           const trackRef = useRef<HTMLDivElement>(null);
-          const isDragging = useRef(false);
+          const activePointerId = useRef<number | null>(null);
           const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
 
-          const getValueFromEvent = (clientY: number) => {
+          const getValueFromClientY = (clientY: number) => {
             const rect = trackRef.current?.getBoundingClientRect();
             if (!rect) return value;
-            const relY = clientY - rect.top;
-            const ratio = 1 - Math.max(0, Math.min(1, relY / rect.height));
+            const ratio = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
             return Math.round(min + ratio * (max - min));
           };
 
           const onPointerDown = (e: React.PointerEvent) => {
             e.preventDefault(); e.stopPropagation();
-            isDragging.current = true;
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
-            onChange(getValueFromEvent(e.clientY));
+            activePointerId.current = e.pointerId;
+            trackRef.current?.setPointerCapture(e.pointerId);
+            onChange(getValueFromClientY(e.clientY));
           };
           const onPointerMove = (e: React.PointerEvent) => {
-            if (!isDragging.current) return;
+            if (activePointerId.current !== e.pointerId) return;
             e.preventDefault();
-            onChange(getValueFromEvent(e.clientY));
+            onChange(getValueFromClientY(e.clientY));
           };
           const onPointerUp = (e: React.PointerEvent) => {
-            isDragging.current = false;
-            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+            if (activePointerId.current !== e.pointerId) return;
+            activePointerId.current = null;
+            trackRef.current?.releasePointerCapture(e.pointerId);
           };
 
           return (
             <div className="zoom-slide flex flex-col items-center gap-1.5 pointer-events-auto" style={{ height: height + 72 }}
               onClick={e => e.stopPropagation()}>
               <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}>
+                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
                 <X size={11} className="text-white/80" />
               </button>
               <div className="px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0"
-                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.75)" }}>
+                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.75)", boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
                 {value}{label === "SPLIT" ? "°" : "%"}
               </div>
-              {/* Track */}
-              <div ref={trackRef} className="relative rounded-full cursor-pointer shrink-0"
-                style={{ width: 20, height, background: "rgba(255,255,255,0.15)", touchAction: "none" }}
+              {/* Track — pointer events are on the track div itself, captured */}
+              <div ref={trackRef} className="relative rounded-full shrink-0"
+                style={{ width: 24, height, background: "rgba(255,255,255,0.12)", touchAction: "none", cursor: "ns-resize", boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 3px rgba(0,0,0,0.3)" }}
                 onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-                {/* Fill */}
-                <div className="absolute bottom-0 left-0 right-0 rounded-full transition-none"
-                  style={{ height: `${pct}%`, background: color }} />
-                {/* Thumb */}
-                <div className="absolute left-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-white shadow-lg"
-                  style={{ bottom: `calc(${pct}% - 12px)`, background: color, boxShadow: "0 2px 10px rgba(0,0,0,0.4)" }} />
+                {/* Fill — pointer-events none so track captures all events */}
+                <div className="absolute bottom-0 left-0 right-0 rounded-full"
+                  style={{ height: `${pct}%`, background: `linear-gradient(to top, ${color}, ${color}cc)`, transition: "none", pointerEvents: "none" }} />
+                {/* Thumb — pointer-events none */}
+                <div className="absolute left-1/2 -translate-x-1/2 w-7 h-7 rounded-full border-[2.5px] border-white"
+                  style={{ bottom: `calc(${pct}% - 14px)`, background: color, boxShadow: "0 3px 14px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3)", transition: "none", pointerEvents: "none" }} />
               </div>
               <div className="px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0"
-                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color }}>
+                style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color, boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
                 {label}
               </div>
             </div>
@@ -1435,6 +1456,43 @@ export function EditorPage() {
                     style={{ background: "#ff742f" }}>
                     {sourceUrlLoading ? "Memuat..." : "Terapkan"}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── SUMBER POPUP ── */}
+            {showSumberPopup && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+                onClick={() => setShowSumberPopup(false)}>
+                <div className="w-full max-w-xs rounded-2xl p-5 flex flex-col gap-3 shadow-2xl"
+                  style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">Sumber Gambar</span>
+                    <button onClick={() => setShowSumberPopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
+                  </div>
+                  <div className="flex gap-2 items-center rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z"/></svg>
+                    <input
+                      type="text"
+                      value={source}
+                      onChange={e => setSource(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") setShowSumberPopup(false); }}
+                      placeholder="contoh: kompas.com"
+                      className="flex-1 bg-transparent text-white focus:outline-none placeholder-white/25"
+                      style={{ fontSize: 16 }}
+                      autoFocus
+                    />
+                    {source && (
+                      <button onClick={() => setSource("")} className="text-white/30 hover:text-white/60 transition">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <button onClick={() => setShowSumberPopup(false)}
+                    className="w-full py-2.5 rounded-xl text-white text-sm font-bold"
+                    style={{ background: "#ff742f" }}>Simpan</button>
                 </div>
               </div>
             )}
@@ -1510,8 +1568,8 @@ export function EditorPage() {
                     </div>
                     <textarea value={t.text} onChange={e => updateText(t.id, { text: e.target.value })}
                       rows={3} autoFocus
-                      className="w-full rounded-xl px-3 py-2.5 text-sm text-white resize-none focus:outline-none"
-                      style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }} />
+                      className="w-full rounded-xl px-3 py-2.5 text-white resize-none focus:outline-none"
+                      style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", fontSize: 16 }} />
                     <div className="flex gap-2">
                       <input type="color" value={t.color} onChange={e => updateText(t.id, { color: e.target.value })}
                         className="w-10 h-10 rounded-xl cursor-pointer p-0.5" style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.14)" }} />
@@ -1600,6 +1658,11 @@ export function EditorPage() {
                         icon: <Italic size={17} />,
                         action: () => applyFormat("italic"),
                         active: isItalicActive
+                      },
+                      {
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+                        action: () => setShowSumberPopup(true),
+                        active: showSumberPopup
                       },
                     ],
                     background: [
