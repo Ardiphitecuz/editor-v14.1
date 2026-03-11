@@ -1,15 +1,10 @@
 // api/fetch-content.js — Vercel Serverless Function
-// Menggunakan @mozilla/readability sesuai dokumentasi resmi:
-// https://github.com/mozilla/readability
-//
-// Key points dari docs:
-// 1. Pass document.cloneNode(true) agar DOM asli tidak dimodifikasi
-// 2. Gunakan serializer: el => el untuk dapat DOM element langsung (bukan string)
-//    sehingga post-processing bisa dilakukan tanpa instansiasi JSDOM ketiga
-// 3. jsdom harus dibuat dengan { url } agar Readability bisa resolve relative URL
+// Menggunakan linkedom (ESM-native, ringan ~3MB) sebagai pengganti jsdom (~30MB)
+// Referensi: https://github.com/mozilla/readability (Node.js usage)
+// linkedom: https://github.com/WebReflection/linkedom
 
 import axios from 'axios';
-import { JSDOM } from 'jsdom';
+import { parseHTML } from 'linkedom';
 import { Readability } from '@mozilla/readability';
 
 export const config = { maxDuration: 30 };
@@ -53,7 +48,7 @@ function resolveUrl(src, baseUrl, pageUrl) {
   try { return new URL(src, pageUrl).href; } catch { return src; }
 }
 
-// ── Sanitize node (recursive, bekerja langsung di DOM element dari Readability) ─
+// ── Sanitize node (recursive) ─────────────────────────────────────────────────
 function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
   if (node.nodeType === 8) { node.parentNode?.removeChild(node); return; }
   if (node.nodeType !== 1) return;
@@ -217,17 +212,23 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── og:image dari raw HTML (sebelum DOM parsing) ───────────────────────────
+    // ── og:image dari raw HTML ─────────────────────────────────────────────────
     let ogImage = null;
     const ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
       ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
     if (ogImgMatch) ogImage = resolveUrl(ogImgMatch[1], baseUrl, url);
 
-    // ── Buat JSDOM — WAJIB sertakan { url } agar Readability resolve relative URL ─
-    // Sesuai docs: "Remember to pass the page's URI as the url option in the JSDOM constructor"
-    const dom = new JSDOM(html, { url });
-    const document = dom.window.document;
+    // ── Parse HTML dengan linkedom (ESM-native, pengganti jsdom) ──────────────
+    // linkedom: parseHTML(html) → { document }
+    // WAJIB: Readability membutuhkan document.URL — set via baseURI trick
+    const { document } = parseHTML(html);
+
+    // Set baseURI agar Readability bisa resolve relative URL
+    // linkedom memakai document.baseURI dari <base href> atau bisa di-set manual
+    const baseTag = document.createElement('base');
+    baseTag.setAttribute('href', url);
+    document.head?.appendChild(baseTag);
 
     // ── FASE 1: Hapus noise SEBELUM Readability ───────────────────────────────
     ['script','style','noscript','iframe','ins','form','nav','header','footer','aside']
@@ -240,15 +241,13 @@ export default async function handler(req, res) {
     });
 
     // ── FASE 2: Readability dengan cloneNode + serializer DOM ─────────────────
-    // Sesuai docs:
-    // - "pass the clone of the document object" agar DOM asli tidak dimodifikasi
-    // - serializer: el => el  →  dapat DOM Element langsung, bukan string HTML
-    //   ini menghilangkan kebutuhan instansiasi JSDOM ketiga untuk post-processing
+    // Sesuai docs Mozilla: pass document.cloneNode(true) agar DOM asli tidak dimodifikasi
+    // serializer: el => el → dapat DOM Element langsung (bukan string innerHTML)
     const documentClone = document.cloneNode(true);
     const reader = new Readability(documentClone, {
       charThreshold: 50,
       keepClasses: false,
-      serializer: el => el,  // ← kunci: kembalikan DOM element, bukan innerHTML string
+      serializer: el => el,
     });
     const article = reader.parse();
 
@@ -256,8 +255,7 @@ export default async function handler(req, res) {
       return res.json({ success: false, error: 'Readability could not extract content', items: [] });
     }
 
-    // article.content sekarang adalah DOM Element (bukan string)
-    // karena serializer: el => el
+    // article.content = DOM Element (karena serializer: el => el)
     const contentElement = article.content;
     const contentDoc = contentElement.ownerDocument;
 
@@ -268,7 +266,7 @@ export default async function handler(req, res) {
       if (NOISE_PATTERN.test(cls) || NOISE_PATTERN.test(id)) el.remove();
     });
 
-    // ── FASE 4: Allowlist sanitizer (langsung di DOM dari Readability) ────────
+    // ── FASE 4: Allowlist sanitizer ───────────────────────────────────────────
     const articleTitle = (article.title ?? '').trim().toLowerCase();
     Array.from(contentElement.childNodes).forEach(node =>
       sanitizeNode(node, contentDoc, baseUrl, url, articleTitle)
@@ -301,7 +299,6 @@ export default async function handler(req, res) {
       }
     });
 
-    // ── Serialisasi akhir ─────────────────────────────────────────────────────
     const contentHtml = contentElement.innerHTML.trim();
     if (!contentHtml) {
       return res.json({ success: false, error: 'No content after sanitization', items: [] });
