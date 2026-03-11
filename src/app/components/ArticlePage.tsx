@@ -7,6 +7,7 @@ import {
 import { articleStore } from "../store/articleStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
 import { fetchArticleContent } from "../services/newsFetcher";
+import { proxyImgInHtml } from "../services/fetcherUtils";
 import type { Article } from "../data/articles";
 
 // ── Image proxy — semua gambar cross-origin diload via server agar COEP tidak blokir
@@ -435,7 +436,7 @@ export function ArticlePage() {
                 `}</style>
                 <div
                   className="article-prose"
-                  dangerouslySetInnerHTML={{ __html: (article as any).contentHtml }}
+                  dangerouslySetInnerHTML={{ __html: proxyImgInHtml((article as any).contentHtml) }}
                 />
               </>
             ) : (article.blocks && article.blocks.length > 0) ? (

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { CATEGORIES, type Article } from "../data/articles";
 import { useNews } from "../hooks/useNews";
 import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from "lucide-react";
+import { LazyImage } from "./ui/LazyImage";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -74,12 +75,14 @@ function HeroCard({ article, onClick, displayTitle }: { article: Article; onClic
             <span className="text-neutral-400" style={{ fontSize: 13 }}>{article.readTime} mnt · {article.publishedAt}</span>
           </div>
         </div>
-        <img 
-          src={article.image || placeholderImg} 
+        <LazyImage
+          src={article.image || placeholderImg}
+          fallback={placeholderImg}
           alt={article.title}
-          className="rounded-2xl object-cover shrink-0 order-1" 
+          className="rounded-2xl object-cover shrink-0 order-1"
           style={{ width: 280, height: 180 }}
-          onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
+          wrapperClass="rounded-2xl shrink-0 order-1"
+          wrapperStyle={{ width: 280, height: 180, flexShrink: 0 }}
         />
       </div>
     </button>
@@ -92,12 +95,13 @@ function FeaturedCard({ article, onClick, displayTitle }: { article: Article; on
   return (
     <button onClick={onClick}
       className="w-full text-left rounded-2xl overflow-hidden bg-white shadow-sm active:scale-[0.98] transition-transform">
-      <img 
-        src={article.image || placeholderImg} 
-        alt={article.title} 
+      <LazyImage
+        src={article.image || placeholderImg}
+        fallback={placeholderImg}
+        alt={article.title}
         className="w-full object-cover"
-        style={{ height: 200 }}
-        onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
+        wrapperStyle={{ width: "100%", height: 200 }}
+        style={{ width: "100%", height: "100%" }}
       />
       <div className="p-4">
         <CategoryBadge category={article.category} />
@@ -157,12 +161,14 @@ function ArticleCard({ article, onClick, displayTitle }: { article: Article; onC
           <span className="text-neutral-400" style={{ fontSize: 12 }}>{article.readTime} mnt · {article.publishedAt}</span>
         </div>
       </div>
-      <img 
-        src={article.image || placeholderImg} 
+      <LazyImage
+        src={article.image || placeholderImg}
+        fallback={placeholderImg}
         alt={article.title}
-        className="rounded-lg object-cover shrink-0" 
-        style={{ width: 100, height: 80 }}
-        onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }}
+        className="rounded-lg object-cover"
+        wrapperClass="rounded-lg shrink-0"
+        wrapperStyle={{ width: 100, height: 80, flexShrink: 0 }}
+        style={{ width: "100%", height: "100%" }}
       />
     </button>
   );
@@ -174,12 +180,13 @@ function ArticleRow({ article, onClick, displayTitle }: { article: Article; onCl
     <button onClick={onClick}
       className="shrink-0 text-left rounded-2xl overflow-hidden bg-white shadow-sm active:scale-[0.97] transition-transform"
       style={{ width: 190 }}>
-      <img 
-        src={article.image || placeholderImg} 
-        alt={article.title} 
-        className="w-full object-cover" 
-        style={{ height: 105 }}
-        onError={(e) => { (e.target as HTMLImageElement).src = placeholderImg; }} 
+      <LazyImage
+        src={article.image || placeholderImg}
+        fallback={placeholderImg}
+        alt={article.title}
+        className="w-full object-cover"
+        wrapperStyle={{ width: "100%", height: 105 }}
+        style={{ width: "100%", height: "100%" }}
       />
       <div className="p-3">
         <CategoryBadge category={article.category} />

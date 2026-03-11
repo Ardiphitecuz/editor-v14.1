@@ -12,23 +12,26 @@ export const config = { maxDuration: 30 };
 // ── Konstanta di scope module ─────────────────────────────────────────────────
 const NOISE_PATTERN = /\b(sidebar|widget|related|recommend|rekomendasi|artikel[\s_-]terkait|baca[\s_-]juga|lihat[\s_-]juga|more[\s_-]post|also[\s_-]read|you[\s_-]may|share|social|comment|disqus|newsletter|subscribe|advertisement|sponsor|banner|promo|popular|trending|tag[\s_-]list|breadcrumb|pagination|post[\s_-]nav|author[\s_-]box|author[\s_-]bio|byline|related[\s_-]post|more[\s_-]from|read[\s_-]next|next[\s_-]article|prev[\s_-]article|floating|sticky[\s_-]bar|cookie|gdpr|popup|modal|overlay|entry[\s_-]meta|entry[\s_-]header|post[\s_-]meta|post[\s_-]header|post[\s_-]info|post[\s_-]category|cat[\s_-]links|post[\s_-]author|entry[\s_-]author|article[\s_-]header|article[\s_-]meta|article[\s_-]info|sharedaddy|jetpack|addtoany)\b/i;
 
+// ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────
 const ALLOWED_TAGS = new Set([
   'p','h1','h2','h3','h4','h5','h6',
   'ul','ol','li','blockquote','pre','code',
-  'strong','em','b','i','s','u','br','hr',
+  'strong','em','b','i','br',
   'a','img','figure','figcaption',
   'table','thead','tbody','tfoot','tr','th','td',
 ]);
 
+// Dibuang beserta seluruh isinya
 const REMOVE_WITH_CONTENT = new Set([
   'script','style','noscript','iframe','object','embed',
   'form','input','button','select','textarea',
   'nav','header','footer','aside','menu','svg','canvas',
 ]);
 
-const TRACKING_IMG = /feedburner\.com|doubleclick\.net|google-analytics|googletagmanager|pixel\.|1x1\.|2x1\.|tracking|analytics|stat\.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\//i;
+// ── Pembasmi tracking pixel — URL mengandung kata kunci ini ──────────────────
+const TRACKING_IMG = /feedburner|doubleclick|google-analytics|googletagmanager|pixel\.|analytics|share\.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\//i;
 
-const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here)\.?$/i;
+const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here|続きを読む|もっと見る)\.?$/i;
 
 const PUBLIC_PROXY_PREFIXES = [
   'https://api.allorigins.win/raw?url=',

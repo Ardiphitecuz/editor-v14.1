@@ -5,7 +5,7 @@
  * 1. prefetchThumbnails — ambil og:image via /api/og (ringan, tanpa Readability)
  * 2. prefetchArticleContents — fetch konten lengkap untuk artikel pertama
  */
-import { fetchArticleContent } from "./newsFetcher";
+import { fetchArticleContent } from "./fetcherUtils";
 import { articleStore } from "../store/articleStore";
 import type { Article } from "../data/articles";
 
