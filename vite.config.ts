@@ -20,19 +20,20 @@ export default defineConfig({
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
 
-  // Code splitting — kurangi ukuran bundle utama
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router'],
-          'vendor-ui': ['lucide-react'],
-          'page-editor': ['./src/app/components/EditorPage.tsx'],
-          'page-article': ['./src/app/components/ArticlePage.tsx'],
+          'vendor-react':   ['react', 'react-dom', 'react-router'],
+          'vendor-ui':      ['lucide-react'],
+          'vendor-tf':      ['@tensorflow/tfjs'],
+          'vendor-upscaler': ['upscaler', '@upscalerjs/esrgan-legacy'],
+          'page-editor':    ['./src/app/components/EditorPage.tsx'],
+          'page-article':   ['./src/app/components/ArticlePage.tsx'],
         },
       },
     },
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 800,
   },
 
   server: {
