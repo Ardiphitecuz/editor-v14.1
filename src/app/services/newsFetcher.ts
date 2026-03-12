@@ -132,7 +132,20 @@ export async function fetchAllSources(
 
   onProgress?.("Selesai", enabled.length, enabled.length);
 
-  all.sort((a, b) => {
+  // ── Dedup berdasarkan URL — artikel yang sama dari beda sumber digabung jadi satu
+  const seenUrls = new Set<string>();
+  const seenTitles = new Set<string>();
+  all = all.filter(a => {
+    const url = (a as any).originalUrl || (a as any).url || "";
+    const titleKey = a.title.trim().toLowerCase().slice(0, 60);
+    // Skip jika URL sama (exact match)
+    if (url && seenUrls.has(url)) return false;
+    // Skip jika judul sangat mirip (mencegah artikel yg sama tapi beda source)
+    if (seenTitles.has(titleKey)) return false;
+    if (url) seenUrls.add(url);
+    seenTitles.add(titleKey);
+    return true;
+  });
     const ta = (a as any).pubTimestamp ?? 0;
     const tb = (b as any).pubTimestamp ?? 0;
     if (tb !== ta) return tb - ta;
