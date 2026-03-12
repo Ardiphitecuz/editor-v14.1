@@ -189,11 +189,14 @@ async function drawNotifBadge(ctx: CanvasRenderingContext2D, label: string, imgR
   ctx.fillText(label, pillX + 24, pillY + 31);
 }
 
-function drawTitleBox(ctx: CanvasRenderingContext2D, titleHtml: string, imgContent: HTMLImageElement, x: number, y: number, w: number, fontSize: number, lineH: number, padH: number): number {
+function drawTitleBox(ctx: CanvasRenderingContext2D, titleHtml: string, imgContent: HTMLImageElement, x: number, y: number, w: number, fontSize: number, lineH: number, fontFamily: string): number {
+  const PAD_TOP = 61, PAD_SIDE = 112, PAD_BOTTOM = 69;
+  const TEXT_W = 1339; // width teks persis sama dengan HTML (w - PAD_SIDE*2)
   const text = stripHtml(titleHtml);
-  ctx.font = `bold ${fontSize}px 'Gilroy-Bold', 'Nunito', sans-serif`;
-  const lines = wrapText(ctx, text, w - 224);
-  const boxH = lines.length * lineH + padH * 2;
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  const lines = wrapText(ctx, text, TEXT_W);
+  const innerH = lines.length * lineH;
+  const boxH = PAD_TOP + innerH + PAD_BOTTOM;
 
   ctx.save();
   roundRect(ctx, x, y, w, boxH, 30); ctx.clip();
@@ -205,11 +208,13 @@ function drawTitleBox(ctx: CanvasRenderingContext2D, titleHtml: string, imgConte
   }
   ctx.restore();
 
+  // Text — center horizontally: x + (w - TEXT_W)/2 = x + (1563-1339)/2 = x+112
   ctx.save();
-  ctx.font = `bold ${fontSize}px 'Gilroy-Bold', 'Nunito', sans-serif`;
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
   ctx.fillStyle = "white"; ctx.textBaseline = "top";
+  const tx = x + PAD_SIDE; // = x + 112, same as HTML padding-left
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], x + 112, y + padH + i * lineH);
+    ctx.fillText(lines[i], tx, y + PAD_TOP + i * lineH);
   }
   ctx.restore();
   return boxH;
@@ -326,28 +331,40 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
 
   // 5: Card-specific layers
   if (isPost) {
-    const badgeX = cardW / 2 - 1563 / 2;
-    // estimate title box height to place badge correctly
-    ctx.font = `bold 90px 'Gilroy-Bold', Nunito, sans-serif`;
-    const titleLines = wrapText(ctx, stripHtml(titleHtml), 1563 - 224);
-    const titleBoxH = titleLines.length * 112 + 61 * 2;
-    const badgeY = cardH - 469 - titleBoxH - 85 - 92; // 92 ~= badge height
+    // Hitung posisi dari bawah seperti HTML: bottom: 469
+    // container: left 50%-781.5, bottom 469, width 1563
+    // flex column: [NotifBadge] gap 85 [TitleBox]
+    // Ukur dulu titleBox height untuk tahu posisi badge
+    const FONT_POST = "'Gilroy-Bold', 'Nunito', sans-serif";
+    ctx.font = `bold 90px ${FONT_POST}`;
+    const titleLines = wrapText(ctx, stripHtml(titleHtml), 1339);
+    const titleBoxH = 61 + titleLines.length * 112 + 69;
+    const containerW = 1563;
+    const containerX = Math.round(cardW / 2 - containerW / 2); // = (1740-1563)/2 = 88.5 → 89
 
-    await drawNotifBadge(ctx, label, imgRect7, badgeX, badgeY);
-    const titleY = badgeY + 92 + 85;
-    drawTitleBox(ctx, titleHtml, imgContent, badgeX, titleY, 1563, 90, 112, 61);
+    // dari bawah: bottom 469 = titleBox bottom
+    const titleBoxBottom = cardH - 469;
+    const titleBoxY = titleBoxBottom - titleBoxH;
+    const badgeY = titleBoxY - 85 - 82; // gap 85, badge height tepat 82px (82×82 square)
+
+    await drawNotifBadge(ctx, label, imgRect7, containerX, badgeY);
+    drawTitleBox(ctx, titleHtml, imgContent, containerX, titleBoxY, containerW, 90, 112, FONT_POST);
     await drawIdentityBar(ctx, imgIdentityBar, 89, 1812.55, 1562.246, 133.453);
     drawSourceBar(ctx, source, 89, 2034, false);
   } else {
-    const badgeX = cardW / 2 - 1563 / 2;
-    ctx.font = `bold 85px 'Gilroy-Bold', Nunito, sans-serif`;
-    const titleLines = wrapText(ctx, stripHtml(titleHtml), 1563 - 224);
-    const titleBoxH = titleLines.length * 108 + 61 * 2;
-    const badgeY = cardH - 949 - titleBoxH - 85 - 92;
+    const FONT_VIDEO = "'Gilroy-Heavy', 'Nunito', sans-serif";
+    ctx.font = `bold 85px ${FONT_VIDEO}`;
+    const titleLines = wrapText(ctx, stripHtml(titleHtml), 1339);
+    const titleBoxH = 61 + titleLines.length * 108 + 69;
+    const containerW = 1563;
+    const containerX = Math.round(cardW / 2 - containerW / 2); // = (1855-1563)/2 = 146
 
-    await drawNotifBadge(ctx, label, imgRect7, badgeX, badgeY);
-    const titleY = badgeY + 92 + 85;
-    drawTitleBox(ctx, titleHtml, imgContent, badgeX, titleY, 1563, 85, 108, 61);
+    const titleBoxBottom = cardH - 949;
+    const titleBoxY = titleBoxBottom - titleBoxH;
+    const badgeY = titleBoxY - 85 - 82;
+
+    await drawNotifBadge(ctx, label, imgRect7, containerX, badgeY);
+    drawTitleBox(ctx, titleHtml, imgContent, containerX, titleBoxY, containerW, 85, 108, FONT_VIDEO);
     await drawIdentityBar(ctx, imgIdentityBar, 146, 2310.55, 1562.25, 133.45);
     drawSourceBar(ctx, source, 136, 2544, true);
   }
