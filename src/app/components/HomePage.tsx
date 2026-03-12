@@ -5,7 +5,7 @@ import { useNews } from "../hooks/useNews";
 import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from "lucide-react";
 import { LazyImage } from "./ui/LazyImage";
 import { useCatFrame, catFrameUrl } from "./LoadingCat";
-import { MascotEmpty } from "./MascotEmpty";
+import { MascotEmptyState } from "./MascotEmptyState";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -525,11 +525,11 @@ export function HomePage() {
           ) : (
             <div className="px-4 pt-5">
               {filtered.length === 0 ? (
-                <MascotEmpty
-                  expression="search_empty"
+                <MascotEmptyState
+                  expr="tanya"
                   title="Tidak ada artikel ditemukan"
-                  description={searchQuery ? `Tidak ada hasil untuk "${searchQuery}"` : `Tidak ada artikel dalam kategori ini`}
-                  size={140}
+                  desc={searchQuery ? `Tidak ada hasil untuk "${searchQuery}"` : `Tidak ada artikel dalam kategori ini`}
+                  imgSize={140}
                 />
               ) : (
                 <>

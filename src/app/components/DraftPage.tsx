@@ -6,7 +6,7 @@ import {
   Clock, X, Instagram,
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
-import { MascotEmpty, MascotActionButton } from "./MascotEmpty";
+import { MascotEmptyState } from "./MascotEmptyState";
 
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -410,13 +410,18 @@ export function DraftPage() {
       {/* Content */}
       <div className="flex-1 pb-28">
         {drafts.length === 0 ? (
-          <MascotEmpty
-            expression="draft_empty"
+          <MascotEmptyState
+            expr="nunjuk"
             title="Belum ada draft"
-            description={'Buat artikel AI dari berita, lalu pilih "Simpan ke Draft" atau "Buat Postingan"'}
-          >
-            <MascotActionButton onClick={() => navigate("/")} label="Cari Artikel →" />
-          </MascotEmpty>
+            desc='Buat artikel AI dari berita, lalu pilih "Simpan ke Draft" atau "Buat Postingan"'
+            action={
+              <button
+                onClick={() => navigate("/")}
+                className="px-5 py-3 rounded-2xl text-white font-bold active:scale-95 transition-transform"
+                style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 13 }}
+              >Cari Artikel →</button>
+            }
+          />
         ) : (
           <>
             {/* Hint */}

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Trash2, CheckCircle2, Circle, BookOpen, Clock } from "lucide-react";
 import { articleStore } from "../store/articleStore";
 import type { Article } from "../data/articles";
-import { MascotEmpty, MascotActionButton } from "./MascotEmpty";
+import { MascotEmptyState } from "./MascotEmptyState";
 
 type FilterTab = "all" | "unread" | "completed";
 
@@ -67,19 +67,24 @@ export function SavedPage() {
       {/* Content */}
       <div className="flex-1 pb-24 lg:pb-6 px-4 pt-4">
         {items.length === 0 ? (
-          <MascotEmpty
-            expression="saved_empty"
+          <MascotEmptyState
+            expr="sedih"
             title="Belum ada artikel disimpan"
-            description="Tekan ikon bookmark saat membaca artikel untuk menyimpannya di sini"
-          >
-            <MascotActionButton onClick={() => navigate("/")} label="Baca Artikel" />
-          </MascotEmpty>
+            desc="Tekan ikon bookmark saat membaca artikel untuk menyimpannya di sini"
+            action={
+              <button
+                onClick={() => navigate("/")}
+                className="px-5 py-3 rounded-2xl text-white font-bold active:scale-95 transition-transform"
+                style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 13 }}
+              >Baca Artikel</button>
+            }
+          />
         ) : filtered.length === 0 ? (
-          <MascotEmpty
-            expression="search_empty"
+          <MascotEmptyState
+            expr="tanya"
             title="Tidak ada di kategori ini"
-            description="Coba tab yang lain"
-            size={120}
+            desc="Coba tab yang lain"
+            imgSize={120}
           />
         ) : (
           <>

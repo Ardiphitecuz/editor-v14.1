@@ -1,35 +1,55 @@
 import { useNavigate } from "react-router";
-import { MascotEmpty, MascotActionButton } from "./MascotEmpty";
+import { mascotSrc } from "./MascotEmptyState";
 
 export function NotFoundPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: "#f8f5f1" }}>
-      {/* 404 number */}
-      <div className="relative mb-2">
-        <p style={{ fontSize: 96, fontWeight: 900, color: "#f0ede9", lineHeight: 1, letterSpacing: "-4px", userSelect: "none" }}>404</p>
-        <p className="absolute inset-0 flex items-center justify-center"
-           style={{ fontSize: 96, fontWeight: 900, color: "#ff742f", lineHeight: 1, letterSpacing: "-4px", opacity: 0.12 }}>404</p>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6 text-center"
+      style={{ background: "#f8f5f1" }}
+    >
+      {/* 404 besar transparan */}
+      <div className="relative flex items-center justify-center mb-2" style={{ height: 80 }}>
+        <p style={{ fontSize: 100, fontWeight: 900, color: "#ede9e4", lineHeight: 1, letterSpacing: "-6px", userSelect: "none" }}>404</p>
       </div>
 
-      <MascotEmpty
-        expression="not_found"
-        title="Halaman tidak ditemukan"
-        description="Sepertinya kamu nyasar ke tempat yang salah... bahkan maskot pun ikut sedih 😢"
-        size={180}
-      >
-        <div className="flex gap-3">
-          <MascotActionButton onClick={() => navigate(-1 as never)} label="← Kembali" variant="secondary" />
-          <MascotActionButton onClick={() => navigate("/")} label="Ke Beranda" />
-        </div>
-      </MascotEmpty>
+      {/* Maskot garuk kepala */}
+      <div className="relative mb-3">
+        <img
+          src={mascotSrc("garuk")}
+          alt=""
+          draggable={false}
+          style={{ height: 200, width: "auto" }}
+        />
+        {/* Tanda tanya melayang */}
+        <span className="absolute" style={{ top: 20, right: -8, fontSize: 22, color: "#ff742f", animation: "floatQ1 2s ease-in-out infinite" }}>?</span>
+        <span className="absolute" style={{ top: 4, right: 16, fontSize: 14, color: "#c97240", animation: "floatQ2 2.5s ease-in-out infinite" }}>?</span>
+      </div>
+
+      <p style={{ fontSize: 18, fontWeight: 800, color: "#1a1a1a", marginBottom: 6 }}>
+        Halaman tidak ditemukan
+      </p>
+      <p style={{ fontSize: 13, color: "#a09890", lineHeight: 1.6, maxWidth: 240, marginBottom: 24 }}>
+        Bahkan maskot kita pun bingung kamu nyasar ke mana 🐱
+      </p>
+
+      <div className="flex gap-3">
+        <button
+          onClick={() => navigate(-1)}
+          className="px-5 py-3 rounded-2xl font-bold active:scale-95 transition-transform"
+          style={{ background: "#f0ede9", color: "#666", fontSize: 13 }}
+        >← Kembali</button>
+        <button
+          onClick={() => navigate("/")}
+          className="px-5 py-3 rounded-2xl text-white font-bold active:scale-95 transition-transform"
+          style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 13 }}
+        >Ke Beranda</button>
+      </div>
 
       <style>{`
-        @keyframes float {
-          0%,100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
-        }
+        @keyframes floatQ1 { 0%,100%{transform:translateY(0) rotate(-5deg)} 50%{transform:translateY(-10px) rotate(6deg)} }
+        @keyframes floatQ2 { 0%,100%{transform:translateY(0) rotate(3deg)} 50%{transform:translateY(-14px) rotate(-7deg)} }
       `}</style>
     </div>
   );
