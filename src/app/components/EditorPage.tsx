@@ -96,6 +96,89 @@ function Slider({ label, value, min, max, step = 1, onChange, suffix = "" }: { l
   );
 }
 
+/**
+ * SplitAngleSlider — slider kemiringan yang smooth di mobile
+ * Menggunakan addEventListener langsung di DOM + setPointerCapture
+ * agar tidak tersendat oleh parent overflow-y-auto yang intercept touch.
+ */
+function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const stateRef = useRef({ active: false, pointerId: -1, value });
+  const MIN = -30; const MAX = 30;
+  const pct = ((value - MIN) / (MAX - MIN)) * 100;
+
+  // Selalu update stateRef.value agar closure di listener selalu punya nilai terbaru
+  stateRef.current.value = value;
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    const getVal = (clientX: number) => {
+      const rect = el.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return Math.round(MIN + ratio * (MAX - MIN));
+    };
+
+    const onDown = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      stateRef.current.active = true;
+      stateRef.current.pointerId = e.pointerId;
+      el.setPointerCapture(e.pointerId);
+      onChange(getVal(e.clientX));
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!stateRef.current.active || e.pointerId !== stateRef.current.pointerId) return;
+      e.preventDefault();
+      onChange(getVal(e.clientX));
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== stateRef.current.pointerId) return;
+      stateRef.current.active = false;
+      el.releasePointerCapture(e.pointerId);
+    };
+
+    el.addEventListener('pointerdown',   onDown,  { passive: false });
+    el.addEventListener('pointermove',   onMove,  { passive: false });
+    el.addEventListener('pointerup',     onUp);
+    el.addEventListener('pointercancel', onUp);
+
+    return () => {
+      el.removeEventListener('pointerdown',   onDown);
+      el.removeEventListener('pointermove',   onMove);
+      el.removeEventListener('pointerup',     onUp);
+      el.removeEventListener('pointercancel', onUp);
+    };
+  }, [onChange]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex justify-between items-center">
+        <span className="text-[12px] text-neutral-500">Kemiringan Split</span>
+        <span className="text-[12px] text-neutral-400 tabular-nums">{value}°</span>
+      </div>
+      <div
+        ref={trackRef}
+        className="relative w-full rounded-full select-none"
+        style={{ height: 36, background: "#f0f0f0", touchAction: "none", cursor: "ew-resize", userSelect: "none" }}
+      >
+        {/* Fill */}
+        <div className="absolute top-0 left-0 h-full rounded-full pointer-events-none"
+          style={{ width: `${pct}%`, background: "linear-gradient(90deg,#ff742f,#ff9a5c)" }} />
+        {/* Thumb */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white pointer-events-none"
+          style={{ left: `${pct}%`, width: 32, height: 32, background: "#ff742f", boxShadow: "0 2px 8px rgba(0,0,0,0.25)" }} />
+        {/* Center mark */}
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none"
+          style={{ left: "50%", width: 2, height: 14, background: "rgba(0,0,0,0.15)", borderRadius: 1 }} />
+      </div>
+    </div>
+  );
+}
+
 function BgImage({ src, transform, cardH }: { src: string; transform: BgTransform; cardH: number }) {
   return <img alt="" src={src} style={{ position: "absolute", height: Math.round(cardH * transform.scale), width: "auto", maxWidth: "none", left: "50%", top: "50%", transform: `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))`, pointerEvents: "none", userSelect: "none" }} />;
 }
@@ -1135,7 +1218,7 @@ export function EditorPage() {
               <button className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 hover:bg-neutral-200 transition" onClick={(e) => { e.stopPropagation(); setActiveTab(null); }}><X size={13}/></button>
             </div>
 
-            <div className={`flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 ${isMobile ? "pb-6" : "pb-3"}`}>
+            <div className={`flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 ${isMobile ? "pb-6" : "pb-3"}`} style={{ overscrollBehavior: "contain" }}>
               {/* ── CONTENT ── */}
               {activeTab === "content" && (
                 <>
@@ -1234,7 +1317,13 @@ export function EditorPage() {
                         <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBgSrc(u); setBgT({...DEFAULT_BG_TRANSFORM}); }} onSourceApply={(d) => { setSource(d); }} />
                       </div>
                     )}
-                    <Slider label="Zoom" value={Math.round(bgT.scale*100)} min={30} max={300} onChange={(v)=>setBgT(p=>({...p, scale:v/100}))} suffix="%" />
+                    {/* Pinch hint — gantikan slider Zoom */}
+                    {!videoSrc && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-200">
+                        <span style={{ fontSize: 16 }}>🤏</span>
+                        <span className="text-[11px] text-neutral-400 font-medium">Pinch di preview untuk zoom & geser gambar</span>
+                      </div>
+                    )}
                     {/* ── Upscale BG1 Button ── */}
                     {!videoSrc && (
                       <button
@@ -1275,8 +1364,13 @@ export function EditorPage() {
                         </button>
                         <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBg2Src(u); setBg2T({...DEFAULT_BG_TRANSFORM}); }} />
                       </div>
-                      <Slider label="Zoom" value={Math.round(bg2T.scale*100)} min={30} max={300} onChange={(v)=>setBg2T(p=>({...p, scale:v/100}))} suffix="%" />
-                      <Slider label="Kemiringan" value={splitAngle} min={-30} max={30} onChange={setSplitAngle} suffix="°" />
+                      {/* Pinch hint BG2 */}
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-200">
+                        <span style={{ fontSize: 16 }}>🤏</span>
+                        <span className="text-[11px] text-neutral-400 font-medium">Pinch di sisi kanan preview untuk zoom gambar kedua</span>
+                      </div>
+                      {/* Kemiringan slider — fix dengan pointer capture */}
+                      <SplitAngleSlider value={splitAngle} onChange={setSplitAngle} />
                       {/* ── Upscale BG2 Button ── */}
                       <button
                         onClick={() => handleUpscaleBg(2)}
@@ -1470,7 +1564,7 @@ export function EditorPage() {
           };
           const onPointerMove = (e: React.PointerEvent) => {
             if (activePointerId.current !== e.pointerId) return;
-            e.preventDefault();
+            e.preventDefault(); e.stopPropagation();
             onChange(getValueFromClientY(e.clientY));
           };
           const onPointerUp = (e: React.PointerEvent) => {
@@ -1481,7 +1575,9 @@ export function EditorPage() {
 
           return (
             <div className="zoom-slide flex flex-col items-center gap-1.5 pointer-events-auto" style={{ height: height + 72 }}
-              onClick={e => e.stopPropagation()}>
+              onClick={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
+              onTouchMove={e => e.stopPropagation()}>
               <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
                 style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
                 <X size={11} className="text-white/80" />
@@ -1490,7 +1586,7 @@ export function EditorPage() {
                 style={{ background: "rgba(20,20,20,0.5)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.75)", boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
                 {value}{label === "SPLIT" ? "°" : "%"}
               </div>
-              {/* Track — pointer events are on the track div itself, captured */}
+              {/* Track — pointer events captured on track, touch events stopped on wrapper */}
               <div ref={trackRef} className="relative rounded-full shrink-0"
                 style={{ width: 24, height, background: "rgba(255,255,255,0.12)", touchAction: "none", cursor: "ns-resize", boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 3px rgba(0,0,0,0.3)" }}
                 onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
@@ -1882,16 +1978,15 @@ export function EditorPage() {
                   </div>
                 )}
 
-                {/* ── VERTICAL ZOOM SLIDER — right edge of preview ── */}
+                {/* ── VERTICAL ZOOM SLIDER — right edge of preview (stiker & teks saja, BG pakai pinch) ── */}
                 {showZoomSlider && (() => {
                   const isSticker = stickers.some(s => s.id === zoomTarget);
                   const isText = extraTexts.some(t => t.id === zoomTarget);
-                  const isBg = zoomTarget === "bg1" || zoomTarget === "bg2";
-                  const zMin = isBg ? 30 : 20;
-                  const zMax = isBg ? 300 : 200;
+                  // BG tidak pakai slider — langsung return null, pakai pinch
+                  if (!isSticker && !isText) return null;
+                  const zMin = 20;
+                  const zMax = 200;
                   const getVal = () => {
-                    if (zoomTarget === "bg1") return Math.round(bgT.scale * 100);
-                    if (zoomTarget === "bg2") return Math.round(bg2T.scale * 100);
                     const s = stickers.find(s => s.id === zoomTarget);
                     if (s) return Math.round((s.size / 300) * 100);
                     const t = extraTexts.find(t => t.id === zoomTarget);
@@ -1899,8 +1994,6 @@ export function EditorPage() {
                     return 100;
                   };
                   const setVal = (v: number) => {
-                    if (zoomTarget === "bg1") { setBgT(p => ({ ...p, scale: v / 100 })); return; }
-                    if (zoomTarget === "bg2") { setBg2T(p => ({ ...p, scale: v / 100 })); return; }
                     if (isSticker) { updateSticker(zoomTarget, { size: Math.max(50, Math.min(900, (v / 100) * 300)) }); return; }
                     if (isText) { updateText(zoomTarget, { fontSize: Math.max(20, Math.min(300, (v / 100) * 80)) }); return; }
                   };
@@ -1940,7 +2033,8 @@ export function EditorPage() {
                           setShowSplitAngleSlider(false);
                           setShowBgSubBubbles(false);
                           setShowBgSub2Bubbles(false);
-                          if (t.id === "background") { setZoomTarget("bg1"); setShowZoomSlider(true); }
+                          // BG tidak pakai zoom slider — pakai pinch langsung di preview
+                          if (t.id === "background") { setShowZoomSlider(false); }
                           else if (t.id === "stickers") { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } else setShowZoomSlider(false); }
                           else if (t.id === "texts") { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } else setShowZoomSlider(false); }
                           else setShowZoomSlider(false);
