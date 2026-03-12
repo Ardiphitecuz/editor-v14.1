@@ -271,12 +271,15 @@ export function HomePage() {
     function onTouchMove(e: TouchEvent) {
       if (!ptrRef.current.active) return;
       if (el!.scrollTop > 0) { ptrRef.current.active = false; return; }
-      const dy = Math.max(0, e.touches[0].clientY - ptrRef.current.startY);
-      const damped = Math.min(dy * 0.45, PTR_THRESHOLD + 20);
+      const rawDy = e.touches[0].clientY - ptrRef.current.startY;
+      // Hanya aktifkan PTR kalau drag ke bawah (rawDy > 0)
+      // Kalau ke atas, biarkan scroll normal berjalan
+      if (rawDy <= 0) { ptrRef.current.active = false; return; }
+      const damped = Math.min(rawDy * 0.45, PTR_THRESHOLD + 20);
       ptrRef.current.pullY = damped;
       setPullY(damped);
       setPtrReady(damped >= PTR_THRESHOLD);
-      // Blokir browser dari melakukan overscroll/refresh bawaannya
+      // Blokir browser native overscroll/refresh hanya saat benar-benar menarik ke bawah
       if (damped > 4) e.preventDefault();
     }
 
