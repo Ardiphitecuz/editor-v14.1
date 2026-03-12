@@ -5,6 +5,7 @@ import { useNews } from "../hooks/useNews";
 import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from "lucide-react";
 import { LazyImage } from "./ui/LazyImage";
 import { useCatFrame, catFrameUrl } from "./LoadingCat";
+import { MascotEmpty } from "./MascotEmpty";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -524,11 +525,12 @@ export function HomePage() {
           ) : (
             <div className="px-4 pt-5">
               {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
-                  <p style={{ fontSize: 40 }}>🔍</p>
-                  <p style={{ fontSize: 15, fontWeight: 600 }} className="mt-2">Tidak ada artikel ditemukan</p>
-                  <p style={{ fontSize: 13 }} className="mt-1">Coba kata kunci lain</p>
-                </div>
+                <MascotEmpty
+                  expression="search_empty"
+                  title="Tidak ada artikel ditemukan"
+                  description={searchQuery ? `Tidak ada hasil untuk "${searchQuery}"` : `Tidak ada artikel dalam kategori ini`}
+                  size={140}
+                />
               ) : (
                 <>
                   <p className="mb-3 text-neutral-400" style={{ fontSize: 13 }}>

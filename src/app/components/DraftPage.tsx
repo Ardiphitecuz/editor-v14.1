@@ -6,7 +6,7 @@ import {
   Clock, X, Instagram,
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
-import { LoadingCat } from "./LoadingCat";
+import { MascotEmpty, MascotActionButton } from "./MascotEmpty";
 
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -410,26 +410,13 @@ export function DraftPage() {
       {/* Content */}
       <div className="flex-1 pb-28">
         {drafts.length === 0 ? (
-          // Empty state dengan maskot
-          <div className="flex flex-col items-center justify-center py-16 px-8 gap-3 text-center">
-            <img
-              src="/mascot/maskot-happy.png"
-              alt="Maskot Otaku Cafe"
-              style={{ width: 160, height: "auto", marginBottom: 4 }}
-            />
-            <p style={{ fontSize: 16, fontWeight: 800, color: "#1a1a1a" }}>Belum ada draft</p>
-            <p className="text-neutral-400" style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 240 }}>
-              Buat artikel AI dari berita, lalu pilih "Simpan ke Draft" atau "Buat Postingan"
-            </p>
-            <LoadingCat label="Kucing menunggu kontenmu..." size={72} />
-            <button
-              onClick={() => navigate("/")}
-              className="mt-1 px-5 py-3 rounded-2xl text-white font-bold active:scale-95 transition-transform"
-              style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 13 }}
-            >
-              Cari Artikel →
-            </button>
-          </div>
+          <MascotEmpty
+            expression="draft_empty"
+            title="Belum ada draft"
+            description={'Buat artikel AI dari berita, lalu pilih "Simpan ke Draft" atau "Buat Postingan"'}
+          >
+            <MascotActionButton onClick={() => navigate("/")} label="Cari Artikel →" />
+          </MascotEmpty>
         ) : (
           <>
             {/* Hint */}

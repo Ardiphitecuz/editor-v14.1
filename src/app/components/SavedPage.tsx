@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Trash2, CheckCircle2, Circle, BookOpen, Clock } from "lucide-react";
 import { articleStore } from "../store/articleStore";
 import type { Article } from "../data/articles";
+import { MascotEmpty, MascotActionButton } from "./MascotEmpty";
 
 type FilterTab = "all" | "unread" | "completed";
 
@@ -66,20 +67,20 @@ export function SavedPage() {
       {/* Content */}
       <div className="flex-1 pb-24 lg:pb-6 px-4 pt-4">
         {items.length === 0 ? (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center py-24 px-6">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: "#f0ede9" }}>
-              <BookOpen size={28} style={{ color: "#c0b8b0" }} />
-            </div>
-            <p style={{ fontSize: 16, fontWeight: 700, color: "#4a4540" }} className="mb-2">Belum ada artikel disimpan</p>
-            <p style={{ fontSize: 13, color: "#b0a89e", textAlign: "center" }}>
-              Tekan ikon bookmark saat membaca artikel untuk menyimpannya di sini
-            </p>
-          </div>
+          <MascotEmpty
+            expression="saved_empty"
+            title="Belum ada artikel disimpan"
+            description="Tekan ikon bookmark saat membaca artikel untuk menyimpannya di sini"
+          >
+            <MascotActionButton onClick={() => navigate("/")} label="Baca Artikel" />
+          </MascotEmpty>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <p style={{ fontSize: 14, color: "#b0a89e" }}>Tidak ada artikel dalam kategori ini</p>
-          </div>
+          <MascotEmpty
+            expression="search_empty"
+            title="Tidak ada di kategori ini"
+            description="Coba tab yang lain"
+            size={120}
+          />
         ) : (
           <>
             <p style={{ fontSize: 12, color: "#b0a89e", fontWeight: 600 }} className="mb-3">

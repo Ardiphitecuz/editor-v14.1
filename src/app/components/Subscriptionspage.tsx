@@ -10,6 +10,7 @@ import {
 } from "../services/sourceManager";
 import { clearAllSourceCache } from "../services/newsFetcher";
 import { clearRewriteCache } from "../services/rewriter";
+import { MascotEmpty, MascotActionButton } from "./MascotEmpty";
 
 const LANG_LABELS: Record<string, string> = {
   ja: "Jepang", en: "Inggris", id: "Indonesia",
@@ -339,12 +340,12 @@ export function SubscriptionsPage() {
           ))}
 
           {(activeTab === "following" ? enabledSources : allSources).length === 0 && (
-            <div className="flex flex-col items-center py-16">
-              <Rss size={32} style={{ color: "#c0b8b0" }} className="mb-3" />
-              <p style={{ fontSize: 14, color: "#b0a89e", fontWeight: 600 }}>
-                {activeTab === "following" ? "Belum ada sumber aktif" : "Belum ada sumber ditambahkan"}
-              </p>
-            </div>
+            <MascotEmpty
+              expression="subscriptions_empty"
+              title={activeTab === "following" ? "Belum ada sumber aktif" : "Belum ada sumber ditambahkan"}
+              description={activeTab === "following" ? "Aktifkan minimal satu sumber RSS di tab Semua" : "Tambahkan sumber berita RSS favoritmu"}
+              size={140}
+            />
           )}
         </div>
       </div>
