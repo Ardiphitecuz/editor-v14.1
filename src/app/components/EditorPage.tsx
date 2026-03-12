@@ -132,6 +132,7 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
     const onMove = (e: PointerEvent) => {
       if (!stateRef.current.active || e.pointerId !== stateRef.current.pointerId) return;
       e.preventDefault();
+      e.stopPropagation();
       onChange(getVal(e.clientX));
     };
 
@@ -141,27 +142,41 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
       el.releasePointerCapture(e.pointerId);
     };
 
-    el.addEventListener('pointerdown',   onDown,  { passive: false });
-    el.addEventListener('pointermove',   onMove,  { passive: false });
+    // Block touchmove langsung di elemen agar document listener tidak intercept
+    const blockTouch = (e: TouchEvent) => {
+      if (stateRef.current.active) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    el.addEventListener('pointerdown',   onDown,      { passive: false });
+    el.addEventListener('pointermove',   onMove,      { passive: false });
     el.addEventListener('pointerup',     onUp);
     el.addEventListener('pointercancel', onUp);
+    el.addEventListener('touchmove',     blockTouch,  { passive: false, capture: true });
+    el.addEventListener('touchstart',    blockTouch,  { passive: false, capture: true });
 
     return () => {
       el.removeEventListener('pointerdown',   onDown);
       el.removeEventListener('pointermove',   onMove);
       el.removeEventListener('pointerup',     onUp);
       el.removeEventListener('pointercancel', onUp);
+      el.removeEventListener('touchmove',     blockTouch,  { capture: true } as any);
+      el.removeEventListener('touchstart',    blockTouch,  { capture: true } as any);
     };
   }, [onChange]);
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5" data-slider="true">
       <div className="flex justify-between items-center">
         <span className="text-[12px] text-neutral-500">Kemiringan Split</span>
         <span className="text-[12px] text-neutral-400 tabular-nums">{value}°</span>
       </div>
       <div
         ref={trackRef}
+        data-slider="true"
         className="relative w-full rounded-full select-none"
         style={{ height: 36, background: "#f0f0f0", touchAction: "none", cursor: "ew-resize", userSelect: "none" }}
       >
@@ -785,6 +800,10 @@ export function EditorPage() {
     };
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 2) {
+        // Pinch — hanya proses jika target menyentuh area preview (bukan slider)
+        const target = e.target as Element;
+        const isOnSlider = target?.closest?.('[data-slider]');
+        if (isOnSlider) return; // biarkan slider handle sendiri
         e.preventDefault();
         const getD = (t: TouchList) => Math.sqrt((t[0].clientX - t[1].clientX) ** 2 + (t[0].clientY - t[1].clientY) ** 2);
         const dist = getD(e.touches);
@@ -807,7 +826,14 @@ export function EditorPage() {
         }
         return;
       }
-      if (activeDrag.current) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }
+      // Single touch drag — hanya preventDefault jika ada drag aktif
+      if (activeDrag.current) {
+        const target = e.target as Element;
+        const isOnSlider = target?.closest?.('[data-slider]');
+        if (isOnSlider) return; // slider handle sendiri via pointer capture
+        e.preventDefault();
+        onMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
     };
     const onMouseMove = (e: MouseEvent) => { if (activeDrag.current) { e.preventDefault(); onMove(e.clientX, e.clientY); } };
     document.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -1575,6 +1601,7 @@ export function EditorPage() {
 
           return (
             <div className="zoom-slide flex flex-col items-center gap-1.5 pointer-events-auto" style={{ height: height + 72 }}
+              data-slider="true"
               onClick={e => e.stopPropagation()}
               onTouchStart={e => e.stopPropagation()}
               onTouchMove={e => e.stopPropagation()}>
