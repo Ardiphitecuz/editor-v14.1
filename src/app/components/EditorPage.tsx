@@ -14,8 +14,9 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 import {
   Bold, Italic, Download, RotateCcw, ImagePlus, ChevronDown,
-  Plus, Trash2, Type, Image as ImageIcon, Layers, FileImage, Link, ArrowLeft, X
+  Plus, Trash2, Type, Image as ImageIcon, Layers, FileImage, Link, ArrowLeft, X, Sparkles
 } from "lucide-react";
+import { upscaleImage } from "../services/imageUpscaler";
 
 // ── Dimensi template ──────────────────────────────────────────────────────────
 const POST_W = 1740;
@@ -451,6 +452,11 @@ export function EditorPage() {
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
+  // ── Upscale state ──────────────────────────────────────────────────────────
+  const [upscaling, setUpscaling]           = useState(false);
+  const [upscaleProgress, setUpscaleProgress] = useState(0);
+  const [upscaleStatus, setUpscaleStatus]   = useState("");
+
   // Responsive: detect desktop (≥1024px)
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
   useEffect(() => {
@@ -582,6 +588,31 @@ export function EditorPage() {
   const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>, which: 1 | 2) => {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader(); reader.onload = (ev) => { const r = ev.target?.result as string; if (which === 1) { setBgSrc(r); setBgT({ ...DEFAULT_BG_TRANSFORM }); } else { setBg2Src(r); setBg2T({ ...DEFAULT_BG_TRANSFORM }); } }; reader.readAsDataURL(file); e.target.value = "";
+  };
+
+  // ── Upscale BG dengan ESRGAN ───────────────────────────────────────────────
+  const handleUpscaleBg = async (which: 1 | 2 = 1) => {
+    const src = which === 1 ? bgSrc : bg2Src;
+    if (!src) { showToast("⚠️ Upload gambar BG terlebih dahulu"); return; }
+    if (upscaling) return;
+    setUpscaling(true);
+    setUpscaleProgress(0);
+    setUpscaleStatus("Mempersiapkan...");
+    try {
+      const result = await upscaleImage(src, {
+        onProgress: (pct) => setUpscaleProgress(pct),
+        onStatus:   (msg) => setUpscaleStatus(msg),
+      });
+      if (which === 1) { setBgSrc(result); setBgT({ ...DEFAULT_BG_TRANSFORM }); }
+      else             { setBg2Src(result); setBg2T({ ...DEFAULT_BG_TRANSFORM }); }
+      showToast("✨ Gambar berhasil di-upscale 2x!");
+    } catch (err: any) {
+      showToast("❌ Upscale gagal: " + (err?.message ?? "error tidak diketahui"));
+    } finally {
+      setUpscaling(false);
+      setUpscaleProgress(0);
+      setUpscaleStatus("");
+    }
   };
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; if (videoSrc) URL.revokeObjectURL(videoSrc); setVideoSrc(URL.createObjectURL(file)); e.target.value = ""; };
   const handleStickerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1204,6 +1235,36 @@ export function EditorPage() {
                       </div>
                     )}
                     <Slider label="Zoom" value={Math.round(bgT.scale*100)} min={30} max={300} onChange={(v)=>setBgT(p=>({...p, scale:v/100}))} suffix="%" />
+                    {/* ── Upscale BG1 Button ── */}
+                    {!videoSrc && (
+                      <button
+                        onClick={() => handleUpscaleBg(1)}
+                        disabled={upscaling}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-60"
+                        style={{ background: upscaling ? "linear-gradient(135deg,#7c3aed55,#a78bfa55)" : "linear-gradient(135deg,#7c3aed,#a78bfa)", color: "white" }}
+                      >
+                        {upscaling ? (
+                          <>
+                            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            <span>{upscaleStatus || "Upscaling..."} {upscaleProgress > 0 ? `${upscaleProgress}%` : ""}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={13} />
+                            <span>Upscale Gambar 2x (ESRGAN)</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {/* Progress bar */}
+                    {upscaling && upscaleProgress > 0 && (
+                      <div className="w-full h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${upscaleProgress}%`, background: "linear-gradient(90deg,#7c3aed,#a78bfa)" }}
+                        />
+                      </div>
+                    )}
                   </div>
                   {bgMode === "collage" && !videoSrc && (
                     <div className="space-y-2.5 pt-1 border-t border-neutral-100">
@@ -1216,6 +1277,16 @@ export function EditorPage() {
                       </div>
                       <Slider label="Zoom" value={Math.round(bg2T.scale*100)} min={30} max={300} onChange={(v)=>setBg2T(p=>({...p, scale:v/100}))} suffix="%" />
                       <Slider label="Kemiringan" value={splitAngle} min={-30} max={30} onChange={setSplitAngle} suffix="°" />
+                      {/* ── Upscale BG2 Button ── */}
+                      <button
+                        onClick={() => handleUpscaleBg(2)}
+                        disabled={upscaling}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-60"
+                        style={{ background: "linear-gradient(135deg,#7c3aed,#a78bfa)", color: "white" }}
+                      >
+                        <Sparkles size={13} />
+                        <span>Upscale Gambar 2x (ESRGAN)</span>
+                      </button>
                     </div>
                   )}
                 </>
