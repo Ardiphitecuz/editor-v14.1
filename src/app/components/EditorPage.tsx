@@ -1116,26 +1116,61 @@ export function EditorPage() {
     setDownloading(true);
     try {
       showToast("⏳ Menyiapkan export...");
-      const dataUrl = await exportCardToCanvas({
+
+      // Tampilkan hiddenCard sebentar untuk measure DOM
+      const el = hiddenCardRef.current;
+      let titleBoxMeasure: { x: number; y: number; w: number; h: number } | undefined;
+      if (el) {
+        el.style.visibility = "visible";
+        el.style.zIndex = "9999";
+        el.style.pointerEvents = "none";
+        await new Promise(r => setTimeout(r, 80)); // beri waktu render
+
+        // Cari title box (div orange dengan borderRadius 30)
+        const cardRect = el.getBoundingClientRect();
+        const titleBoxEl = el.querySelector<HTMLElement>('[style*="borderRadius: 30"]');
+        if (titleBoxEl) {
+          const r = titleBoxEl.getBoundingClientRect();
+          // Konversi ke koordinat card (CARD_W × CARD_H)
+          const scaleX = CARD_W / cardRect.width;
+          const scaleY = CARD_H / cardRect.height;
+          titleBoxMeasure = {
+            x: (r.left - cardRect.left) * scaleX,
+            y: (r.top  - cardRect.top)  * scaleY,
+            w: r.width  * scaleX,
+            h: r.height * scaleY,
+          };
+        }
+
+        el.style.visibility = "hidden";
+        el.style.zIndex = "-9999";
+      }
+
+      const blobUrl = await exportCardToCanvas({
         template, label, titleHtml, source,
         bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
         stickers, extraTexts,
-        // Pass asset URLs langsung dari import (Vite sudah resolve hash-nya)
         assetRect7: imgRectangle7 as string,
         assetContent: imgContent as string,
         assetIdentityBar: imgIdentityBar as string,
+        titleBoxMeasure,
       });
       const link = document.createElement("a");
       link.download = `discuss-${template}-${label}.png`;
-      link.href = dataUrl;
+      link.href = blobUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
       showToast("✅ Gambar berhasil diunduh!");
     } catch (e: any) {
       console.error("Export error:", e);
       showToast("❌ Gagal export: " + (e?.message ?? "coba lagi"));
     } finally {
+      if (hiddenCardRef.current) {
+        hiddenCardRef.current.style.visibility = "hidden";
+        hiddenCardRef.current.style.zIndex = "-9999";
+      }
       setDownloading(false);
     }
   };
