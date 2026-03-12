@@ -417,7 +417,7 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
 export function EditorPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const locationState = location.state as { titleHtml?: string; bgUrl?: string } | null;
+  const locationState = location.state as { titleHtml?: string; bgUrl?: string; aiContent?: string[]; source?: string } | null;
   const INIT_TITLE = locationState?.titleHtml ?? DEFAULT_TITLE_HTML;
 
   const [template, setTemplate] = useState<TemplateType>("post");
@@ -428,7 +428,7 @@ export function EditorPage() {
 
   const [label, setLabel]           = useState("Discuss");
   const [titleHtml, setTitleHtml]   = useState(INIT_TITLE);
-  const [source, setSource]         = useState("");
+  const [source, setSource]         = useState(locationState?.source ?? "");
 
   const [bgMode, setBgMode]         = useState<BgMode>("single");
   const [bgSrc, setBgSrc]           = useState<string>(locationState?.bgUrl ?? DEFAULT_BG);
@@ -448,6 +448,7 @@ export function EditorPage() {
   const [bgDragActive, setBgDragActive] = useState<1 | 2 | null>(null);
   const [cropStickerId, setCropStickerId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   // Responsive: detect desktop (≥1024px)
@@ -981,7 +982,8 @@ export function EditorPage() {
     } catch (e) { alert("Gagal export."); } finally { if (hiddenCardRef.current) { hiddenCardRef.current.style.visibility = "hidden"; hiddenCardRef.current.style.zIndex = "-9999"; } setDownloading(false); }
   };
   
-  const handleReset = () => { setLabel("Discuss"); setTitleHtml(DEFAULT_TITLE_HTML); setBgSrc(DEFAULT_BG); setBgT({...DEFAULT_BG_TRANSFORM}); setStickers([]); setExtraTexts([]); if(editorRef.current) editorRef.current.innerHTML = DEFAULT_TITLE_HTML; };
+  const handleReset = () => { setShowConfirmReset(true); };
+  const doReset = () => { setLabel("Discuss"); setTitleHtml(DEFAULT_TITLE_HTML); setBgSrc(DEFAULT_BG); setBgT({...DEFAULT_BG_TRANSFORM}); setStickers([]); setExtraTexts([]); if(editorRef.current) editorRef.current.innerHTML = DEFAULT_TITLE_HTML; setShowConfirmReset(false); };
 
   const applySourceUrl = () => {
     const url = sourceUrlInput.trim();
@@ -1052,6 +1054,7 @@ export function EditorPage() {
            <button onClick={() => setTemplate("post")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "post" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Post</button>
            <button onClick={() => setTemplate("video")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "video" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Video</button>
         </div>
+        <button onClick={handleReset} title="Reset Editor" className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-red-50 hover:text-red-400 transition text-neutral-400 ml-auto mr-1"><RotateCcw size={15} /></button>
         
         {/* Download/Render Button with Circular Progress */}
         <div className="relative">
@@ -1143,6 +1146,31 @@ export function EditorPage() {
                       className={`flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff742f] border ${!source.trim() ? "bg-red-50 border-red-200 placeholder-red-300" : "bg-neutral-50 border-neutral-200"}`}
                       placeholder="Wajib diisi..." value={source} onChange={(e) => setSource(e.target.value)} />
                   </div>
+
+                  {/* Konten AI dari ArticlePage */}
+                  {locationState?.aiContent && locationState.aiContent.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs text-neutral-400 font-medium flex items-center gap-1.5">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                        Isi Artikel AI
+                      </span>
+                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 max-h-48 overflow-y-auto flex flex-col gap-2">
+                        {locationState.aiContent.map((p, i) => (
+                          <p key={i} className="text-xs text-neutral-600" style={{ lineHeight: 1.7 }}>{p}</p>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const text = locationState.aiContent!.join("\n\n");
+                          navigator.clipboard.writeText(text).then(() => showToast("📋 Konten AI disalin!"));
+                        }}
+                        className="w-full py-2 rounded-lg border border-dashed border-neutral-300 text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f] transition flex items-center justify-center gap-1.5"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Salin Isi Artikel
+                      </button>
+                    </div>
+                  )}
 
                   {template === "video" && (
                     <button onClick={() => videoInputRef.current?.click()} className="w-full py-2 border border-dashed border-neutral-300 rounded-lg text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f] transition">
@@ -1859,6 +1887,29 @@ export function EditorPage() {
           </>
         );
       })()}
+
+      {/* ── CONFIRM RESET MODAL ── */}
+      {showConfirmReset && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowConfirmReset(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl flex flex-col gap-4"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col gap-1.5">
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#1a1a1a" }}>Reset Editor?</span>
+              <span style={{ fontSize: 13, color: "#777", lineHeight: 1.5 }}>Semua perubahan — judul, background, stiker, dan teks — akan dihapus dan tidak bisa dikembalikan.</span>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowConfirmReset(false)}
+                className="flex-1 py-3 rounded-2xl bg-neutral-100 text-neutral-700 font-bold transition active:scale-95"
+                style={{ fontSize: 13 }}>Batal</button>
+              <button onClick={doReset}
+                className="flex-1 py-3 rounded-2xl text-white font-bold transition active:scale-95"
+                style={{ fontSize: 13, background: "linear-gradient(135deg,#ef4444,#dc2626)" }}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── TOAST ── */}
       {toast && (

@@ -240,7 +240,28 @@ function getSystemPrompt(isCommunity: boolean): string {
   return isCommunity ? PROMPT_COMMUNITY : PROMPT_NEWS;
 }
 
-const rewriteCache = new Map<string, Article>();
+const CACHE_KEY = "ai_rewrite_cache_v1";
+const CACHE_MAX = 30; // simpan maksimal 30 artikel
+
+function loadCache(): Map<string, Article> {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return new Map();
+    const entries = JSON.parse(raw) as [string, Article][];
+    return new Map(entries);
+  } catch { return new Map(); }
+}
+
+function saveCache(cache: Map<string, Article>) {
+  try {
+    // Batasi ukuran cache — buang entri terlama jika melebihi CACHE_MAX
+    let entries = Array.from(cache.entries());
+    if (entries.length > CACHE_MAX) entries = entries.slice(entries.length - CACHE_MAX);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(entries));
+  } catch { /* storage penuh, abaikan */ }
+}
+
+const rewriteCache: Map<string, Article> = loadCache();
 
 export function getCachedRewrite(articleId: string): Article | null {
   return rewriteCache.get(articleId) ?? null;
@@ -396,6 +417,7 @@ export async function rewriteArticleOnDemand(
     };
 
     rewriteCache.set(article.id, result);
+    saveCache(rewriteCache);
     return result;
   } catch (e: any) {
     console.error("AI Rewrite Failed:", e);
@@ -405,4 +427,5 @@ export async function rewriteArticleOnDemand(
 
 export function clearRewriteCache() {
   rewriteCache.clear();
+  try { localStorage.removeItem(CACHE_KEY); } catch { }
 }

@@ -143,6 +143,9 @@ export function ArticlePage() {
   // AI popup state
   const [aiPopup, setAiPopup] = useState<Article | null>(null);
   const [aiCopied, setAiCopied] = useState(false);
+  // Toast
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2200); };
 
   const fetchedRef = useRef<string | null>(null);
 
@@ -346,6 +349,21 @@ export function ArticlePage() {
               }
           </button>
           <button
+            onClick={async () => {
+              const shareData = {
+                title: article.title,
+                text: article.summary ?? article.title,
+                url: originalUrl ?? window.location.href,
+              };
+              try {
+                if (navigator.share) {
+                  await navigator.share(shareData);
+                } else {
+                  await navigator.clipboard.writeText(shareData.url);
+                  showToast("🔗 Link artikel disalin!");
+                }
+              } catch (_) {}
+            }}
             className="w-9 h-9 flex items-center justify-center rounded-full transition-colors active:scale-95"
             style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)" }}>
             <Share2 size={16} className="text-white" />
@@ -483,7 +501,7 @@ export function ArticlePage() {
                     <button
                       onClick={() => {
                         setAiPopup(null);
-                        navigate("/editor", { state: { titleHtml: aiPopup.title, bgUrl: article.image } });
+                        navigate("/editor", { state: { titleHtml: aiPopup.title, aiContent: aiPopup.content, source: article.source, bgUrl: article.image } });
                       }}
                       className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
                       style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", color: "white" }}>
@@ -680,6 +698,13 @@ export function ArticlePage() {
       </div>
 
       <div className="h-16 lg:hidden" />
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] bg-neutral-900 text-white text-sm font-semibold px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-[fadeInDown_0.2s_ease]">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
