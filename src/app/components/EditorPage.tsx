@@ -285,7 +285,7 @@ function NotifBadge({ label }: { label: string }) {
 
 // ── Card Components ──────────────────────────────────────────────────────────
 function PostCard(props: any) {
-  const { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, onTitleChange } = props;
+  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, onTitleChange } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
   const inlineTitleRef = useRef<HTMLDivElement>(null);
 
@@ -347,17 +347,27 @@ function PostCard(props: any) {
         <img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} />
       </div>
 
-      {/* Source bar — zIndex 6 */}
-      <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 6, display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", pointerEvents: "none" }}>
-        <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
-        <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{source}</span>
+      {/* Source bar(s) — zIndex 6 */}
+      <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 6, display: "flex", alignItems: "center", gap: 20, pointerEvents: "none" }}>
+        {/* Sumber Foto */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+          <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
+          <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{source}</span>
+        </div>
+        {/* Sumber Artikel (opsional) */}
+        {articleSource && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
+            <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 function VideoCard(props: any) {
-  const { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoSrc, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
+  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoSrc, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
   
   const togglePlay = (e: React.MouseEvent | React.TouchEvent) => {
@@ -397,8 +407,19 @@ function VideoCard(props: any) {
           </div>
         </div>
         <div style={{ position: "absolute", left: 146, top: 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
-        <div style={{ position: "absolute", left: 136, top: 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21" /></svg><span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
+        <div style={{ position: "absolute", left: 136, top: 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
+          {/* Sumber Foto */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
+            <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
+          </div>
+          {/* Sumber Artikel (opsional) */}
+          {articleSource && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+              <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
+              <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -528,6 +549,7 @@ export function EditorPage() {
   const [label, setLabel]           = useState("Discuss");
   const [titleHtml, setTitleHtml]   = useState(INIT_TITLE);
   const [source, setSource]         = useState(locationState?.source ?? "");
+  const [articleSource, setArticleSource] = useState(locationState?.articleSource ?? "");
 
   const [bgMode, setBgMode]         = useState<BgMode>("single");
   const [bgSrc, setBgSrc]           = useState<string>(locationState?.bgUrl ?? DEFAULT_BG);
@@ -546,9 +568,15 @@ export function EditorPage() {
   const [snapIndicator, setSnapIndicator] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const [bgDragActive, setBgDragActive] = useState<1 | 2 | null>(null);
   const [cropStickerId, setCropStickerId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: "success"|"error"|"loading"|"info" } | null>(null);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (msg: string, type: "success"|"error"|"loading"|"info" = "info", duration = 3000) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, type });
+    if (duration > 0) toastTimer.current = setTimeout(() => setToast(null), duration);
+  };
+  const hideToast = () => { if (toastTimer.current) clearTimeout(toastTimer.current); setToast(null); };
 
   // ── Upscale state ──────────────────────────────────────────────────────────
   const [upscaling, setUpscaling]           = useState(false);
@@ -691,7 +719,7 @@ export function EditorPage() {
   // ── Upscale BG dengan ESRGAN ───────────────────────────────────────────────
   const handleUpscaleBg = async (which: 1 | 2 = 1) => {
     const src = which === 1 ? bgSrc : bg2Src;
-    if (!src) { showToast("⚠️ Upload gambar BG terlebih dahulu"); return; }
+    if (!src) { showToast("Upload gambar BG terlebih dahulu", "error"); return; }
     if (upscaling) return;
     setUpscaling(true);
     setUpscaleProgress(0);
@@ -703,9 +731,9 @@ export function EditorPage() {
       });
       if (which === 1) { setBgSrc(result); setBgT({ ...DEFAULT_BG_TRANSFORM }); }
       else             { setBg2Src(result); setBg2T({ ...DEFAULT_BG_TRANSFORM }); }
-      showToast("✨ Gambar berhasil di-upscale 4x!");
+      showToast("Gambar berhasil di-upscale 4x!", "success");
     } catch (err: any) {
-      showToast("❌ Upscale gagal: " + (err?.message ?? "error tidak diketahui"));
+      showToast("Upscale gagal: " + (err?.message ?? "error"), "error");
     } finally {
       setUpscaling(false);
       setUpscaleProgress(0);
@@ -1110,12 +1138,12 @@ export function EditorPage() {
   };
 
   const handleDownload = async () => {
-    if (!source.trim()) { showToast("⚠️ Isi sumber gambar terlebih dahulu"); return; }
-    if (label === "Discuss" && !titleHtml.trim()) { showToast("⚠️ Isi judul terlebih dahulu"); return; }
+    if (!source.trim()) { showToast("Isi sumber gambar terlebih dahulu", "error"); return; }
+    if (label === "Discuss" && !titleHtml.trim()) { showToast("Isi judul terlebih dahulu", "error"); return; }
     if (template === "video") { await handleExportVideo(); return; }
     setDownloading(true);
     try {
-      showToast("⏳ Menyiapkan export...");
+      showToast("Menyiapkan export...", "loading", 0);
 
       // Tampilkan hiddenCard sebentar untuk measure DOM
       const el = hiddenCardRef.current;
@@ -1147,7 +1175,7 @@ export function EditorPage() {
       }
 
       const dataUrl = await exportCardToCanvas({
-        template, label, titleHtml, source,
+        template, label, titleHtml, source, articleSource,
         bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
         stickers, extraTexts,
         assetRect7: imgRectangle7 as string,
@@ -1165,12 +1193,12 @@ export function EditorPage() {
           const file = new File([blob], filename, { type: "image/png" });
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({ files: [file], title: filename });
-            showToast("✅ Gambar siap disimpan!");
+            showToast("Gambar siap disimpan!", "success");
             return;
           }
         } catch (shareErr: any) {
           // User cancel share = AbortError, bukan error real
-          if (shareErr?.name === "AbortError") { showToast("❌ Dibatalkan"); return; }
+          if (shareErr?.name === "AbortError") { showToast("Dibatalkan", "error"); return; }
           // Lanjut ke fallback
         }
       }
@@ -1183,10 +1211,10 @@ export function EditorPage() {
       link.click();
       document.body.removeChild(link);
 
-      showToast("✅ Gambar berhasil diunduh!");
+      showToast("Gambar berhasil diunduh!", "success");
     } catch (e: any) {
       console.error("Export error:", e);
-      showToast("❌ Gagal export: " + (e?.message ?? "coba lagi"));
+      showToast("Gagal export: " + (e?.message ?? "coba lagi"), "error");
     } finally {
       if (hiddenCardRef.current) {
         hiddenCardRef.current.style.visibility = "hidden";
@@ -1233,7 +1261,7 @@ export function EditorPage() {
   };
 
   const PREVIEW_W = 340; const PREVIEW_H = Math.round(PREVIEW_W * (CARD_H / CARD_W)); const scale = PREVIEW_W / CARD_W;
-  const commonProps = { label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts };
+  const commonProps = { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts };
   const handleInlineTitleChange = useCallback((html: string) => {
     setTitleHtml(html);
     // keep panel editor ref in sync without moving cursor
@@ -1361,6 +1389,14 @@ export function EditorPage() {
                       placeholder="Wajib diisi..." value={source} onChange={(e) => setSource(e.target.value)} />
                   </div>
 
+                  {/* Sumber Artikel */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-neutral-400 font-medium shrink-0 w-14">Sumber Artikel</span>
+                    <input
+                      className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff742f] border bg-neutral-50 border-neutral-200"
+                      placeholder="Opsional..." value={articleSource} onChange={(e) => setArticleSource(e.target.value)} />
+                  </div>
+
                   {/* Konten AI dari ArticlePage */}
                   {locationState?.aiContent && locationState.aiContent.length > 0 && (
                     <div className="flex flex-col gap-1.5">
@@ -1376,7 +1412,7 @@ export function EditorPage() {
                       <button
                         onClick={() => {
                           const text = locationState.aiContent!.join("\n\n");
-                          navigator.clipboard.writeText(text).then(() => showToast("📋 Konten AI disalin!"));
+                          navigator.clipboard.writeText(text).then(() => showToast("Konten AI disalin!", "success"));
                         }}
                         className="w-full py-2 rounded-lg border border-dashed border-neutral-300 text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f] transition flex items-center justify-center gap-1.5"
                       >
@@ -2206,11 +2242,24 @@ export function EditorPage() {
       )}
 
       {/* ── TOAST ── */}
-      {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] bg-neutral-900 text-white text-sm font-semibold px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-[fadeInDown_0.2s_ease]">
-          {toast}
-        </div>
-      )}
+      {toast && (() => {
+        const cfg = {
+          success: { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, color: "#22c55e" },
+          error:   { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, color: "#ef4444" },
+          loading: { icon: <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>, color: "#ff742f" },
+          info:    { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>, color: "#a3a3a3" },
+        }[toast.type];
+        return (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] animate-[fadeInDown_0.2s_ease] pointer-events-none"
+            style={{ filter: "drop-shadow(0 4px 24px rgba(0,0,0,0.35))" }}>
+            <div className="bg-neutral-900 text-white text-sm font-semibold px-4 py-3 rounded-2xl flex items-center gap-2.5 whitespace-nowrap"
+              style={{ border: `1px solid ${cfg.color}33` }}>
+              <span style={{ color: cfg.color, display: "flex", flexShrink: 0 }}>{cfg.icon}</span>
+              <span className="text-neutral-100">{toast.msg}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── CROP MODAL ── */}
       {cropStickerId && (() => {

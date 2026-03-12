@@ -17,7 +17,7 @@ export interface ExtraText {
 }
 export interface CardExportParams {
   template: "post" | "video";
-  label: string; titleHtml: string; source: string;
+  label: string; titleHtml: string; source: string; articleSource?: string;
   bgMode: "single" | "collage";
   bgSrc: string; bgT: BgTransform;
   bg2Src: string; bg2T: BgTransform;
@@ -32,7 +32,7 @@ const VIDEO_W = 1855, VIDEO_H = 3298;
 
 const SVG_NOTIF_TAIL   = "M0 0H19.0443C27.7434 0 33.988 8.37811 31.5024 16.7145L20.7686 52.7145C19.1259 58.2239 14.0596 62 8.31054 62H0V0Z";
 const SVG_DISCUSS_ICON = "M23.5032 1.62318C22.7023 1.54188 21.8863 1.5 21.0584 1.5C10.2566 1.5 1.5 8.62833 1.5 17.4216C1.5 26.2148 10.2566 33.3431 21.0584 33.3431C22.7468 33.3431 24.3852 33.169 25.948 32.8415L33.2824 40.1667V29.9314C36.5749 27.7049 39.221 24.3592 40.1667 20.8333M40.1667 9.95833C40.1667 13.2951 37.4617 16 34.125 16C30.7883 16 28.0833 13.2951 28.0833 9.95833C28.0833 6.62161 30.7883 3.91667 34.125 3.91667C37.4617 3.91667 40.1667 6.62161 40.1667 9.95833Z";
-const SVG_SOURCE_ICON  = "M5.21875 1V2H19.2812V1V0H5.21875V1ZM23.5 5.21875H22.5V19.2812H23.5H24.5V5.21875H23.5ZM19.2812 23.5V22.5H5.21875V23.5V24.5H19.2812V23.5ZM1 19.2812H2V5.21875H1H0V19.2812H1ZM5.21875 23.5V22.5C3.44108 22.5 2 21.0589 2 19.2812H1H0C0 22.1635 2.33651 24.5 5.21875 24.5V23.5ZM23.5 19.2812H22.5C22.5 21.0589 21.0589 22.5 19.2812 22.5V23.5V24.5C22.1635 24.5 24.5 22.1635 24.5 19.2812H23.5ZM19.2812 1V2C21.0589 2 22.5 3.44108 22.5 5.21875H23.5H24.5C24.5 2.33651 22.1635 0 19.2812 0V1ZM5.21875 1V0C2.33651 0 0 2.33651 0 5.21875H1H2C2 3.44108 3.44108 2 5.21875 2V1ZM9.4375 7.32812H8.4375C8.4375 7.94082 7.94082 8.4375 7.32812 8.4375V9.4375V10.4375C9.04539 10.4375 10.4375 9.04539 10.4375 7.32812H9.4375ZM7.32812 9.4375V8.4375C6.71543 8.4375 6.21875 7.94082 6.21875 7.32812H5.21875H4.21875C4.21875 9.04539 5.61086 10.4375 7.32812 10.4375V9.4375ZM5.21875 7.32812H6.21875C6.21875 6.71543 6.71543 6.21875 7.32812 6.21875V5.21875V4.21875C5.61086 4.21875 4.21875 5.61086 4.21875 7.32812H5.21875ZM7.32812 5.21875V6.21875C7.94082 6.21875 8.4375 6.71543 8.4375 7.32812H9.4375H10.4375C10.4375 5.61086 9.04539 4.21875 7.32812 4.21875V5.21875Z";
+const SVG_SOURCE_ICON = "M1.69914 20.6835C1.30862 21.074 1.30862 21.7072 1.69914 22.0977C2.08967 22.4883 2.72283 22.4883 3.11336 22.0977L2.40625 21.3906L1.69914 20.6835ZM8.03125 15.7656L8.73836 15.0585C8.34783 14.668 7.71467 14.668 7.32414 15.0585L8.03125 15.7656ZM10.8438 18.5781L10.1366 19.2852C10.5272 19.6758 11.1603 19.6758 11.5509 19.2852L10.8438 18.5781ZM17.1719 12.25L17.879 11.5429C17.4885 11.1524 16.8553 11.1524 16.4648 11.5429L17.1719 12.25ZM22.0898 18.5821C22.4803 18.9726 23.1135 18.9726 23.504 18.5821C23.8945 18.1916 23.8945 17.5584 23.504 17.1679L22.7969 17.875L22.0898 18.5821ZM2.40625 21.3906L3.11336 22.0977L8.73836 16.4727L8.03125 15.7656L7.32414 15.0585L1.69914 20.6835L2.40625 21.3906ZM8.03125 15.7656L7.32414 16.4727L10.1366 19.2852L10.8438 18.5781L11.5509 17.871L8.73836 15.0585L8.03125 15.7656ZM10.8438 18.5781L11.5509 19.2852L17.879 12.9571L17.1719 12.25L16.4648 11.5429L10.1366 17.871L10.8438 18.5781ZM17.1719 12.25L16.4648 12.9571L22.0898 18.5821L22.7969 17.875L23.504 17.1679L17.879 11.5429L17.1719 12.25ZM5.21875 1V2H19.2812V1V0H5.21875V1ZM23.5 5.21875H22.5V19.2812H23.5H24.5V5.21875H23.5ZM19.2812 23.5V22.5H5.21875V23.5V24.5H19.2812V23.5ZM1 19.2812H2V5.21875H1H0V19.2812H1ZM5.21875 23.5V22.5C3.44108 22.5 2 21.0589 2 19.2812H1H0C0 22.1635 2.33651 24.5 5.21875 24.5V23.5ZM23.5 19.2812H22.5C22.5 21.0589 21.0589 22.5 19.2812 22.5V23.5V24.5C22.1635 24.5 24.5 22.1635 24.5 19.2812H23.5ZM19.2812 1V2C21.0589 2 22.5 3.44108 22.5 5.21875H23.5H24.5C24.5 2.33651 22.1635 0 19.2812 0V1ZM5.21875 1V0C2.33651 0 0 2.33651 0 5.21875H1H2C2 3.44108 3.44108 2 5.21875 2V1ZM9.4375 7.32812H8.4375C8.4375 7.94082 7.94082 8.4375 7.32812 8.4375V9.4375V10.4375C9.04539 10.4375 10.4375 9.04539 10.4375 7.32812H9.4375ZM7.32812 9.4375V8.4375C6.71543 8.4375 6.21875 7.94082 6.21875 7.32812H5.21875H4.21875C4.21875 9.04539 5.61086 10.4375 7.32812 10.4375V9.4375ZM5.21875 7.32812H6.21875C6.21875 6.71543 6.71543 6.21875 7.32812 6.21875V5.21875V4.21875C5.61086 4.21875 4.21875 5.61086 4.21875 7.32812H5.21875ZM7.32812 5.21875V6.21875C7.94082 6.21875 8.4375 6.71543 8.4375 7.32812H9.4375H10.4375C10.4375 5.61086 9.04539 4.21875 7.32812 4.21875V5.21875Z";
 
 const imgCache = new Map<string, HTMLImageElement>();
 async function loadImg(src: string): Promise<HTMLImageElement> {
@@ -179,24 +179,47 @@ async function drawNotifBadge(ctx: CanvasRenderingContext2D, label: string, imgR
   ctx.restore();
 }
 
-function drawSourceBar(ctx: CanvasRenderingContext2D, source: string, x: number, y: number, isVideo: boolean) {
-  const pad=16, gap=12, iconSz=28, fontSize=isVideo?22:20;
-  ctx.font=`600 ${fontSize}px Inter,sans-serif`;
-  const barW=pad*2+iconSz+gap+ctx.measureText(source).width+8, barH=52;
-  ctx.save(); roundRect(ctx,x,y,barW,barH,10);
-  ctx.fillStyle="rgba(255,255,255,0.08)"; ctx.fill();
-  ctx.strokeStyle="rgba(255,255,255,0.14)"; ctx.lineWidth=1; ctx.stroke(); ctx.restore();
-  if (isVideo) {
-    ctx.save(); ctx.fillStyle="white"; ctx.beginPath();
-    ctx.moveTo(x+pad,y+13); ctx.lineTo(x+pad+iconSz,y+barH/2); ctx.lineTo(x+pad,y+barH-13);
-    ctx.closePath(); ctx.fill(); ctx.restore();
-  } else {
-    ctx.save(); ctx.translate(x+pad,y+barH/2-iconSz/2);
-    ctx.strokeStyle="white"; ctx.lineWidth=1.5; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.fillStyle="white";
-    ctx.scale(iconSz/24.5,iconSz/24.5); ctx.fill(new Path2D(SVG_SOURCE_ICON)); ctx.restore();
+/** Render satu source bar, kembalikan lebar bar */
+function drawOneSourceBar(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number): number {
+  const padV = 11, padH = 16, gap = 12, iconSz = 30;
+  const barH = padV * 2 + 22; // 44px
+
+  ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+  const barW = padH + iconSz + gap + ctx.measureText(text).width + padH;
+
+  // Glass background
+  ctx.save();
+  roundRect(ctx, x, y, barW, barH, 10);
+  ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
+
+  // Icon — viewBox 0 0 24.5 24.5, fill white, persis seperti HTML
+  ctx.save();
+  ctx.translate(x + padH, y + barH / 2 - iconSz / 2);
+  ctx.fillStyle = "white";
+  const s = iconSz / 24.5;
+  ctx.scale(s, s);
+  ctx.fill(new Path2D(SVG_SOURCE_ICON));
+  ctx.restore();
+
+  // Text
+  ctx.save();
+  ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+  ctx.fillStyle = "white"; ctx.textBaseline = "middle";
+  ctx.fillText(text, x + padH + iconSz + gap, y + barH / 2);
+  ctx.restore();
+
+  return barW;
+}
+
+function drawSourceBars(ctx: CanvasRenderingContext2D, source: string, articleSource: string | undefined, x: number, y: number, isVideo: boolean) {
+  const fontSize = isVideo ? 22 : 20;
+  const gap = 20; // gap antar dua bar
+  const w1 = drawOneSourceBar(ctx, source, x, y, fontSize);
+  if (articleSource) {
+    drawOneSourceBar(ctx, articleSource, x + w1 + gap, y, fontSize);
   }
-  ctx.font=`600 ${fontSize}px Inter,sans-serif`; ctx.fillStyle="white"; ctx.textBaseline="middle";
-  ctx.fillText(source, x+pad+iconSz+gap, y+barH/2);
 }
 
 async function drawSticker(ctx: CanvasRenderingContext2D, s: Sticker, cardW: number, cardH: number) {
@@ -225,7 +248,7 @@ function drawExtraText(ctx: CanvasRenderingContext2D, t: ExtraText, cardW: numbe
 }
 
 export async function exportCardToCanvas(params: CardExportParams): Promise<string> {
-  const { template, label, titleHtml, source, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
+  const { template, label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
     stickers, extraTexts, assetRect7, assetContent, assetIdentityBar, titleBoxMeasure } = params;
 
   await waitFonts(); // PENTING: tunggu Gilroy sebelum render
@@ -271,7 +294,7 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
     await drawNotifBadge(ctx,label,imgRect7,containerX,tbY-85-82);
     drawTitleBox(ctx,titleHtml,imgContent,tbX,tbY,tbW,tbH,90,112,FONT);
     await drawIdentityBar(ctx,imgIdentityBar,89,1812.55,1562.246,133.453);
-    drawSourceBar(ctx,source,89,2034,false);
+    drawSourceBars(ctx,source,articleSource,89,2034,false);
   } else {
     const FONT="'Gilroy-Heavy','Nunito',sans-serif";
     let tbX:number,tbY:number,tbW:number,tbH:number;
@@ -285,7 +308,7 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
     await drawNotifBadge(ctx,label,imgRect7,containerX,tbY-85-82);
     drawTitleBox(ctx,titleHtml,imgContent,tbX,tbY,tbW,tbH,85,108,FONT);
     await drawIdentityBar(ctx,imgIdentityBar,146,2310.55,1562.25,133.45);
-    drawSourceBar(ctx,source,136,2544,true);
+    drawSourceBars(ctx,source,articleSource,136,2544,true);
   }
 
   // Gunakan Blob URL — jauh lebih handal dari dataURL di mobile iOS/Android
