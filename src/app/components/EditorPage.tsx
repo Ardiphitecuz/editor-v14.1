@@ -169,7 +169,7 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
   }, [onChange]);
 
   return (
-    <div className="flex flex-col gap-1.5" data-slider="true">
+    <div className="flex flex-col gap-1.5" data-slider="true" style={{ touchAction: "none" }}>
       <div className="flex justify-between items-center">
         <span className="text-[12px] text-neutral-500">Kemiringan Split</span>
         <span className="text-[12px] text-neutral-400 tabular-nums">{value}°</span>
@@ -195,7 +195,7 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
 }
 
 function BgImage({ src, transform, cardH }: { src: string; transform: BgTransform; cardH: number }) {
-  return <img alt="" src={src} style={{ position: "absolute", height: Math.round(cardH * transform.scale), width: "auto", maxWidth: "none", left: "50%", top: "50%", transform: `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))`, pointerEvents: "none", userSelect: "none" }} />;
+  return <img alt="" crossOrigin="anonymous" src={src} style={{ position: "absolute", height: Math.round(cardH * transform.scale), width: "auto", maxWidth: "none", left: "50%", top: "50%", transform: `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))`, pointerEvents: "none", userSelect: "none" }} />;
 }
 
 function Background({ mode, src1, t1, src2, t2, splitAngle, cardW, cardH }: { mode: BgMode; src1: string; t1: BgTransform; src2: string; t2: BgTransform; splitAngle: number; cardW: number; cardH: number; }) {
@@ -1113,13 +1113,49 @@ export function EditorPage() {
     if (!source.trim()) { showToast("⚠️ Isi sumber gambar terlebih dahulu"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("⚠️ Isi judul terlebih dahulu"); return; }
     if (template === "video") { await handleExportVideo(); return; }
-    if (!hiddenCardRef.current) return; setDownloading(true);
+    if (!hiddenCardRef.current) return;
+    setDownloading(true);
     try {
-      const el = hiddenCardRef.current; el.style.visibility = "visible"; el.style.zIndex = "9999";
-      await new Promise(r => setTimeout(r, 500));
-      const dataUrl = await toPng(el, { width: CARD_W, height: CARD_H, cacheBust: true });
-      const link = document.createElement("a"); link.download = `discuss-${template}-${label}.png`; link.href = dataUrl; link.click();
-    } catch (e) { alert("Gagal export."); } finally { if (hiddenCardRef.current) { hiddenCardRef.current.style.visibility = "hidden"; hiddenCardRef.current.style.zIndex = "-9999"; } setDownloading(false); }
+      const el = hiddenCardRef.current;
+      el.style.visibility = "visible";
+      el.style.zIndex = "9999";
+      // Tunggu gambar selesai render
+      await new Promise(r => setTimeout(r, 600));
+
+      // Pastikan semua img di dalam el sudah complete
+      const imgs = Array.from(el.querySelectorAll("img"));
+      await Promise.allSettled(imgs.map(img =>
+        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+      ));
+
+      const dataUrl = await toPng(el, {
+        width: CARD_W,
+        height: CARD_H,
+        cacheBust: true,
+        skipAutoScale: true,
+        pixelRatio: 1,
+        // Konversi semua gambar ke data URL via proxy agar tidak taint canvas
+        includeQueryParams: true,
+      });
+
+      if (!dataUrl || dataUrl === "data:,") throw new Error("Output kosong");
+
+      const link = document.createElement("a");
+      link.download = `discuss-${template}-${label}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e: any) {
+      console.error("Export error:", e);
+      showToast("❌ Gagal export: " + (e?.message ?? "coba lagi"));
+    } finally {
+      if (hiddenCardRef.current) {
+        hiddenCardRef.current.style.visibility = "hidden";
+        hiddenCardRef.current.style.zIndex = "-9999";
+      }
+      setDownloading(false);
+    }
   };
   
   const handleReset = () => { setShowConfirmReset(true); };
@@ -1948,8 +1984,15 @@ export function EditorPage() {
 
                   const items = configs[mobileBubbleTab] ?? [];
                   return (
-                    <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2.5 z-30 pointer-events-auto"
-                      style={{ opacity: bgDragActive ? 0.1 : 1, transition: "opacity 0.18s ease" }}
+                    <div className="absolute left-2 flex flex-col items-center gap-2.5 z-30 pointer-events-auto"
+                      style={{
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        maxHeight: "90%",
+                        overflowY: "visible",
+                        opacity: bgDragActive ? 0.1 : 1,
+                        transition: "opacity 0.18s ease"
+                      }}
                       onClick={e => e.stopPropagation()}>
                       {items.map((b, i) => (
                         <div key={i} className="relative flex items-center gap-2">
@@ -2009,6 +2052,20 @@ export function EditorPage() {
                       onClose={() => setShowSplitAngleSlider(false)}
                       label="SPLIT"
                     />
+                  </div>
+                )}
+
+                {/* ── UPSCALE PROGRESS OVERLAY ── */}
+                {upscaling && (
+                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 pointer-events-none"
+                    style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}>
+                    <svg className="animate-spin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    <span className="text-white text-xs font-bold px-3 text-center">{upscaleStatus || "Upscaling..."}</span>
+                    {upscaleProgress > 0 && (
+                      <div className="w-32 h-1.5 rounded-full bg-white/30 overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${upscaleProgress}%`, background: "linear-gradient(90deg,#a78bfa,#7c3aed)" }} />
+                      </div>
+                    )}
                   </div>
                 )}
 
