@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { exportCardToCanvas } from "../services/canvasExport";
 import { draftStore } from "../store/draftStore";
+import { CatOverlay } from "./LoadingCat";
 import svgPaths from "../../imports/svg-0zf9wwjyvn";
 // Menggunakan figma:asset (Pastikan vite.config.ts sudah di-set alias-nya)
 import imgImage1 from "figma:asset/8acdc84a856693a878bcf009f2c9faadb518a733.png";
@@ -2154,16 +2155,10 @@ export function EditorPage() {
 
                 {/* ── UPSCALE PROGRESS OVERLAY ── */}
                 {upscaling && (
-                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 pointer-events-none"
-                    style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}>
-                    <svg className="animate-spin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                    <span className="text-white text-xs font-bold px-3 text-center">{upscaleStatus || "Upscaling..."}</span>
-                    {upscaleProgress > 0 && (
-                      <div className="w-32 h-1.5 rounded-full bg-white/30 overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${upscaleProgress}%`, background: "linear-gradient(90deg,#a78bfa,#7c3aed)" }} />
-                      </div>
-                    )}
-                  </div>
+                  <CatOverlay
+                    label={upscaleStatus || "Upscaling 4x..."}
+                    progress={upscaleProgress > 0 ? upscaleProgress : undefined}
+                  />
                 )}
 
                 {/* ── VERTICAL ZOOM SLIDER — right edge of preview (stiker & teks saja, BG pakai pinch) ── */}

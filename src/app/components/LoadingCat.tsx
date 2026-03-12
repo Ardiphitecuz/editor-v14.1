@@ -1,91 +1,105 @@
 import { useEffect, useState, useRef } from "react";
 
-const TOTAL_FRAMES = 23;
-const FPS = 12;
+export const CAT_TOTAL_FRAMES = 19;
+const FPS = 14;
 const FRAME_MS = 1000 / FPS;
 
-function buildFrameUrl(i: number) {
+export function catFrameUrl(i: number) {
   return `/mascot/cat-frame-${String(i).padStart(2, "0")}.png`;
 }
 
-interface LoadingCatProps {
-  /** Teks di bawah kucing */
-  label?: string;
-  size?: number;
+export function preloadCatFrames() {
+  for (let i = 0; i < CAT_TOTAL_FRAMES; i++) {
+    const img = new Image(); img.src = catFrameUrl(i);
+  }
 }
 
-export function LoadingCat({ label = "Memuat...", size = 80 }: LoadingCatProps) {
+export function useCatFrame() {
   const [frame, setFrame] = useState(0);
-  const [catX, setCatX] = useState(0);
   const rafRef = useRef<number>(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    let frameIdx = 0;
-    let last = 0;
+    let idx = 0, last = 0;
     function tick(ts: number) {
-      if (ts - last > FRAME_MS) {
-        frameIdx = (frameIdx + 1) % TOTAL_FRAMES;
-        setFrame(frameIdx);
-        last = ts;
-      }
+      if (ts - last > FRAME_MS) { idx = (idx + 1) % CAT_TOTAL_FRAMES; setFrame(idx); last = ts; }
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
+  return frame;
+}
 
-  // Kucing lari bolak-balik dalam container
+interface LoadingCatProps {
+  label?: string;
+  trackWidth?: number;
+  catHeight?: number;
+}
+
+export function LoadingCat({ label, trackWidth = 180, catHeight = 72 }: LoadingCatProps) {
+  const frame = useCatFrame();
+  const [x, setX] = useState(0);
+  const [dir, setDir] = useState(1);
+  const rafRef = useRef<number>(0);
+  const stateRef = useRef({ x: 0, dir: 1 });
+  const catW = catHeight * (150 / 90);
+
   useEffect(() => {
-    const containerW = containerRef.current?.clientWidth ?? 200;
-    const catW = size;
-    const maxX = containerW - catW;
-    let x = 0;
-    let dir = 1;
+    const maxX = trackWidth - catW;
     let last = 0;
-
     function move(ts: number) {
       if (ts - last > 16) {
-        x += dir * 2.5;
-        if (x >= maxX) { x = maxX; dir = -1; }
-        if (x <= 0) { x = 0; dir = 1; }
-        setCatX(x);
+        stateRef.current.x += stateRef.current.dir * 2.8;
+        if (stateRef.current.x >= maxX) { stateRef.current.x = maxX; stateRef.current.dir = -1; }
+        if (stateRef.current.x <= 0)    { stateRef.current.x = 0;    stateRef.current.dir =  1; }
+        setX(stateRef.current.x);
+        setDir(stateRef.current.dir);
         last = ts;
       }
       rafRef.current = requestAnimationFrame(move);
     }
     rafRef.current = requestAnimationFrame(move);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [size]);
+  }, [trackWidth, catW]);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div
-        ref={containerRef}
-        className="relative w-48 overflow-hidden"
-        style={{ height: size * 0.85 }}
-      >
-        <div
-          className="absolute bottom-0"
-          style={{ height: 1, background: "rgba(0,0,0,0.1)", left: 0, right: 0 }}
-        />
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative overflow-hidden" style={{ width: trackWidth, height: catHeight + 4 }}>
+        <div className="absolute bottom-0 left-0 right-0" style={{ height: 1, background: "rgba(0,0,0,0.08)" }} />
         <img
-          src={buildFrameUrl(frame)}
-          alt=""
-          draggable={false}
+          src={catFrameUrl(frame)} alt="" draggable={false}
           style={{
-            position: "absolute",
-            bottom: 2,
-            left: catX,
-            width: size,
-            height: size * 0.8,
-            imageRendering: "pixelated",
+            position: "absolute", bottom: 2, left: x,
+            height: catHeight, width: catW,
+            transform: dir < 0 ? "scaleX(-1)" : "none",
           }}
         />
       </div>
-      {label && (
-        <p style={{ fontSize: 12, color: "#a09890", fontWeight: 600 }}>{label}</p>
-      )}
+      {label && <p style={{ fontSize: 11, color: "#a09890", fontWeight: 600 }}>{label}</p>}
+    </div>
+  );
+}
+
+interface CatOverlayProps {
+  label?: string;
+  dim?: boolean;
+  progress?: number;
+}
+
+export function CatOverlay({ label = "Memproses...", dim = true, progress }: CatOverlayProps) {
+  return (
+    <div
+      className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-50"
+      style={{ background: dim ? "rgba(0,0,0,0.55)" : "transparent", backdropFilter: dim ? "blur(2px)" : "none" }}
+    >
+      <LoadingCat trackWidth={160} catHeight={68} />
+      <div className="flex flex-col items-center gap-1">
+        <p style={{ fontSize: 12, fontWeight: 700, color: dim ? "white" : "#555" }}>{label}</p>
+        {progress !== undefined && (
+          <div className="rounded-full overflow-hidden" style={{ width: 120, height: 4, background: dim ? "rgba(255,255,255,0.2)" : "#f0ede9" }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: "#ff742f" }} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

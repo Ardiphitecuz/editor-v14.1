@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { CATEGORIES, type Article } from "../data/articles";
 import { useNews } from "../hooks/useNews";
 import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from "lucide-react";
 import { LazyImage } from "./ui/LazyImage";
+import { useCatFrame, catFrameUrl } from "./LoadingCat";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -199,6 +200,40 @@ function ArticleRow({ article, onClick, displayTitle }: { article: Article; onCl
   );
 }
 
+// ── Pull-to-refresh indicator ────────────────────────────────────────────────
+function PullToRefreshIndicator({ pullY, ready, refreshing }: { pullY: number; ready: boolean; refreshing: boolean }) {
+  const frame = useCatFrame();
+  const catH = 56;
+  const catW = catH * (150 / 90);
+  const maxPull = 72;
+  const progress = Math.min(pullY / maxPull, 1);
+
+  return (
+    <div
+      className="absolute top-0 left-0 right-0 flex flex-col items-center justify-end overflow-hidden pointer-events-none"
+      style={{ height: Math.max(0, pullY), zIndex: 20, transition: refreshing ? "height 0.2s" : "none" }}
+    >
+      <div className="flex flex-col items-center pb-1" style={{ opacity: progress }}>
+        {/* Kucing */}
+        <img
+          src={catFrameUrl(frame)}
+          alt=""
+          draggable={false}
+          style={{
+            height: catH,
+            width: catW,
+            transform: `rotate(${ready || refreshing ? 0 : (1 - progress) * -15}deg)`,
+            transition: "transform 0.2s",
+          }}
+        />
+        <p style={{ fontSize: 10, fontWeight: 700, color: "#a09890", marginTop: 2 }}>
+          {refreshing ? "Memperbarui..." : ready ? "Lepas untuk refresh ↑" : "Tarik untuk refresh"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState("Semua");
@@ -209,6 +244,43 @@ export function HomePage() {
   const PAGE_SIZE = 20;
 
   const { articles: fetchedArticles, loading, progressMsg, progressDone, progressTotal, errors, fromCache, refresh } = useNews();
+
+  // ── Pull-to-refresh state ────────────────────────────────────────────────
+  const [pullY, setPullY] = useState(0);
+  const [ptrReady, setPtrReady] = useState(false);
+  const ptrRef = useRef({ startY: 0, active: false, pullY: 0 });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const PTR_THRESHOLD = 72;
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const el = scrollRef.current;
+    if (!el || el.scrollTop > 0) return;
+    ptrRef.current.startY = e.touches[0].clientY;
+    ptrRef.current.active = true;
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!ptrRef.current.active) return;
+    const el = scrollRef.current;
+    if (!el || el.scrollTop > 0) { ptrRef.current.active = false; return; }
+    const dy = Math.max(0, e.touches[0].clientY - ptrRef.current.startY);
+    const damped = Math.min(dy * 0.45, PTR_THRESHOLD + 20);
+    ptrRef.current.pullY = damped;
+    setPullY(damped);
+    setPtrReady(damped >= PTR_THRESHOLD);
+    if (damped > 4) e.preventDefault();
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    if (!ptrRef.current.active) return;
+    ptrRef.current.active = false;
+    if (ptrRef.current.pullY >= PTR_THRESHOLD && !loading) {
+      refresh();
+    }
+    ptrRef.current.pullY = 0;
+    setPullY(0);
+    setPtrReady(false);
+  }, [loading, refresh]);
   const allArticles = fetchedArticles;
   const hasArticles = allArticles.length > 0;
   const showSkeleton = loading && !hasArticles;
@@ -291,8 +363,17 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 pb-24 lg:pb-6">
+      {/* Body — PTR zone */}
+      <div
+        ref={scrollRef}
+        className="flex-1 pb-24 lg:pb-6 relative overflow-y-auto"
+        style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Pull-to-refresh indicator */}
+        <PullToRefreshIndicator pullY={pullY} ready={ptrReady} refreshing={loading} />
 
         {/* Refresh bar — tipis di atas, muncul saat ada artikel tapi sedang update */}
         {showRefreshBar && (
