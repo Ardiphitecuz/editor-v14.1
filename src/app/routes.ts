@@ -9,6 +9,7 @@ import { ExplorePage } from "./components/ExplorePage";
 import { DraftPage } from "./components/DraftPage";
 import { SavedPage } from "./components/SavedPage";
 import { SubscriptionsPage } from "./components/Subscriptionspage";
+import { NotFoundPage } from "./components/NotFoundPage";
 
 export const router = createBrowserRouter([
   {
@@ -24,7 +25,7 @@ export const router = createBrowserRouter([
       { path: "editor", Component: EditorPage },
       { path: "pengaturan", Component: SettingsPage },
       { path: "fetchrss", Component: FetchRSSPage },
-      { path: "*", Component: HomePage },
+      { path: "*", Component: NotFoundPage },
     ],
   },
 ]);

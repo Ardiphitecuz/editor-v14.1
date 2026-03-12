@@ -138,9 +138,22 @@ async function drawIdentityBar(ctx: CanvasRenderingContext2D, img: HTMLImageElem
   // HTML: width:100% (=w), height:1176.47% dari h, top:-1076.47% dari h
   const imgH = h * 11.7647;
   const imgY = y - h * 10.7647;
-  // Pakai w persis (bukan aspect ratio) seperti HTML width:100%
   ctx.drawImage(img, x, imgY, w, imgH);
   ctx.restore();
+
+  // Overlay logo Otaku Cafe di atas identity bar
+  try {
+    const logo = await loadImg("/mascot/logo.png");
+    if (logo.naturalWidth) {
+      // Logo height = 70% dari tinggi bar, center secara vertikal
+      const logoH = h * 0.68;
+      const logoW = (logo.naturalWidth / logo.naturalHeight) * logoH;
+      // Posisi: kiri dengan padding
+      const logoX = x + 28;
+      const logoY = y + (h - logoH) / 2;
+      ctx.drawImage(logo, logoX, logoY, logoW, logoH);
+    }
+  } catch { /* logo opsional */ }
 }
 
 async function drawNotifBadge(ctx: CanvasRenderingContext2D, label: string, imgRect7: HTMLImageElement, originX: number, originY: number) {
