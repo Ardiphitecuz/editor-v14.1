@@ -2,15 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
   FileText, Image as ImageIcon, Trash2, PlusCircle,
-  Download, Send, Copy, Check, ChevronDown, ChevronUp,
-  Clock, X, Share2, Instagram,
+  Download, Copy, Check,
+  Clock, X, Instagram,
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
-import { exportCardToCanvas } from "../services/canvasExport";
 
-import imgRectangle7 from "figma:asset/3faeab794066e6a5837760291e83a4cac94d2503.png";
-import imgContent from "figma:asset/dd1da5fc74964e99895149508d6205a4d1bf1cb6.png";
-import imgIdentityBar from "figma:asset/de21bf7c4db25ef35876a6b7b4b21eaa1919be07.png";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function relativeTime(ts: number): string {
@@ -98,62 +94,94 @@ function DraftCard({ draft, onClick, onDelete }: {
 }
 
 // ─── DraftPreviewModal ──────────────────────────────────────────────────────
-function DraftPreviewModal({ draft, onClose }: { draft: Draft; onClose: () => void }) {
+function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onClose: () => void }) {
   const navigate = useNavigate();
-  const [copied, setCopied] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [articleExpanded, setArticleExpanded] = useState(false);
 
-  const articleText = [
-    stripHtml(draft.aiTitle),
-    "",
-    ...(draft.aiContent ?? []),
-    "",
-    `Sumber: ${draft.source}`,
-  ].join("\n");
+  // Bisa update draft lokal setelah rewrite
+  const [draft, setDraft] = useState(initialDraft);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadDone, setDownloadDone] = useState(false);
+
+  // Caption state
+  const [captionMode, setCaptionMode] = useState<"view" | "edit">("view");
+  const [captionText, setCaptionText] = useState<string>(() =>
+    [stripHtml(initialDraft.aiTitle), "", ...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
+  );
+  const [rewriting, setRewriting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync jika draft berubah dari luar
+  useEffect(() => {
+    setDraft(initialDraft);
+    setCaptionText(
+      [stripHtml(initialDraft.aiTitle), "", ...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
+    );
+  }, [initialDraft.id]);
+
+  useEffect(() => {
+    if (captionMode === "edit" && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.selectionStart = 0;
+    }
+  }, [captionMode]);
+
+  async function handleRewrite() {
+    setRewriting(true);
+    try {
+      const { getAIConfig } = await import("../services/rewriter");
+      const cfg = getAIConfig();
+      const prompt = `Tulis ulang caption Instagram berikut dalam Bahasa Indonesia yang engaging, informatif, dan cocok untuk postingan media sosial. Sertakan 3-5 hashtag relevan di akhir. Jangan ubah nama orang/produk/judul. Langsung tulis hasilnya tanpa preamble.\n\n${captionText}`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 800, messages: [{ role: "user", content: prompt }] }),
+      });
+      const data = await res.json();
+      const newText = data.content?.[0]?.text?.trim();
+      if (newText) setCaptionText(newText);
+    } catch (e) {
+      console.error("Rewrite error", e);
+    } finally {
+      setRewriting(false);
+    }
+  }
 
   async function handleDownload() {
-    if (!draft.template) return;
+    if (!draft.template?.imageDataUrl) return;
     setDownloading(true);
     try {
-      // Re-generate canvas (template.imageDataUrl sudah ada, tapi kita pakai yang disimpan)
-      const dataUrl = draft.template.imageDataUrl!;
+      await navigator.clipboard.writeText(captionText).catch(() => {});
+      const dataUrl = draft.template.imageDataUrl;
       const filename = `draft-${draft.id.slice(6, 14)}.png`;
-
-      // Salin teks artikel ke clipboard
-      await navigator.clipboard.writeText(articleText).catch(() => {});
-
-      // Download gambar
       if (navigator.canShare) {
         try {
           const blob = await (await fetch(dataUrl)).blob();
           const file = new File([blob], filename, { type: "image/png" });
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({ files: [file], title: filename });
+            setDownloadDone(true);
+            setTimeout(() => setDownloadDone(false), 2500);
             return;
           }
-        } catch (e: any) {
-          if (e?.name === "AbortError") return;
-        }
+        } catch (e: any) { if (e?.name === "AbortError") return; }
       }
       const link = document.createElement("a");
       link.href = dataUrl; link.download = filename;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  async function handleCopyArticle() {
-    await navigator.clipboard.writeText(articleText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+      setDownloadDone(true);
+      setTimeout(() => setDownloadDone(false), 2500);
+    } finally { setDownloading(false); }
   }
 
   function handlePostToInstagram() {
-    // Salin teks dulu, lalu buka Instagram
-    navigator.clipboard.writeText(articleText).catch(() => {});
-    window.open("https://www.instagram.com", "_blank");
+    navigator.clipboard.writeText(captionText).catch(() => {});
+    // Buka Instagram dengan deep link ke new post, fallback ke web
+    const igDeepLink = "instagram://camera";
+    const igWeb = "https://www.instagram.com";
+    // Coba deep link dulu (mobile app), fallback ke web setelah 500ms
+    window.location.href = igDeepLink;
+    setTimeout(() => { window.open(igWeb, "_blank"); }, 600);
   }
 
   function handleEditTemplate() {
@@ -165,144 +193,170 @@ function DraftPreviewModal({ draft, onClose }: { draft: Draft; onClose: () => vo
         source: draft.source,
         bgUrl: draft.imageUrl,
         draftId: draft.id,
+        fromDraft: true,
+        articleTitle: draft.articleTitle,
+        imageUrl: draft.imageUrl,
       }
     });
   }
 
+  const hasImage = !!draft.template?.imageDataUrl;
+
   return (
     <div
-      className="fixed inset-0 z-[200] flex flex-col"
-      style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
+      className="fixed inset-0 z-[200]"
+      style={{ background: "rgba(0,0,0,0.9)" }}
       onClick={onClose}
     >
-      {/* Modal container */}
+      {/* Scrollable sheet dari bawah */}
       <div
-        className="relative flex flex-col w-full max-w-sm mx-auto my-auto rounded-3xl overflow-hidden shadow-2xl"
-        style={{ maxHeight: "92vh", background: "#0f0f0f" }}
+        className="absolute bottom-0 left-0 right-0 flex flex-col rounded-t-3xl overflow-hidden"
+        style={{ maxHeight: "96vh", background: "#111" }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(255,255,255,0.12)" }}
-        >
-          <X size={14} color="white" />
-        </button>
-
-        {/* Instagram-style header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <div className="w-8 h-8 rounded-full overflow-hidden shrink-0" style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)" }}>
-            <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ fontSize: 12 }}>OC</div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-bold" style={{ fontSize: 12 }}>otakucafe.id</p>
-            <p className="text-white/40" style={{ fontSize: 10 }}>{relativeTime(draft.createdAt)}</p>
-          </div>
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }} />
         </div>
 
-        {/* Image preview */}
-        <div className="relative w-full shrink-0" style={{ aspectRatio: "1563/2320", background: "#1a1a1a" }}>
-          {draft.template?.imageDataUrl ? (
-            <img src={draft.template.imageDataUrl} alt="preview" className="w-full h-full object-contain" />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/30">
-              <ImageIcon size={40} strokeWidth={1} />
-              <span style={{ fontSize: 13 }}>Template belum dibuat</span>
-              <button
-                onClick={handleEditTemplate}
-                className="px-4 py-2 rounded-xl text-white font-bold active:scale-95 transition-transform"
-                style={{ background: "#ff742f", fontSize: 13 }}
-              >
-                Buat Template Sekarang
-              </button>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-black shrink-0"
+              style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 11 }}>OC</div>
+            <div>
+              <p className="text-white font-bold" style={{ fontSize: 13 }}>otakucafe.id</p>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{relativeTime(draft.createdAt)}</p>
             </div>
-          )}
-        </div>
-
-        {/* Caption / artikel preview */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <button
-            onClick={() => setArticleExpanded(!articleExpanded)}
-            className="w-full flex items-start gap-2 px-4 py-3 text-left"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-white/90 font-bold" style={{ fontSize: 11, lineHeight: 1.4 }}>
-                {stripHtml(draft.aiTitle)}
-              </p>
-              {articleExpanded && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  {draft.aiContent?.map((p, i) => (
-                    <p key={i} className="text-white/50" style={{ fontSize: 10.5, lineHeight: 1.6 }}>{p}</p>
-                  ))}
-                  <p className="text-white/30 mt-1" style={{ fontSize: 10 }}>Sumber: {draft.source}</p>
-                </div>
-              )}
-            </div>
-            <div className="shrink-0 mt-0.5">
-              {articleExpanded ? <ChevronUp size={14} className="text-white/40" /> : <ChevronDown size={14} className="text-white/40" />}
-            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.1)" }}>
+            <X size={14} color="white" />
           </button>
         </div>
 
-        {/* Action bar */}
-        <div className="shrink-0 px-4 py-3 flex flex-col gap-2.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "#0f0f0f" }}>
-          {/* Row 1: Download + Salin Artikel */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleDownload}
-              disabled={!draft.template?.imageDataUrl || downloading}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-40"
-              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
-            >
-              <Download size={14} color="white" />
-              <span className="text-white font-bold" style={{ fontSize: 12 }}>
-                {downloading ? "Mengunduh..." : "Download"}
-              </span>
-            </button>
-            <button
-              onClick={handleCopyArticle}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all active:scale-95"
-              style={{ background: copied ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${copied ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.12)"}` }}
-            >
-              {copied ? <Check size={14} color="#22c55e" /> : <Copy size={14} color="white" />}
-              <span style={{ fontSize: 12, fontWeight: 700, color: copied ? "#22c55e" : "white" }}>
-                {copied ? "Tersalin!" : "Salin Artikel"}
-              </span>
-            </button>
-          </div>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
 
-          {/* Row 2: Edit Template + Post ke Instagram */}
-          <div className="flex gap-2">
-            {draft.template?.imageDataUrl ? (
-              <button
-                onClick={handleEditTemplate}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all active:scale-95"
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-              >
-                <FileText size={13} color="rgba(255,255,255,0.6)" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>Edit</span>
-              </button>
+          {/* ── Image preview (1:1 square crop seperti Instagram) ── */}
+          <div className="relative w-full shrink-0" style={{ aspectRatio: "1/1", background: "#1a1a1a" }}>
+            {hasImage ? (
+              <img src={draft.template!.imageDataUrl!} alt="preview"
+                className="w-full h-full" style={{ objectFit: "contain" }} />
             ) : (
-              <button
-                onClick={handleEditTemplate}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all active:scale-95"
-                style={{ background: "rgba(255,116,47,0.15)", border: "1px solid rgba(255,116,47,0.35)" }}
-              >
-                <PlusCircle size={13} color="#ff742f" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#ff742f" }}>Buat Template</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <ImageIcon size={36} strokeWidth={1} color="rgba(255,255,255,0.2)" />
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>Template belum dibuat</span>
+                <button onClick={handleEditTemplate}
+                  className="px-4 py-2 rounded-xl text-white font-bold active:scale-95 transition-transform"
+                  style={{ background: "#ff742f", fontSize: 13 }}>
+                  Buat Template
+                </button>
+              </div>
+            )}
+            {/* Edit template overlay jika sudah ada gambar */}
+            {hasImage && (
+              <button onClick={handleEditTemplate}
+                className="absolute bottom-2 right-2 flex items-center gap-1 px-2.5 py-1.5 rounded-full active:scale-95 transition-transform"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}>
+                <PlusCircle size={11} color="rgba(255,255,255,0.8)" />
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", fontWeight: 700 }}>Edit template</span>
               </button>
             )}
-            <button
-              onClick={handlePostToInstagram}
-              className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl transition-all active:scale-95"
-              style={{ background: "linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)" }}
-            >
-              <Instagram size={15} color="white" />
-              <span className="text-white font-bold" style={{ fontSize: 12 }}>Post</span>
-            </button>
           </div>
+
+          {/* ── Caption section ── */}
+          <div className="px-4 pt-4 pb-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+            {/* Label + tombol Rewrite / Edit / Simpan */}
+            <div className="flex items-center justify-between mb-2.5">
+              <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em" }}>CAPTION</span>
+              <div className="flex items-center gap-1.5">
+                {captionMode === "view" ? (
+                  <>
+                    <button
+                      onClick={handleRewrite}
+                      disabled={rewriting}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full transition-all active:scale-95 disabled:opacity-50"
+                      style={{ background: "rgba(255,116,47,0.15)", border: "1px solid rgba(255,116,47,0.35)" }}>
+                      {rewriting
+                        ? <span style={{ fontSize: 10, color: "#ff742f", fontWeight: 700 }}>✦ Menulis ulang...</span>
+                        : <><span style={{ fontSize: 15 }}>✦</span><span style={{ fontSize: 10, color: "#ff742f", fontWeight: 700 }}>Rewrite</span></>
+                      }
+                    </button>
+                    <button
+                      onClick={() => setCaptionMode("edit")}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full transition-all active:scale-95"
+                      style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>✎ Edit</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setCaptionMode("view")}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full transition-all active:scale-95"
+                    style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)" }}>
+                    <Check size={11} color="#22c55e" />
+                    <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700 }}>Simpan</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Teks caption */}
+            {captionMode === "view" ? (
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {captionText}
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                value={captionText}
+                onChange={e => setCaptionText(e.target.value)}
+                className="w-full rounded-2xl px-3 py-3 focus:outline-none resize-none"
+                style={{
+                  minHeight: 180,
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "rgba(255,255,255,0.85)",
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                }}
+              />
+            )}
+          </div>
+
+          {/* spacer agar tidak tertutup tombol fixed */}
+          <div style={{ height: 100 }} />
+        </div>
+
+        {/* ── Action buttons — fixed di bawah ── */}
+        <div className="shrink-0 px-4 py-3 flex gap-2.5"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "#111", paddingBottom: "calc(12px + env(safe-area-inset-bottom,0px))" }}>
+
+          {/* Download (+ salin otomatis) */}
+          <button
+            onClick={handleDownload}
+            disabled={!hasImage || downloading}
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all active:scale-95 disabled:opacity-40"
+            style={{
+              background: downloadDone ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.08)",
+              border: `1.5px solid ${downloadDone ? "rgba(34,197,94,0.5)" : "rgba(255,255,255,0.15)"}`,
+            }}>
+            {downloadDone
+              ? <><Check size={16} color="#22c55e" /><span style={{ fontSize: 13, fontWeight: 700, color: "#22c55e" }}>Tersimpan!</span></>
+              : <><Download size={16} color="white" /><span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>{downloading ? "Menyimpan..." : "Download"}</span></>
+            }
+          </button>
+
+          {/* Post ke Instagram */}
+          <button
+            onClick={handlePostToInstagram}
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all active:scale-95"
+            style={{ background: "linear-gradient(135deg,#833ab4 0%,#fd1d1d 50%,#fcb045 100%)" }}>
+            <Instagram size={16} color="white" />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Posting</span>
+          </button>
         </div>
       </div>
     </div>
