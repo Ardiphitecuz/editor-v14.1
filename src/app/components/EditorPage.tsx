@@ -1146,7 +1146,7 @@ export function EditorPage() {
         el.style.zIndex = "-9999";
       }
 
-      const blobUrl = await exportCardToCanvas({
+      const dataUrl = await exportCardToCanvas({
         template, label, titleHtml, source,
         bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
         stickers, extraTexts,
@@ -1155,13 +1155,34 @@ export function EditorPage() {
         assetIdentityBar: imgIdentityBar as string,
         titleBoxMeasure,
       });
+
+      const filename = `discuss-${template}-${label}.png`;
+
+      // Coba Web Share API dulu (iOS Safari support download via share)
+      if (navigator.canShare) {
+        try {
+          const blob = await (await fetch(dataUrl)).blob();
+          const file = new File([blob], filename, { type: "image/png" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: filename });
+            showToast("✅ Gambar siap disimpan!");
+            return;
+          }
+        } catch (shareErr: any) {
+          // User cancel share = AbortError, bukan error real
+          if (shareErr?.name === "AbortError") { showToast("❌ Dibatalkan"); return; }
+          // Lanjut ke fallback
+        }
+      }
+
+      // Fallback: link.click (desktop) atau buka tab baru (iOS Safari fallback)
       const link = document.createElement("a");
-      link.download = `discuss-${template}-${label}.png`;
-      link.href = blobUrl;
+      link.download = filename;
+      link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
       showToast("✅ Gambar berhasil diunduh!");
     } catch (e: any) {
       console.error("Export error:", e);

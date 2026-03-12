@@ -135,10 +135,11 @@ function drawTitleBox(ctx: CanvasRenderingContext2D, titleHtml: string, imgConte
 async function drawIdentityBar(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
   if (!img.naturalWidth) return;
   ctx.save(); roundRect(ctx,x,y,w,h,18); ctx.clip();
-  // Sesuai CSS: top:-1076.47%, height:1176.47% dari container h
+  // HTML: width:100% (=w), height:1176.47% dari h, top:-1076.47% dari h
   const imgH = h * 11.7647;
-  const imgW = (img.naturalWidth / img.naturalHeight) * imgH;
-  ctx.drawImage(img, x, y - h*10.7647, imgW, imgH);
+  const imgY = y - h * 10.7647;
+  // Pakai w persis (bukan aspect ratio) seperti HTML width:100%
+  ctx.drawImage(img, x, imgY, w, imgH);
   ctx.restore();
 }
 
