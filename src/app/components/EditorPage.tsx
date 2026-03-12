@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { toPng } from "html-to-image";
+import { exportCardToCanvas } from "../services/canvasExport";
 import svgPaths from "../../imports/svg-0zf9wwjyvn";
 // Menggunakan figma:asset (Pastikan vite.config.ts sudah di-set alias-nya)
 import imgImage1 from "figma:asset/8acdc84a856693a878bcf009f2c9faadb518a733.png";
@@ -1113,47 +1113,29 @@ export function EditorPage() {
     if (!source.trim()) { showToast("⚠️ Isi sumber gambar terlebih dahulu"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("⚠️ Isi judul terlebih dahulu"); return; }
     if (template === "video") { await handleExportVideo(); return; }
-    if (!hiddenCardRef.current) return;
     setDownloading(true);
     try {
-      const el = hiddenCardRef.current;
-      el.style.visibility = "visible";
-      el.style.zIndex = "9999";
-      // Tunggu gambar selesai render
-      await new Promise(r => setTimeout(r, 600));
-
-      // Pastikan semua img di dalam el sudah complete
-      const imgs = Array.from(el.querySelectorAll("img"));
-      await Promise.allSettled(imgs.map(img =>
-        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
-      ));
-
-      const dataUrl = await toPng(el, {
-        width: CARD_W,
-        height: CARD_H,
-        cacheBust: true,
-        skipAutoScale: true,
-        pixelRatio: 1,
-        // Konversi semua gambar ke data URL via proxy agar tidak taint canvas
-        includeQueryParams: true,
+      showToast("⏳ Menyiapkan export...");
+      const dataUrl = await exportCardToCanvas({
+        template, label, titleHtml, source,
+        bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
+        stickers, extraTexts,
+        // Pass asset URLs langsung dari import (Vite sudah resolve hash-nya)
+        assetRect7: imgRectangle7 as string,
+        assetContent: imgContent as string,
+        assetIdentityBar: imgIdentityBar as string,
       });
-
-      if (!dataUrl || dataUrl === "data:,") throw new Error("Output kosong");
-
       const link = document.createElement("a");
       link.download = `discuss-${template}-${label}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showToast("✅ Gambar berhasil diunduh!");
     } catch (e: any) {
       console.error("Export error:", e);
       showToast("❌ Gagal export: " + (e?.message ?? "coba lagi"));
     } finally {
-      if (hiddenCardRef.current) {
-        hiddenCardRef.current.style.visibility = "hidden";
-        hiddenCardRef.current.style.zIndex = "-9999";
-      }
       setDownloading(false);
     }
   };
