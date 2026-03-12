@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { exportCardToCanvas } from "../services/canvasExport";
+import { draftStore } from "../store/draftStore";
 import svgPaths from "../../imports/svg-0zf9wwjyvn";
 // Menggunakan figma:asset (Pastikan vite.config.ts sudah di-set alias-nya)
 import imgImage1 from "figma:asset/8acdc84a856693a878bcf009f2c9faadb518a733.png";
@@ -537,7 +538,7 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
 export function EditorPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const locationState = location.state as { titleHtml?: string; bgUrl?: string; aiContent?: string[]; source?: string } | null;
+  const locationState = location.state as { titleHtml?: string; bgUrl?: string; aiContent?: string[]; source?: string; articleSource?: string; fromDraft?: boolean; draftId?: string; articleTitle?: string; imageUrl?: string } | null;
   const INIT_TITLE = locationState?.titleHtml ?? DEFAULT_TITLE_HTML;
 
   const [template, setTemplate] = useState<TemplateType>("post");
@@ -1137,6 +1138,8 @@ export function EditorPage() {
     }
   };
 
+  const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ").trim();
+
   const handleDownload = async () => {
     if (!source.trim()) { showToast("Isi sumber gambar terlebih dahulu", "error"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("Isi judul terlebih dahulu", "error"); return; }
@@ -1186,7 +1189,33 @@ export function EditorPage() {
 
       const filename = `discuss-${template}-${label}.png`;
 
-      // Coba Web Share API dulu (iOS Safari support download via share)
+      // Jika datang dari "Buat Postingan" — simpan ke draft lalu redirect
+      if (locationState?.fromDraft !== false) {
+        // Simpan atau update draft
+        const draftTemplate = {
+          imageDataUrl: dataUrl,
+          template, label, titleHtml, source, articleSource,
+          bgSrc, bgMode,
+        };
+        const existingDraftId = locationState?.draftId;
+        if (existingDraftId && draftStore.get(existingDraftId)) {
+          draftStore.updateTemplate(existingDraftId, draftTemplate);
+        } else {
+          draftStore.create({
+            articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
+            aiTitle: titleHtml,
+            aiContent: locationState?.aiContent ?? [],
+            source,
+            imageUrl: locationState?.imageUrl ?? bgSrc,
+            template: draftTemplate,
+          });
+        }
+        showToast("✅ Tersimpan ke Draft!", "success");
+        navigate("/jelajahi");
+        return;
+      }
+
+      // Fallback normal download (jika bukan dari flow draft)
       if (navigator.canShare) {
         try {
           const blob = await (await fetch(dataUrl)).blob();
@@ -1197,20 +1226,12 @@ export function EditorPage() {
             return;
           }
         } catch (shareErr: any) {
-          // User cancel share = AbortError, bukan error real
           if (shareErr?.name === "AbortError") { showToast("Dibatalkan", "error"); return; }
-          // Lanjut ke fallback
         }
       }
-
-      // Fallback: link.click (desktop) atau buka tab baru (iOS Safari fallback)
       const link = document.createElement("a");
-      link.download = filename;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      link.download = filename; link.href = dataUrl;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
       showToast("Gambar berhasil diunduh!", "success");
     } catch (e: any) {
       console.error("Export error:", e);
@@ -1328,7 +1349,9 @@ export function EditorPage() {
             className={`relative z-10 flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold ${downloading ? "bg-neutral-300" : "bg-[#ff742f]"}`}
           >
             <Download size={14} />
-            {downloading ? (template === "video" ? `${renderProgress}%` : "Menyimpan...") : "Download"}
+            {downloading
+              ? (template === "video" ? `${renderProgress}%` : "Menyimpan...")
+              : (locationState?.fromDraft !== false ? "Simpan" : "Download")}
           </button>
         </div>
       </header>

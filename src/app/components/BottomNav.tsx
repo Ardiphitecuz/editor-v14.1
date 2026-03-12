@@ -1,9 +1,9 @@
 import { useNavigate, useLocation } from "react-router";
-import { Home, Search, Bookmark, Rss, PlusCircle } from "lucide-react";
+import { Home, BookMarked, Bookmark, Rss, PlusCircle } from "lucide-react";
 
 const NAV_PATHS = [
   { label: "Home",    path: "/",              icon: Home },
-  { label: "Explore", path: "/jelajahi",      icon: Search },
+  { label: "Draft",   path: "/jelajahi",      icon: BookMarked },
   { label: "Saved",   path: "/simpan",        icon: Bookmark },
   { label: "Sources", path: "/subscriptions", icon: Rss },
 ];

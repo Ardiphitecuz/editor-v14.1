@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   ArrowLeft, Clock, Share2, Bookmark, Sparkles,
-  RefreshCw, ExternalLink, Edit3, Languages, Copy, Check, X,
+  RefreshCw, ExternalLink, Edit3, Languages, Copy, Check, X, BookmarkPlus,
 } from "lucide-react";
 import { articleStore } from "../store/articleStore";
+import { draftStore } from "../store/draftStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
 import { fetchArticleContent } from "../services/newsFetcher";
 import { proxyImgInHtml } from "../services/fetcherUtils";
@@ -490,24 +491,47 @@ export function ArticlePage() {
                     </div>
                   </div>
                   {/* Action buttons */}
-                  <div className="flex gap-3 px-5 py-4 border-t border-neutral-100 shrink-0">
+                  <div className="flex flex-col gap-2 px-5 py-4 border-t border-neutral-100 shrink-0">
+                    {/* Row 1: Salin */}
                     <button
                       onClick={handleAICopyContent}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl transition-all active:scale-95"
                       style={{ background: aiCopied ? "#22c55e" : "#f5f5f5", color: aiCopied ? "white" : "#333" }}>
                       {aiCopied ? <Check size={15} /> : <Copy size={15} />}
-                      <span style={{ fontSize: 13, fontWeight: 700 }}>{aiCopied ? "Tersalin!" : "Salin"}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>{aiCopied ? "Tersalin!" : "Salin Artikel"}</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        setAiPopup(null);
-                        navigate("/editor", { state: { titleHtml: aiPopup.title, aiContent: aiPopup.content, source: article.source, bgUrl: article.image } });
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
-                      style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", color: "white" }}>
-                      <Edit3 size={15} />
-                      <span style={{ fontSize: 13, fontWeight: 700 }}>Buat Post</span>
-                    </button>
+                    {/* Row 2: Simpan ke Draft + Buat Postingan */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          // Simpan ke draft tanpa template
+                          draftStore.create({
+                            articleTitle: article.title,
+                            aiTitle: aiPopup!.title,
+                            aiContent: aiPopup!.content,
+                            source: article.source ?? "",
+                            imageUrl: article.image ?? "",
+                            template: null,
+                          });
+                          setAiPopup(null);
+                          navigate("/jelajahi");
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl transition-all active:scale-95"
+                        style={{ background: "#f0ede9", color: "#555" }}>
+                        <BookmarkPlus size={14} />
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>Simpan Draft</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAiPopup(null);
+                          navigate("/editor", { state: { titleHtml: aiPopup!.title, aiContent: aiPopup!.content, source: article.source, bgUrl: article.image, fromDraft: true, articleTitle: article.title, imageUrl: article.image } });
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
+                        style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", color: "white" }}>
+                        <Edit3 size={14} />
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>Buat Postingan</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
