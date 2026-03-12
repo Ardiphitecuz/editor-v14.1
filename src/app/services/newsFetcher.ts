@@ -146,6 +146,8 @@ export async function fetchAllSources(
     seenTitles.add(titleKey);
     return true;
   });
+
+  all.sort((a, b) => {
     const ta = (a as any).pubTimestamp ?? 0;
     const tb = (b as any).pubTimestamp ?? 0;
     if (tb !== ta) return tb - ta;
