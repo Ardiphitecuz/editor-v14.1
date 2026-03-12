@@ -703,7 +703,7 @@ export function EditorPage() {
       });
       if (which === 1) { setBgSrc(result); setBgT({ ...DEFAULT_BG_TRANSFORM }); }
       else             { setBg2Src(result); setBg2T({ ...DEFAULT_BG_TRANSFORM }); }
-      showToast("✨ Gambar berhasil di-upscale 2x!");
+      showToast("✨ Gambar berhasil di-upscale 4x!");
     } catch (err: any) {
       showToast("❌ Upscale gagal: " + (err?.message ?? "error tidak diketahui"));
     } finally {
@@ -1366,7 +1366,7 @@ export function EditorPage() {
                         ) : (
                           <>
                             <Sparkles size={13} />
-                            <span>Upscale Gambar 2x (ESRGAN)</span>
+                            <span>Upscale Gambar 4x (ESRGAN)</span>
                           </>
                         )}
                       </button>
@@ -1405,7 +1405,7 @@ export function EditorPage() {
                         style={{ background: "linear-gradient(135deg,#7c3aed,#a78bfa)", color: "white" }}
                       >
                         <Sparkles size={13} />
-                        <span>Upscale Gambar 2x (ESRGAN)</span>
+                        <span>Upscale Gambar 4x (ESRGAN)</span>
                       </button>
                     </div>
                   )}
@@ -1908,6 +1908,13 @@ export function EditorPage() {
                         action: () => setShowSplitAngleSlider(p => !p),
                         active: showSplitAngleSlider
                       }] : []),
+                      {
+                        icon: upscaling
+                          ? <svg className="animate-spin" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          : <Sparkles size={17} />,
+                        action: () => { if (!upscaling) handleUpscaleBg(1); },
+                        active: upscaling
+                      },
                     ],
                     stickers: [
                       {
