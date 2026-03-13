@@ -1,7 +1,10 @@
-// api/proxy.js — Vercel Serverless Function: raw HTML proxy
+// api/proxy.js — Vercel & Netlify compatible
 import axios from 'axios';
 
-export default async function handler(req, res) {
+export const config = { maxDuration: 15 };
+
+// ── Core logic ────────────────────────────────────────────────────────────────
+async function handle(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -26,4 +29,35 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
+}
+
+// ── Vercel export ─────────────────────────────────────────────────────────────
+export default handle;
+
+// ── Netlify adapter ───────────────────────────────────────────────────────────
+export const handler = netlifyAdapter(handle);
+
+function netlifyAdapter(fn) {
+  return async (event) => {
+    let statusCode = 200;
+    const headers = {};
+    let body = '';
+
+    const req = {
+      method: event.httpMethod,
+      query: event.queryStringParameters || {},
+      headers: event.headers,
+      body: event.body,
+    };
+    const res = {
+      status(c) { statusCode = c; return this; },
+      setHeader(k, v) { headers[k] = v; return this; },
+      json(d) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(d); return this; },
+      send(d) { body = typeof d === 'string' ? d : JSON.stringify(d); return this; },
+      end() { return this; },
+    };
+
+    await fn(req, res);
+    return { statusCode, headers, body };
+  };
 }

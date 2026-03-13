@@ -1,0 +1,60 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "api"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Redirect /api/* ke Netlify Functions
+[[redirects]]
+  from = "/api/fetch-content"
+  to = "/.netlify/functions/fetch-content"
+  status = 200
+
+[[redirects]]
+  from = "/api/feeds"
+  to = "/.netlify/functions/feeds"
+  status = 200
+
+[[redirects]]
+  from = "/api/rss"
+  to = "/.netlify/functions/rss"
+  status = 200
+
+[[redirects]]
+  from = "/api/proxy"
+  to = "/.netlify/functions/proxy"
+  status = 200
+
+[[redirects]]
+  from = "/api/og"
+  to = "/.netlify/functions/og"
+  status = 200
+
+[[redirects]]
+  from = "/api/img"
+  to = "/.netlify/functions/img"
+  status = 200
+
+# SPA fallback — harus paling bawah
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Fix MIME type untuk JS dan CSS
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+
+[[headers]]
+  for = "/*.mjs"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Content-Type = "text/css; charset=utf-8"
