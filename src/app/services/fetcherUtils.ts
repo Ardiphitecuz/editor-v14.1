@@ -58,7 +58,7 @@ export const fallbackImg = (cat: string) =>
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function hashId(s: string): string {
-  if (!s) return Math.random().toString(36).slice(2);
+  if (!s) return "empty_" + s; // jangan random — ID harus deterministik
   // FNV-1a 64-bit emulated via two 32-bit halves — collision jauh lebih kecil
   // dari hash 32-bit sebelumnya yang sering bentrok untuk URL berbeda
   let h1 = 0x811c9dc5;

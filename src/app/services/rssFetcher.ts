@@ -96,7 +96,7 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
         : fallbackImg(cat);
 
     return {
-      id: hashId((item.link || title) + source.id),
+      id: hashId((item.link || item.pubDate || String(i)) + source.id + title.slice(0, 30)),
       category: cat,
       title,
       summary: parsed.content[0] || title,
@@ -238,7 +238,7 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
         : fallbackImg(cat);
 
     return {
-      id: hashId((link || title) + source.id),
+      id: hashId((link || pubDate || String(i)) + source.id + title.slice(0, 30)),
       category: cat,
       title,
       summary: parsed.content[0] || title,
