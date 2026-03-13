@@ -38,7 +38,8 @@ export function MascotEmpty({
   className = "",
 }: MascotEmptyProps) {
   return (
-    <div className={`flex flex-col items-center justify-center py-14 px-8 text-center gap-3 ${className}`}>
+    <div className={`flex flex-col items-center justify-center px-8 text-center gap-3 ${className}`}
+      style={{ minHeight: "calc(100dvh - 140px)" }}>
       <img
         src={mascotUrl(expression)}
         alt=""
