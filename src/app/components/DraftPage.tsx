@@ -373,6 +373,15 @@ export function DraftPage() {
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
 
+  // Ukur tinggi header + navbar untuk empty state height
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const totalOffset = headerRef.current.offsetHeight + 84; // 84 = bottom nav
+    document.documentElement.style.setProperty("--header-h", `${totalOffset}px`);
+    return () => document.documentElement.style.removeProperty("--header-h");
+  }, []);
+
   useEffect(() => {
     return draftStore.subscribe(() => setDrafts(draftStore.getAll()));
   }, []);
@@ -392,7 +401,7 @@ export function DraftPage() {
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md" style={{ borderBottom: "1px solid #f0ede9" }}>
+      <div ref={headerRef} className="sticky top-0 z-30 bg-white/95 backdrop-blur-md" style={{ borderBottom: "1px solid #f0ede9" }}>
         <div className="px-4 pt-5 pb-4">
           <p className="text-neutral-400" style={{ fontSize: 13 }}>Artikel & Template</p>
           <div className="flex items-end justify-between">

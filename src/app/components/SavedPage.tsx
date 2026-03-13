@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import { Trash2, CheckCircle2, Circle, BookOpen, Clock } from "lucide-react";
 import { articleStore } from "../store/articleStore";
@@ -18,6 +18,14 @@ export function SavedPage() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
+
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const totalOffset = headerRef.current.offsetHeight + 84;
+    document.documentElement.style.setProperty("--header-h", `${totalOffset}px`);
+    return () => document.documentElement.style.removeProperty("--header-h");
+  }, []);
 
   const loadSaved = useCallback(() => {
     const saved = articleStore.getSavedArticles();
@@ -42,7 +50,7 @@ export function SavedPage() {
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
       {/* Header */}
-      <div className="sticky top-0 z-30 border-b"
+      <div ref={headerRef} className="sticky top-0 z-30 border-b"
         style={{ background: "rgba(252,249,245,0.97)", backdropFilter: "blur(16px)", borderColor: "#ede8e2" }}>
         <div className="px-4 pt-4 pb-4">
           <p style={{ fontSize: 11, fontWeight: 700, color: "#ff742f", letterSpacing: "0.08em" }}>☕ KOLEKSI SAYA</p>

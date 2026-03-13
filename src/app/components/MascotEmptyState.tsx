@@ -38,7 +38,8 @@ export function MascotEmptyState({
   className = "",
 }: MascotEmptyStateProps) {
   return (
-    <div className={`flex flex-col items-center justify-center py-14 px-8 gap-3 text-center ${className}`}>
+    <div className={`flex flex-col items-center justify-center px-8 gap-3 text-center ${className}`}
+      style={{ height: "calc(100dvh - var(--header-h, 140px))", maxHeight: "calc(100dvh - var(--header-h, 140px))", overflow: "hidden" }}>
       <img
         src={mascotSrc(expr)}
         alt=""

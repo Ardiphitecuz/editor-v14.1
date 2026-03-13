@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus, Trash2, ToggleLeft, ToggleRight,
   Rss, Loader2, CheckCircle2, XCircle, AlertCircle,
@@ -263,6 +263,14 @@ function AddSourceModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
 export function SubscriptionsPage() {
   const [sources, setSources] = useState<NewsSource[]>([]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
+
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const totalOffset = headerRef.current.offsetHeight + 84;
+    document.documentElement.style.setProperty("--header-h", `${totalOffset}px`);
+    return () => document.documentElement.style.removeProperty("--header-h");
+  }, []);
   const [showAdd, setShowAdd] = useState(false);
   const [activeTab, setActiveTab] = useState<"follow" | "following">("following");
 
@@ -289,7 +297,7 @@ export function SubscriptionsPage() {
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
       {/* Header */}
-      <div className="sticky top-0 z-30 border-b"
+      <div ref={headerRef} className="sticky top-0 z-30 border-b"
         style={{ background: "rgba(252,249,245,0.97)", backdropFilter: "blur(16px)", borderColor: "#ede8e2" }}>
         <div className="px-4 pt-4 pb-3">
           <p style={{ fontSize: 11, fontWeight: 700, color: "#ff742f", letterSpacing: "0.08em" }}>☕ SUMBER BERITA</p>
