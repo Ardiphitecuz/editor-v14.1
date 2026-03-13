@@ -181,59 +181,61 @@ async function parseRSS(url, pioneer = false) {
 
     console.timeEnd('>> parseRSS.' + url);
 
-    if (!content) return { rss_url: url };
-
-    // ── Pre-parse Clean: Fix rss-parser CDATA bugs by stripping spaces before CDATA (e.g., WordPress) ──
-    content = content.replace(/<([a-zA-Z0-9_:]+)([^>]*)>\s+<!\[CDATA\[/gi, '<$1$2><![CDATA[');
-    content = content.replace(/\]\]>\s+<\/([a-zA-Z0-9_:]+)>/gi, ']]></$1>');
-
     // Parse RSS/Atom string
     const data = await rssParser.parseString(content);
 
-    // ── Title fix universal: rss-parser di Vercel/Node22+ salah baca CDATA title ──
-    // Deteksi: Banyak item punya title sama → fallback ke regex extraction dari raw XML.
-    const rawItems = data.items || [];
-    if (rawItems.length > 1) {
-      const titles = rawItems.map(function(i) { return (i.title || '').trim(); });
-      const uniqueTitles = new Set(titles.map(function(t) { return t.toLowerCase().slice(0, 60); }));
+    // ── Title Override Universal (Fix rss-parser State Bleeding Bug) ──
+    // rss-parser (memakai saxjs) memiliki kelemahan serius terhadap XML malformed/spasi CDATA WordPress,
+    // yang dapat menyebabkan judul artikel pertama "menular" ke artikel-artikel berikutnya.
+    // Solusi: Kita lakukan fast-parse `<title>` spesifik per `<item>` menggunakan regex 
+    // dan override hasil rssParser dengan data yang lebih akurat ini, dicocokkan berdasarkan <link>.
+    try {
+      const itemBlockRe = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
+      let mi2;
+      const regexTitlesByLink = {};
       
-      // Jika jumlah judul unik sangat sedikit dibandingkan total item (indikasi duplikat massal)
-      if (uniqueTitles.size <= Math.max(1, Math.floor(rawItems.length / 2))) {
-        console.log('[parseRSS] Duplicated titles detected (' + uniqueTitles.size + '/' + rawItems.length + '), fixing titles via regex for:', url);
+      while ((mi2 = itemBlockRe.exec(content)) !== null) {
+        const block2 = mi2[1];
+        const cdataMatch2 = block2.match(/<title[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i);
+        const textMatch2  = block2.match(/<title[^>]*>\s*([\s\S]*?)\s*<\/title>/i);
+        let extractedTitle = ((cdataMatch2 && cdataMatch2[1]) || (textMatch2 && textMatch2[1]) || '').trim();
         
-        var itemBlockRe = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
-        var mi2;
-        while ((mi2 = itemBlockRe.exec(content)) !== null) {
-          var block2 = mi2[1];
-          var cdataMatch2 = block2.match(/<title[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i);
-          var textMatch2  = block2.match(/<title[^>]*>\s*([^<]{1,400})\s*<\/title>/i);
-          var extractedTitle = ((cdataMatch2 && cdataMatch2[1]) || (textMatch2 && textMatch2[1]) || '').trim();
+        // Hapus tag HTML di dalam title (contoh feed aneh yang menaruh <b> di dalam title text)
+        extractedTitle = extractedTitle.replace(/<[^>]+>/g, '').trim();
+
+        if (extractedTitle) {
+          const linkMatch1 = block2.match(/<link[^>]*href=["']([^"']+)["']/i);
+          const linkMatch2 = block2.match(/<link[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/link>/i);
+          const linkMatch3 = block2.match(/<link[^>]*>\s*([^<]+)\s*<\/link>/i);
+          const extractedLink = (
+             (linkMatch1 ? linkMatch1[1] : null) || 
+             (linkMatch2 ? linkMatch2[1] : null) || 
+             (linkMatch3 ? linkMatch3[1] : null) || 
+             ''
+          ).trim();
           
-          if (extractedTitle) {
-            // Coba temukan item yang sesuai menggunakan link
-            var linkMatch1 = block2.match(/<link[^>]*href=["']([^"']+)["']/i);
-            var linkMatch2 = block2.match(/<link[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/link>/i);
-            var linkMatch3 = block2.match(/<link[^>]*>\s*([^<]+)\s*<\/link>/i);
-            var extractedLink = (
-               (linkMatch1 ? linkMatch1[1] : null) || 
-               (linkMatch2 ? linkMatch2[1] : null) || 
-               (linkMatch3 ? linkMatch3[1] : null) || 
-               ''
-            ).trim();
-            
-            if (extractedLink) {
-              // Cari di rawItems berdasarkan id atau link
-              var targetItem = rawItems.find(function(i) {
-                  var ilink = i.link || i.id || '';
-                  return ilink && (ilink.includes(extractedLink) || extractedLink.includes(ilink));
-              });
-              if (targetItem) {
-                 targetItem.title = extractedTitle;
-              }
-            }
+          if (extractedLink) {
+            regexTitlesByLink[extractedLink] = extractedTitle;
           }
         }
       }
+
+      if (data.items && data.items.length > 0) {
+        data.items.forEach(item => {
+          const ilink = (item.link || item.id || '').trim();
+          if (ilink) {
+            if (regexTitlesByLink[ilink]) {
+              item.title = regexTitlesByLink[ilink];
+            } else {
+              // Fuzzy fallback jika trailing slash berbeda
+              const fuzzyKey = Object.keys(regexTitlesByLink).find(k => ilink === k || ilink.includes(k) || k.includes(ilink));
+              if (fuzzyKey) item.title = regexTitlesByLink[fuzzyKey];
+            }
+          }
+        });
+      }
+    } catch (err) {
+      console.error('[parseRSS] Error regex override fallback:', err);
     }
 
     // Normalisasi ke format yang sama dengan Deno rss lib

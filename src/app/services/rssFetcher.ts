@@ -130,15 +130,14 @@ function extractRawItems(rawText: string): Map<number, { link: string; guid: str
     const linkMatch = block.match(/<link[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
     // Extract <guid>URL</guid>
     const guidMatch = block.match(/<guid[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
-    // Extract <title> — tangani CDATA dan teks biasa
     // DOMParser text/html memperlakukan <title> sebagai document title → textContent kosong/salah
     const titleMatch =
-      block.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i) ||
-      block.match(/<title[^>]*>([^<]{1,300})<\/title>/i);
+      block.match(/<title[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i) ||
+      block.match(/<title[^>]*>\s*([\s\S]*?)\s*<\/title>/i);
     result.set(i++, {
       link: linkMatch?.[1]?.trim() ?? "",
       guid: guidMatch?.[1]?.trim() ?? "",
-      title: titleMatch?.[1]?.trim() ?? "",
+      title: titleMatch?.[1]?.replace(/<[^>]+>/g, '').trim() ?? "",
     });
   }
   return result;
