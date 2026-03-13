@@ -17,6 +17,7 @@
  */
 
 import axios from 'axios';
+import RSSParser from 'rss-parser';
 import https from 'https';
 
 // ── HTTPS Agent (bypass sertifikat lemah) ─────────────────────────────────────
@@ -40,10 +41,30 @@ const CACHE = {
 
 setInterval(() => console.log('[NewsroomEngine] CACHE.MAP.size:', CACHE.MAP.size), 10 * 60e3);
 
-// ── RSS Parser instance tidak dipakai lagi  ─────────────────────────────────
-// Diganti dengan parseXmlString() yang menggunakan regex untuk menghindari
-// bug CDATA title di Vercel serverless (rss-parser salah baca CDATA)
+// ── RSS Parser instance ─────────────────────────────────────────────────────
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+const rssParser = new RSSParser({
+  customFields: {
+    feed: ['image'],
+    item: [
+      ['media:content', 'media:content', { keepArray: true }],
+      ['media:thumbnail', 'media:thumbnail'],
+      ['media:group', 'media:group'],
+      ['media:description', 'media:description'],
+      ['media:community', 'media:community'],
+      ['dc:subject', 'dc:subject'],
+      ['dc:creator', 'dc:creator'],
+    ],
+  },
+  timeout: 10000,
+  headers: {
+    'User-Agent': BROWSER_UA,
+    'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
+    'Cache-Control': 'no-cache',
+  },
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function safeHost(urlStr) {
@@ -162,8 +183,8 @@ async function parseRSS(url, pioneer = false) {
 
     if (!content) return { rss_url: url };
 
-    // Gunakan parser manual (regex-based) -- menggantikan rss-parser yang gagal parse CDATA di Vercel
-    const data = parseXmlString(content);
+    // Parse RSS/Atom string
+    const data = await rssParser.parseString(content);
 
     // Normalisasi ke format yang sama dengan Deno rss lib
     return {
@@ -180,149 +201,6 @@ async function parseRSS(url, pioneer = false) {
   }
 }
 
-// ── parseXmlString — parser RSS/Atom manual berbasis regex ────────────────────
-// Menggantikan rss-parser yang gagal parse CDATA title di Vercel serverless.
-// Pendekatan regex terbukti reliable untuk CDATA, media:*, enclosure, Atom.
-function extractCdata(str) {
-  if (!str) return '';
-  return str.replace(/<\!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
-}
-
-function decodeXmlEntities(str) {
-  if (!str) return '';
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-}
-
-function extractTag(block, tag) {
-  // Match CDATA terlebih dahulu, lalu teks biasa
-  const cdataRe = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`, 'i');
-  const textRe  = new RegExp(`<${tag}[^>]*>([^<]{0,2000})</${tag}>`, 'i');
-  const cdataMatch = block.match(cdataRe);
-  if (cdataMatch) return cdataMatch[1].trim();
-  const textMatch  = block.match(textRe);
-  if (textMatch)  return decodeXmlEntities(textMatch[1].trim());
-  return '';
-}
-
-function extractAttr(block, tag, attr) {
-  const re = new RegExp(`<${tag}[^>]*\\s${attr}=["']([^"']*)["'][^>]*>`, 'i');
-  return block.match(re)?.[1]?.trim() ?? '';
-}
-
-function parseXmlString(xmlStr) {
-  // Normalisasi
-  const clean = (xmlStr || '')
-    .replace(/^\uFEFF/, '')
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-
-  const isAtom = /<feed[\s>]/i.test(clean);
-  const itemTag = isAtom ? 'entry' : 'item';
-  const itemRe = new RegExp(`<${itemTag}[\\s>]([\\s\\S]*?)<\\/${itemTag}>`, 'gi');
-
-  // Channel-level fields
-  const chanBlock = clean.replace(/<item[\s\S]*$/i, '').replace(/<entry[\s\S]*$/i, '');
-  const feedTitle = extractCdata(extractTag(chanBlock, 'title')) || '';
-  const feedLink  = chanBlock.match(/<link[^>]*href=["']([^"']+)["']/i)?.[1]
-    ?? chanBlock.match(/<link[^>]*>\s*(https?:\/\/[^\s<"]+)/i)?.[1] ?? '';
-  const feedImgUrl = chanBlock.match(/<image>[\s\S]*?<url>\s*([^\s<]+)\s*<\/url>/i)?.[1]
-    ?? chanBlock.match(/<itunes:image[^>]*href=["']([^"']+)["']/i)?.[1] ?? '';
-
-  // Parse items
-  const items = [];
-  let m;
-  while ((m = itemRe.exec(clean)) !== null) {
-    const b = m[1];
-
-    // Title — CDATA prioritas
-    const title = extractCdata(extractTag(b, 'title')) || extractTag(b, 'title');
-
-    // Link
-    const linkRe = /<link[^>]*>\s*(https?:\/\/[^\s<"]+)/i;
-    const hrefRe = /<link[^>]*href=["'](https?:[^"']+)["']/i;
-    const guidRe = /<guid[^>]*>\s*(https?:\/\/[^\s<"]+)/i;
-    const link =
-      b.match(linkRe)?.[1]?.trim() ??
-      b.match(hrefRe)?.[1]?.trim() ??
-      b.match(guidRe)?.[1]?.trim() ?? '';
-
-    // Dates
-    const pubDate = extractTag(b, 'pubDate') || extractTag(b, 'published')
-      || extractTag(b, 'updated') || extractTag(b, 'dc:date') || '';
-
-    // Description / content
-    const contentEncoded = extractCdata(
-      b.match(/<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i)?.[1] ?? ''
-    );
-    const description = extractCdata(extractTag(b, 'description'))
-      || extractCdata(extractTag(b, 'summary'))
-      || extractCdata(extractTag(b, 'content'));
-    const contentSnippet = description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
-
-    // Author
-    const author = extractTag(b, 'dc:creator') || extractTag(b, 'author')
-      || b.match(/<author>[\s\S]*?<name>([^<]+)<\/name>/i)?.[1]?.trim() || '';
-
-    // Categories
-    const categories = [];
-    const catRe = /<category[^>]*>([^<]+)<\/category>/gi;
-    let cm; while ((cm = catRe.exec(b)) !== null) categories.push(cm[1].trim());
-    const catDomain = b.match(/<category[^>]*domain=["']([^"']+)["']/i)?.[1] ?? '';
-    if (catDomain && !categories.includes(catDomain)) categories.push(catDomain);
-
-    // Enclosure
-    const enclosureUrl  = extractAttr(b, 'enclosure', 'url');
-    const enclosureType = extractAttr(b, 'enclosure', 'type');
-
-    // media:thumbnail
-    const mediaThumbnail = b.match(/<media:thumbnail[^>]*url=["']([^"']+)["']/i)?.[1]?.trim() ?? '';
-
-    // media:content (bisa banyak)
-    const mediaContents = [];
-    const mcRe = /<media:content([^>]*)\/?>/gi;
-    let mc; while ((mc = mcRe.exec(b)) !== null) {
-      const mUrl    = mc[1].match(/url=["']([^"']+)["']/i)?.[1]?.trim() ?? '';
-      const mMedium = mc[1].match(/medium=["']([^"']+)["']/i)?.[1]?.trim() ?? '';
-      if (mUrl) mediaContents.push({ url: mUrl, medium: mMedium });
-    }
-
-    // GUID — source untuk Google News
-    const guid = b.match(/<guid[^>]*>([^<]+)<\/guid>/i)?.[1]?.trim() ?? '';
-
-    items.push({
-      title,
-      link,
-      pubDate,
-      isoDate: pubDate ? (isNaN(Date.parse(pubDate)) ? '' : new Date(pubDate).toISOString()) : '',
-      contentSnippet,
-      'content:encoded': contentEncoded,
-      content: description,
-      summary: description,
-      author,
-      'dc:creator': author,
-      categories,
-      enclosure: enclosureUrl ? { url: enclosureUrl, type: enclosureType } : null,
-      'media:thumbnail': mediaThumbnail ? { $: { url: mediaThumbnail }, url: mediaThumbnail } : null,
-      'media:content': mediaContents,
-      guid,
-      source: link ? { url: link } : null,
-    });
-  }
-
-  return {
-    title:   feedTitle,
-    description: feedTitle,
-    link:    feedLink,
-    image:   feedImgUrl ? { url: feedImgUrl } : null,
-    items,
-  };
-}
 function normalizeItem(item) {
   const mediaContents = Array.isArray(item['media:content'])
     ? item['media:content']
