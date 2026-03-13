@@ -59,9 +59,16 @@ export const fallbackImg = (cat: string) =>
 
 export function hashId(s: string): string {
   if (!s) return Math.random().toString(36).slice(2);
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
-  return Math.abs(h).toString(36);
+  // FNV-1a 64-bit emulated via two 32-bit halves — collision jauh lebih kecil
+  // dari hash 32-bit sebelumnya yang sering bentrok untuk URL berbeda
+  let h1 = 0x811c9dc5;
+  let h2 = 0xc4ac5265;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0;
+  }
+  return h1.toString(36) + h2.toString(36);
 }
 
 export function decodeHtmlEntities(s: string): string {
