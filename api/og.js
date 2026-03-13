@@ -1,45 +1,29 @@
-// api/og.js — ambil og:image dari halaman artikel, ringan tanpa Readability
+// api/og.js — Vercel & Netlify compatible
 import axios from 'axios';
 
 export const config = { maxDuration: 10 };
 
-export default async function handler(req, res) {
+// ── Core logic ────────────────────────────────────────────────────────────────
+async function handle(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { url } = req.query;
   if (!url) return res.status(400).json({ image: null });
 
-  const UAS = [
-    'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (compatible; Feedfetcher-Google; +http://www.google.com/feedfetcher.html)',
-  ];
-
-  let response = null;
-  for (const ua of UAS) {
-    try {
-      response = await axios.get(url, {
-        timeout: 7000,
-        responseType: 'text',
-        headers: {
-          'User-Agent': ua,
-          'Accept': 'text/html,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-        maxRedirects: 3,
-        // Batasi ukuran response — cukup untuk baca <head> saja
-        maxContentLength: 150000,
-      });
-      if (response.status === 200) break;
-    } catch { response = null; }
-  }
-
   try {
-    if (!response || response.status !== 200) return res.json({ image: null });
+    const response = await axios.get(url, {
+      timeout: 8000,
+      responseType: 'text',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        'Accept': 'text/html,*/*;q=0.8',
+        'Range': 'bytes=0-51200',
+      },
+      maxRedirects: 3,
+    });
 
     const html = response.data ?? '';
-    // Cari og:image, twitter:image, atau <img> pertama
     const match =
       html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']{10,})["']/i) ||
       html.match(/<meta[^>]+content=["']([^"']{10,})["'][^>]+property=["']og:image["']/i) ||
@@ -49,19 +33,45 @@ export default async function handler(req, res) {
     if (!match) return res.json({ image: null });
 
     let image = match[1].trim();
-    // Upgrade HTTP ke HTTPS
     if (image.startsWith('http://')) image = 'https://' + image.slice(7);
-    // Resolve URL relatif
     if (image.startsWith('//')) image = 'https:' + image;
     if (image.startsWith('/')) {
-      try {
-        const base = new URL(url).origin;
-        image = base + image;
-      } catch {}
+      try { image = new URL(url).origin + image; } catch {}
     }
 
     return res.json({ image });
   } catch {
     return res.json({ image: null });
   }
+}
+
+// ── Vercel export ─────────────────────────────────────────────────────────────
+export default handle;
+
+// ── Netlify adapter ───────────────────────────────────────────────────────────
+export const handler = netlifyAdapter(handle);
+
+function netlifyAdapter(fn) {
+  return async (event) => {
+    let statusCode = 200;
+    const headers = {};
+    let body = '';
+
+    const req = {
+      method: event.httpMethod,
+      query: event.queryStringParameters || {},
+      headers: event.headers,
+      body: event.body,
+    };
+    const res = {
+      status(c) { statusCode = c; return this; },
+      setHeader(k, v) { headers[k] = v; return this; },
+      json(d) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(d); return this; },
+      send(d) { body = typeof d === 'string' ? d : JSON.stringify(d); return this; },
+      end() { return this; },
+    };
+
+    await fn(req, res);
+    return { statusCode, headers, body };
+  };
 }
