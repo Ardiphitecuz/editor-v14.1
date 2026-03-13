@@ -2,7 +2,13 @@ import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
 import https from 'https';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
 import { handleFeedsRequest } from './backend/newsroom-engine.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 
@@ -11,6 +17,12 @@ app.use(cors({ origin: '*' }));
 
 // JSON body parser (untuk POST /api/feeds)
 app.use(express.json({ limit: '1mb' }));
+
+// ── Serve React build (dist/) di production ───────────────────────────────────
+const distPath = join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath, { maxAge: '1d' }));
+}
 
 // ── HTTPS Agent: abaikan sertifikat lemah (EE certificate key too weak) ────────
 // Banyak situs berita lama pakai sertifikat SSL 1024-bit yang ditolak Node.js modern
@@ -71,9 +83,7 @@ function decodeHtmlEntities(str) {
   return str;
 }
 
-app.get('/', (req, res) => {
-  res.send('Server Berjalan!');
-});
+// Route '/' ditangani oleh express.static (dist/index.html)
 
 // ── Bersihkan teks dari noise iklan ──────────────────────────────────────────
 function cleanText(s) {
@@ -663,22 +673,12 @@ app.options('/api/feeds', (req, res) => {
   res.status(200).end();
 });
 
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import fs from 'fs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
-// ── Serve React build (dist/) di production ───────────────────────────────────
-const distPath = join(__dirname, 'dist');
+// SPA fallback — semua route non-/api/* → index.html
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath, { maxAge: '1d' }));
-  // SPA fallback — semua route non-API → index.html
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/')) {
-      res.sendFile(join(distPath, 'index.html'));
-    }
+    res.sendFile(join(distPath, 'index.html'));
   });
 }
 
