@@ -663,12 +663,29 @@ app.options('/api/feeds', (req, res) => {
   res.status(200).end();
 });
 
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ── Serve React build (dist/) di production ───────────────────────────────────
+const distPath = join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath, { maxAge: '1d' }));
+  // SPA fallback — semua route non-API → index.html
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(join(distPath, 'index.html'));
+    }
+  });
+}
+
 const PORT = process.env.PORT || 3000;
 
-// Jalankan server hanya di lokal (bukan di Vercel/serverless)
-// Di Vercel, file api/index.js yang meng-import dan meng-export app ini
 if (process.env.VERCEL !== '1') {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 }
 
 export default app;
