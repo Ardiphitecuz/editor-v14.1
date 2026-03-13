@@ -22,7 +22,7 @@ function isFallbackImage(img: string | undefined): boolean {
 // ── 1. Prefetch thumbnail via /api/og (ringan, hanya baca meta tag) ──────────
 // Pakai /api/og bukan fetchArticleContent — jauh lebih cepat karena hanya fetch
 // 50KB pertama halaman untuk baca og:image, tanpa Readability/linkedom sama sekali
-export async function prefetchThumbnails(articles: Article[], concurrency = 4): Promise<void> {
+export async function prefetchThumbnails(articles: Article[], concurrency = 5): Promise<void> {
   const needsThumb = articles.filter(a =>
     a.originalUrl &&
     !thumbPrefetched.has(a.id) &&
@@ -79,11 +79,12 @@ export async function prefetchArticleContents(articles: Article[], batchSize = 5
           image: result.image?.startsWith("http") ? result.image : art.image,
           contentHtml: (result as any).contentHtml,
           rssContentSufficient: true,
+          _fullFetched: true,   // ← tandai sudah di-fetch agar ArticlePage skip re-fetch
           readTime: Math.max(1, Math.ceil(
             ((result as any).contentHtml ?? result.content.join(" "))
               .replace(/<[^>]+>/g, " ").trim().split(/\s+/).length / 200
           )),
-        };
+        } as any;
         articleStore.updateById(art.id, updated);
         thumbPrefetched.add(art.id);
       } catch {

@@ -10,18 +10,33 @@ export default async function handler(req, res) {
   const { url } = req.query;
   if (!url) return res.status(400).json({ image: null });
 
+  const UAS = [
+    'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (compatible; Feedfetcher-Google; +http://www.google.com/feedfetcher.html)',
+  ];
+
+  let response = null;
+  for (const ua of UAS) {
+    try {
+      response = await axios.get(url, {
+        timeout: 7000,
+        responseType: 'text',
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        maxRedirects: 3,
+        // Batasi ukuran response — cukup untuk baca <head> saja
+        maxContentLength: 150000,
+      });
+      if (response.status === 200) break;
+    } catch { response = null; }
+  }
+
   try {
-    const response = await axios.get(url, {
-      timeout: 8000,
-      responseType: 'text',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
-        'Accept': 'text/html,*/*;q=0.8',
-        // Hanya minta 50KB pertama — cukup untuk meta tags di <head>
-        'Range': 'bytes=0-51200',
-      },
-      maxRedirects: 3,
-    });
+    if (!response || response.status !== 200) return res.json({ image: null });
 
     const html = response.data ?? '';
     // Cari og:image, twitter:image, atau <img> pertama

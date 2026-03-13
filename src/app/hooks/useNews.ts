@@ -59,10 +59,10 @@ export function useNews(): UseNewsState {
 
       // Background prefetch:
       // - thumbnail (og:image) untuk semua artikel yang gambarnya masih fallback
-      // - konten lengkap untuk 10 artikel teratas
+      // - konten lengkap untuk 8 artikel teratas
       if (result.articles.length > 0) {
-        setTimeout(() => prefetchThumbnails(result.articles, 3), 800);
-        setTimeout(() => prefetchArticleContents(result.articles.slice(0, 10), 5), 1500);
+        setTimeout(() => prefetchThumbnails(result.articles, 5), 300);
+        setTimeout(() => prefetchArticleContents(result.articles.slice(0, 8), 4), 800);
       }
     } catch (err) {
       if (mountedRef.current) {
