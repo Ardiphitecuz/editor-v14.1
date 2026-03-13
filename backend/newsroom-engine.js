@@ -186,6 +186,28 @@ async function parseRSS(url, pioneer = false) {
     // Parse RSS/Atom string
     const data = await rssParser.parseString(content);
 
+    // ── Title fix universal: rss-parser di Vercel/Node22+ salah baca CDATA title ──
+    // Deteksi: semua item punya title sama → fallback ke regex extraction dari raw XML.
+    const rawItems = data.items || [];
+    if (rawItems.length > 1) {
+      const titles = rawItems.map(function(i) { return (i.title || '').trim(); });
+      const uniqueTitles = new Set(titles.map(function(t) { return t.toLowerCase().slice(0, 60); }));
+      if (uniqueTitles.size <= 1) {
+        console.log('[parseRSS] All titles identical (' + (titles[0]||'').slice(0,50) + '...), fixing titles via regex for:', url);
+        var itemBlockRe = /<item[\s>]([\s\S]*?)<\/item>/gi;
+        var mi2;
+        var idx2 = 0;
+        while ((mi2 = itemBlockRe.exec(content)) !== null && idx2 < rawItems.length) {
+          var block2 = mi2[1];
+          var cdataMatch2 = block2.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i);
+          var textMatch2  = block2.match(/<title[^>]*>([^<]{1,400})<\/title>/i);
+          var extracted2  = ((cdataMatch2 && cdataMatch2[1]) || (textMatch2 && textMatch2[1]) || '').trim();
+          if (extracted2) rawItems[idx2].title = extracted2;
+          idx2++;
+        }
+      }
+    }
+
     // Normalisasi ke format yang sama dengan Deno rss lib
     return {
       rss_url: url,
