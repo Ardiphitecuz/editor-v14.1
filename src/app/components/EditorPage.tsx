@@ -346,7 +346,10 @@ function PostCard(props: any) {
         </div>
       </div>
 
-      {/* Identity bar removed */}
+      {/* Identity bar — zIndex 6 */}
+      <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 6, pointerEvents: "none" }}>
+        <img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} />
+      </div>
 
       {/* Source bar(s) — zIndex 6 */}
       <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 6, display: "flex", alignItems: "center", gap: 20, pointerEvents: "none" }}>
@@ -408,6 +411,7 @@ function VideoCard(props: any) {
           </div>
         </div>
 
+        <div style={{ position: "absolute", left: 146, top: 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
         <div style={{ position: "absolute", left: 136, top: 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
           {/* Sumber Foto */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
