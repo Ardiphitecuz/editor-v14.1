@@ -115,11 +115,37 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
   });
 }
 
+// ── Ekstrak raw item blocks dari XML string (sebelum DOMParser) ──────────────
+// DOMParser text/html mode memperlakukan <link> sebagai void element (tanpa textContent)
+// sehingga URL artikel hilang. Solusi: extract link & guid dari raw string dulu.
+function extractRawLinks(rawText: string): Map<number, { link: string; guid: string }> {
+  const result = new Map<number, { link: string; guid: string }>();
+  const itemPattern = /<item[\s>]([\s\S]*?)<\/item>/gi;
+  let match: RegExpExecArray | null;
+  let i = 0;
+  while ((match = itemPattern.exec(rawText)) !== null) {
+    const block = match[1];
+    // Regex extract <link>URL</link> — tangani URL langsung dalam tag
+    const linkMatch = block.match(/<link[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
+    // Regex extract <guid>URL</guid>
+    const guidMatch = block.match(/<guid[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
+    result.set(i++, {
+      link: linkMatch?.[1]?.trim() ?? "",
+      guid: guidMatch?.[1]?.trim() ?? "",
+    });
+  }
+  return result;
+}
+
 // ── XML parser ────────────────────────────────────────────────────────────────
 function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Article[] {
   const clean = rawText
     .replace(/^\uFEFF/, "")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+
+  // Pre-extract links dari raw string sebelum DOMParser
+  // (DOMParser text/html mode membuat <link> void element → textContent kosong)
+  const rawLinks = extractRawLinks(clean);
 
   let xml = new DOMParser().parseFromString(clean, "text/xml");
   if (xml.querySelector("parsererror")) {
@@ -140,19 +166,23 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 
     const pubDate = item.querySelector("pubDate, published, updated")?.textContent ?? "";
 
-    // Ambil link artikel — WordPress RSS kadang punya <link> kosong (atom:link self-closing)
-    // Fallback chain: link text → link href → guid (isPermaLink) → guid text
-    const linkEl = Array.from(item.querySelectorAll("link")).find(el =>
+    // Gunakan pre-extracted link dari raw string (lebih reliable dari DOMParser)
+    const rawLinkData = rawLinks.get(i);
+    const domLinkEl = Array.from(item.querySelectorAll("link")).find(el =>
       (el.textContent?.trim().startsWith("http")) || (el.getAttribute("href")?.startsWith("http"))
     );
-    const guidEl = item.querySelector("guid");
-    const guidIsPermalink = guidEl?.getAttribute("isPermaLink") !== "false";
-    const guidUrl = guidIsPermalink ? (guidEl?.textContent?.trim() ?? "") : "";
-    const link =
-      linkEl?.textContent?.trim() ||
-      linkEl?.getAttribute("href") ||
-      guidUrl ||
-      "";
+    const domGuidEl = item.querySelector("guid");
+    const domGuidUrl = domGuidEl?.getAttribute("isPermaLink") !== "false"
+      ? (domGuidEl?.textContent?.trim() ?? "") : "";
+
+    const link = upgrade(
+      rawLinkData?.link ||           // ← paling reliable: regex dari raw XML
+      domLinkEl?.textContent?.trim() ||
+      domLinkEl?.getAttribute("href") ||
+      rawLinkData?.guid ||
+      domGuidUrl ||
+      ""
+    );
 
     // Prioritas: content:encoded (konten HTML penuh) > description > summary > content
     // Pilih yang TERPANJANG agar tidak salah ambil summary ketika keduanya tersedia
