@@ -201,6 +201,37 @@ async function handle(req, res) {
       if (NOISE_PATTERN.test(cls) || NOISE_PATTERN.test(id)) el.remove();
     });
 
+    // Hapus スポンサードリンク + wrapper-nya sebelum Readability
+    document.querySelectorAll('p,div,span,b,strong').forEach(el => {
+      const t = (el.textContent ?? '').trim();
+      if (t === 'スポンサードリンク' || t === 'スポンサーリンク' || /^(sponsored ?link|スポンサー広告)$/i.test(t)) {
+        const parent = el.parentElement;
+        if (parent && parent.tagName !== 'BODY' && parent.tagName !== 'ARTICLE' &&
+            (parent.textContent ?? '').trim().length < 300) {
+          parent.remove();
+        } else {
+          el.remove();
+        }
+      }
+    });
+
+    // Hapus div/p/center yang hanya berisi <a eksternal><img></a> — banner iklan tanpa class
+    document.querySelectorAll('div,p,center,figure').forEach(wrapper => {
+      const kids = Array.from(wrapper.children);
+      if (kids.length !== 1 || kids[0].tagName !== 'A') return;
+      const a = kids[0];
+      const href = a.getAttribute('href') ?? '';
+      if (!href) return;
+      try {
+        const hrefHost = new URL(href, url).hostname;
+        if (hrefHost === pageUrl.hostname) return;
+        // Link eksternal yang hanya berisi gambar = banner iklan
+        const onlyImg = a.children.length === 1 && a.children[0].tagName === 'IMG';
+        const noText = (a.textContent ?? '').replace(/\s+/g, '').length === 0;
+        if (onlyImg || noText) wrapper.remove();
+      } catch {}
+    });
+
     const documentClone = document.cloneNode(true);
     const reader = new Readability(documentClone, { charThreshold: 50, keepClasses: false, serializer: el => el });
     const article = reader.parse();
@@ -290,16 +321,56 @@ async function handle(req, res) {
       }
     });
 
-    // Post-pass: hapus teks "スポンサードリンク" (sponsored link header Yaraon)
-    contentElement.querySelectorAll('p,div,span').forEach(el => {
+    // Post-pass: hapus blok sponsor (スポンサードリンク + semua sibling sampai elemen teks berikutnya)
+    contentElement.querySelectorAll('p,div,span,b,strong').forEach(el => {
       const t = (el.textContent ?? '').trim();
       if (t === 'スポンサードリンク' || t === 'スポンサーリンク' || /^sponsored\s*(link)?$/i.test(t)) {
-        // Hapus elemen ini dan sibling berikutnya (biasanya berisi banner)
+        // Hapus semua sibling setelahnya yang bukan paragraf teks (biasanya banner div)
         let next = el.nextSibling;
-        if (next) { const r = next; next = r.nextSibling; r.parentNode?.removeChild(r); }
+        while (next) {
+          const sibling = next;
+          next = sibling.nextSibling;
+          const sibText = (sibling.textContent ?? '').replace(/\s+/g, ' ').trim();
+          // Stop jika menemukan paragraf teks yang cukup panjang (konten artikel)
+          if (sibling.nodeType === 1 && sibText.length > 80 && !sibling.querySelector('img,iframe')) break;
+          sibling.parentNode?.removeChild(sibling);
+        }
         el.remove();
       }
     });
+
+    // Post-pass: hapus Pinterest "Save" button yang inject ke DOM
+    contentElement.querySelectorAll('[data-pin-do],[data-pin-href],[class*="pinterest"],[id*="pinterest"]').forEach(el => el.remove());
+    // Hapus overlay Pinterest yang inject sebagai sibling dari img
+    contentElement.querySelectorAll('a[href*="pinterest.com/pin"]').forEach(el => el.remove());
+
+    // Post-pass: hapus duplikasi judul di awal konten (Yaraon pattern)
+    // Yaraon: setelah gambar hero, ada <a>judul</a> + <ul><li>tanggal</li><li>komentar</li></ul>
+    // Ini adalah header artikel yang ikut masuk ke Readability
+    const firstImgIdx = Array.from(contentElement.children).findIndex(el => el.querySelector('img') || el.tagName === 'IMG');
+    if (firstImgIdx >= 0) {
+      // Cek elemen setelah gambar pertama — jika <a> atau <p><a> dengan teks panjang mirip judul
+      let checkEl = contentElement.children[firstImgIdx + 1];
+      if (checkEl) {
+        const checkText = (checkEl.textContent ?? '').trim();
+        const isLikelyTitleRepeat = checkText.length > 20 && checkText.length < 200 &&
+          checkEl.querySelectorAll('a').length >= 1 &&
+          !checkEl.querySelector('img,iframe');
+        if (isLikelyTitleRepeat) {
+          // Hapus juga elemen berikutnya jika berisi list metadata (tanggal, komentar)
+          const nextEl = checkEl.nextElementSibling;
+          if (nextEl && (nextEl.tagName === 'UL' || nextEl.tagName === 'OL')) {
+            const items = nextEl.querySelectorAll('li');
+            const looksLikeMeta = Array.from(items).every(li => {
+              const t = (li.textContent ?? '').trim();
+              return t.length < 60 || /^\d{4}[.\-\/]\d{2}[.\-\/]\d{2}/.test(t) || /コメント|件|comment/i.test(t);
+            });
+            if (looksLikeMeta) nextEl.remove();
+          }
+          checkEl.remove();
+        }
+      }
+    }
 
     // Post-pass: potong semua konten setelah heading "Artikel Terkait" / "Related" / "Baca Juga"
     // Di WordPress/blog, artikel terkait hampir selalu di akhir konten setelah heading ini
