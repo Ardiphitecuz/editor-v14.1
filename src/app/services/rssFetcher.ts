@@ -46,7 +46,9 @@ function buildFromRssContent(
 // ── rss2json ──────────────────────────────────────────────────────────────────
 async function fetchRss2Json(feedUrl: string): Promise<any> {
   try {
-    const res = await fetch(`${RSS2JSON}${encodeURIComponent(feedUrl)}&count=20`, {
+    // &_t= untuk bust rss2json server-side cache (cache 1 jam di sisi mereka)
+    const cacheBust = Math.floor(Date.now() / (60 * 60 * 1000)); // berubah tiap 1 jam
+    const res = await fetch(`${RSS2JSON}${encodeURIComponent(feedUrl)}&count=20&_t=${cacheBust}`, {
       signal: AbortSignal.timeout(30000), // timeout diperpanjang jadi 30 detik
     });
     if (!res.ok) return null;
@@ -235,10 +237,16 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
       // (sering terjadi pada WordPress feed dengan CDATA title) → fallback ke XML parser
       const titles = articles.map(a => a.title);
       const links = articles.map(a => (a as any).originalUrl ?? "");
+      // Validasi kualitas data rss2json:
+      // 1. Semua judul identik → rss2json salah baca CDATA title
+      // 2. Semua link identik (dan ada isinya) → rss2json salah baca link
+      // 3. Mayoritas link kosong → rss2json tidak dapat link sama sekali
       const allTitleSame = titles.length > 1 && titles.every(t => t === titles[0]);
-      const allLinkSame = links.length > 1 && links.every(l => l && l === links[0]);
-      if (!allTitleSame && !allLinkSame) return articles;
-      // rss2json salah baca feed → fallback ke XML parser
+      const filledLinks = links.filter(l => l && l.startsWith("http"));
+      const allLinkSame = filledLinks.length > 1 && filledLinks.every(l => l === filledLinks[0]);
+      const mostLinkEmpty = filledLinks.length < articles.length * 0.5;
+      if (!allTitleSame && !allLinkSame && !mostLinkEmpty) return articles;
+      // rss2json data invalid → fallback ke XML parser
     }
   }
 
