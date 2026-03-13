@@ -163,9 +163,12 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
     const descriptionText =
       item.querySelector("description, summary, content")?.textContent || "";
     // Pakai content:encoded jika tersedia dan lebih panjang, selain itu pakai description
-    const rawContent = (contentEncoded.length >= descriptionText.length)
+    // decodeHtmlEntities diperlukan karena textContent dari DOMParser XML mode
+    // tidak decode HTML entities seperti &aacute; → á
+    const rawContentRaw = (contentEncoded.length >= descriptionText.length)
       ? (contentEncoded || descriptionText)
       : (descriptionText || contentEncoded);
+    const rawContent = decodeHtmlEntities(rawContentRaw);
 
     const baseUrl = link || source.url;
     const tags = Array.from(item.querySelectorAll("category")).map(c => c.textContent?.trim() ?? "");
@@ -228,8 +231,11 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Article[]> {
   const feedUrl = source.feedUrl ?? source.url;
 
-  // ① rss2json — paling lengkap, skip untuk Google News
-  if (!feedUrl.includes("news.google.com")) {
+  // ① rss2json — paling lengkap, skip untuk Google News dan WordPress feeds
+  // WordPress /feed URL sering bermasalah dengan rss2json (CDATA, link duplikat)
+  // langsung pakai XML parser yang lebih reliable untuk format ini
+  const isWordPressFeed = /\/feed\/?($|\?)/.test(feedUrl) || feedUrl.includes("feed=rss");
+  if (!feedUrl.includes("news.google.com") && !isWordPressFeed) {
     const j = await fetchRss2Json(feedUrl);
     if (j) {
       const articles = articlesFromR2J(source, j, limit);
