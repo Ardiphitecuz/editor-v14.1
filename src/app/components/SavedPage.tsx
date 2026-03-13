@@ -17,6 +17,8 @@ export function SavedPage() {
   const [items, setItems] = useState<SavedItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
 
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
+
   const loadSaved = useCallback(() => {
     const saved = articleStore.getSavedArticles();
     setItems(prev => {

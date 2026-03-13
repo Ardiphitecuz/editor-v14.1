@@ -262,6 +262,7 @@ function AddSourceModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
 
 export function SubscriptionsPage() {
   const [sources, setSources] = useState<NewsSource[]>([]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   const [showAdd, setShowAdd] = useState(false);
   const [activeTab, setActiveTab] = useState<"follow" | "following">("following");
 

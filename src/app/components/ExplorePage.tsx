@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Search, Bookmark } from "lucide-react";
 import { ARTICLES, type Article } from "../data/articles";
@@ -82,6 +82,7 @@ function CategoryGridCard({ category, onClick }: CategoryGridCardProps) {
 
 export function ExplorePage() {
   const navigate = useNavigate();
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
   const [isSearching, setIsSearching] = useState(false);

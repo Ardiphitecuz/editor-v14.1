@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { mascotSrc } from "./MascotEmptyState";
 
 export function NotFoundPage() {
   const navigate = useNavigate();
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
 
   return (
     <div

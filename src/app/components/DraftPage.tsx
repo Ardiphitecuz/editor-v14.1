@@ -371,6 +371,8 @@ export function DraftPage() {
   const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
+
   useEffect(() => {
     return draftStore.subscribe(() => setDrafts(draftStore.getAll()));
   }, []);
