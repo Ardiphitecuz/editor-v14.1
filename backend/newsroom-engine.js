@@ -184,60 +184,6 @@ async function parseRSS(url, pioneer = false) {
     // Parse RSS/Atom string
     const data = await rssParser.parseString(content);
 
-    // ── Title Override Universal (Fix rss-parser State Bleeding Bug) ──
-    // rss-parser (memakai saxjs) memiliki kelemahan serius terhadap XML malformed/spasi CDATA WordPress,
-    // yang dapat menyebabkan judul artikel pertama "menular" ke artikel-artikel berikutnya.
-    // Solusi: Kita lakukan fast-parse `<title>` spesifik per `<item>` menggunakan regex 
-    // dan override hasil rssParser dengan data yang lebih akurat ini, dicocokkan berdasarkan <link>.
-    try {
-      const itemBlockRe = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
-      let mi2;
-      const regexTitlesByLink = {};
-      
-      while ((mi2 = itemBlockRe.exec(content)) !== null) {
-        const block2 = mi2[1];
-        const cdataMatch2 = block2.match(/<title[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i);
-        const textMatch2  = block2.match(/<title[^>]*>\s*([\s\S]*?)\s*<\/title>/i);
-        let extractedTitle = ((cdataMatch2 && cdataMatch2[1]) || (textMatch2 && textMatch2[1]) || '').trim();
-        
-        // Hapus tag HTML di dalam title (contoh feed aneh yang menaruh <b> di dalam title text)
-        extractedTitle = extractedTitle.replace(/<[^>]+>/g, '').trim();
-
-        if (extractedTitle) {
-          const linkMatch1 = block2.match(/<link[^>]*href=["']([^"']+)["']/i);
-          const linkMatch2 = block2.match(/<link[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/link>/i);
-          const linkMatch3 = block2.match(/<link[^>]*>\s*([^<]+)\s*<\/link>/i);
-          const extractedLink = (
-             (linkMatch1 ? linkMatch1[1] : null) || 
-             (linkMatch2 ? linkMatch2[1] : null) || 
-             (linkMatch3 ? linkMatch3[1] : null) || 
-             ''
-          ).trim();
-          
-          if (extractedLink) {
-            regexTitlesByLink[extractedLink] = extractedTitle;
-          }
-        }
-      }
-
-      if (data.items && data.items.length > 0) {
-        data.items.forEach(item => {
-          const ilink = (item.link || item.id || '').trim();
-          if (ilink) {
-            if (regexTitlesByLink[ilink]) {
-              item.title = regexTitlesByLink[ilink];
-            } else {
-              // Fuzzy fallback jika trailing slash berbeda
-              const fuzzyKey = Object.keys(regexTitlesByLink).find(k => ilink === k || ilink.includes(k) || k.includes(ilink));
-              if (fuzzyKey) item.title = regexTitlesByLink[fuzzyKey];
-            }
-          }
-        });
-      }
-    } catch (err) {
-      console.error('[parseRSS] Error regex override fallback:', err);
-    }
-
     // Normalisasi ke format yang sama dengan Deno rss lib
     return {
       rss_url: url,

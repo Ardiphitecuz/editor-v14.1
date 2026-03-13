@@ -13,6 +13,7 @@ export interface Article {
   content: string[];
   source: string;
   sourceId?: string;
+  author?: string;
   rssContentSufficient?: boolean;
   image: string;
   images?: string[];
@@ -20,6 +21,7 @@ export interface Article {
   contentHtml?: string;          // HTML bersih siap render (Inoreader-style)
   readTime: number;
   publishedAt: string;
+  pubTimestamp?: number;
   hot?: boolean;
   originalUrl?: string;
 }

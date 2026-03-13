@@ -103,6 +103,7 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
       content: [], // Kosongkan agar tidak render paragraf saja
       source: source.name,
       sourceId: source.id,
+      author: typeof item.author === "string" && item.author.length > 0 ? item.author : undefined,
       rssContentSufficient: parsed.sufficient,
       image: heroImage,
       contentHtml: parsed.contentHtml || undefined, // HTML hasil sanitasi
@@ -116,42 +117,11 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
   });
 }
 
-// ── Ekstrak raw item blocks dari XML string (sebelum DOMParser) ──────────────
-// DOMParser text/html mode memperlakukan <link> sebagai void element (tanpa textContent)
-// sehingga URL artikel hilang. Solusi: extract link & guid dari raw string dulu.
-function extractRawItems(rawText: string): Map<number, { link: string; guid: string; title: string }> {
-  const result = new Map<number, { link: string; guid: string; title: string }>();
-  const itemPattern = /<item[\s>]([\s\S]*?)<\/item>/gi;
-  let match: RegExpExecArray | null;
-  let i = 0;
-  while ((match = itemPattern.exec(rawText)) !== null) {
-    const block = match[1];
-    // Extract <link>URL</link>
-    const linkMatch = block.match(/<link[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
-    // Extract <guid>URL</guid>
-    const guidMatch = block.match(/<guid[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
-    // DOMParser text/html memperlakukan <title> sebagai document title → textContent kosong/salah
-    const titleMatch =
-      block.match(/<title[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i) ||
-      block.match(/<title[^>]*>\s*([\s\S]*?)\s*<\/title>/i);
-    result.set(i++, {
-      link: linkMatch?.[1]?.trim() ?? "",
-      guid: guidMatch?.[1]?.trim() ?? "",
-      title: titleMatch?.[1]?.replace(/<[^>]+>/g, '').trim() ?? "",
-    });
-  }
-  return result;
-}
-
 // ── XML parser ────────────────────────────────────────────────────────────────
 function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Article[] {
   const clean = rawText
     .replace(/^\uFEFF/, "")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
-
-  // Pre-extract links dari raw string sebelum DOMParser
-  // (DOMParser text/html mode membuat <link> void element → textContent kosong)
-  const rawLinks = extractRawItems(clean);
 
   let xml = new DOMParser().parseFromString(clean, "text/xml");
   if (xml.querySelector("parsererror")) {
@@ -165,19 +135,17 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
     u?.startsWith("http://") ? u.replace("http://", "https://") : u;
 
   return items.map((item, i) => {
-    // Raw title dari regex (sebelum DOMParser) lebih reliable untuk CDATA
-    // DOMParser text/html mode memperlakukan <title> sebagai document.title
-    const rawTitleRegex = rawLinks.get(i)?.title ?? "";
     const rawTitleDom = item.querySelector("title")?.textContent ?? "";
-    const rawTitle = rawTitleRegex || rawTitleDom;
     const title = decodeHtmlEntities(
-      rawTitle.replace(/<!\[CDATA\[/gi, "").replace(/\]\]>/gi, "").trim()
+      rawTitleDom.replace(/<!\[CDATA\[/gi, "").replace(/\]\]>/gi, "").trim()
     ) || "Untitled";
 
     const pubDate = item.querySelector("pubDate, published, updated")?.textContent ?? "";
+    const dcNs = "http://purl.org/dc/elements/1.1/";
+    const author = item.getElementsByTagNameNS(dcNs, "creator")[0]?.textContent?.trim() || 
+                   item.querySelector("author, creator")?.textContent?.trim() || 
+                   undefined;
 
-    // Gunakan pre-extracted link dari raw string (lebih reliable dari DOMParser)
-    const rawLinkData = rawLinks.get(i);
     const domLinkEl = Array.from(item.querySelectorAll("link")).find(el =>
       (el.textContent?.trim().startsWith("http")) || (el.getAttribute("href")?.startsWith("http"))
     );
@@ -186,10 +154,8 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
       ? (domGuidEl?.textContent?.trim() ?? "") : "";
 
     const link = upgrade(
-      rawLinkData?.link ||           // ← paling reliable: regex dari raw XML
       domLinkEl?.textContent?.trim() ||
       domLinkEl?.getAttribute("href") ||
-      rawLinkData?.guid ||
       domGuidUrl ||
       ""
     );
@@ -255,6 +221,7 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
       content: [], // Kosongkan agar tidak render paragraf saja
       source: srcName,
       sourceId: source.id,
+      author,
       rssContentSufficient: parsed.sufficient,
       image: heroImage,
       contentHtml: parsed.contentHtml || undefined, // HTML hasil sanitasi
@@ -271,33 +238,11 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Article[]> {
   const feedUrl = source.feedUrl ?? source.url;
 
-  // ① rss2json — paling lengkap, skip untuk Google News dan WordPress feeds
-  // WordPress /feed URL sering bermasalah dengan rss2json (CDATA, link duplikat)
-  // langsung pakai XML parser yang lebih reliable untuk format ini
-  const isWordPressFeed = /\/feed\/?($|\?)/.test(feedUrl) || feedUrl.includes("feed=rss");
-  if (!feedUrl.includes("news.google.com") && !isWordPressFeed) {
+  // ① rss2json — paling lengkap, skip untuk Google News
+  if (!feedUrl.includes("news.google.com")) {
     const j = await fetchRss2Json(feedUrl);
     if (j) {
-      const articles = articlesFromR2J(source, j, limit);
-      // Validasi: jika semua artikel punya judul identik, rss2json salah baca feed
-      // (sering terjadi pada WordPress feed dengan CDATA title) → fallback ke XML parser
-      const titles = articles.map(a => a.title);
-      const links = articles.map(a => (a as any).originalUrl ?? "");
-      // Validasi kualitas data rss2json:
-      // 1. Semua judul identik → rss2json salah baca CDATA title
-      // 2. Semua link identik (dan ada isinya) → rss2json salah baca link
-      // 3. Mayoritas link kosong → rss2json tidak dapat link sama sekali
-      const filledLinks = links.filter(l => l && l.startsWith("http"));
-      const allLinkSame = filledLinks.length > 1 && filledLinks.every(l => l === filledLinks[0]);
-      const mostLinkEmpty = filledLinks.length < articles.length * 0.5;
-
-      // Deteksi judul identik/hampir identik (Levenshtein terlalu berat, pakai slice perbandingan)
-      const titleSet = new Set(titles.map(t => t.trim().toLowerCase().slice(0, 60)));
-      const allTitleSame = titles.length > 1 && titleSet.size <= 1;
-
-      if (!allTitleSame && !allLinkSame && !mostLinkEmpty) return articles;
-      // rss2json data invalid (judul/link sama atau kosong) → fallback ke XML parser
-      // XML parser (extractRawItems) bisa baca CDATA title dengan benar
+      return articlesFromR2J(source, j, limit);
     }
   }
 

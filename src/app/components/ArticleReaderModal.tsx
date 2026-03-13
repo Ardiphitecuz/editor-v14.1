@@ -333,18 +333,39 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
 
           <div className="p-6 md:p-10 max-w-3xl mx-auto">
             {/* Meta */}
-            <div className="flex items-center gap-3 flex-wrap mb-4">
-              <div className="flex items-center gap-1.5 text-neutral-400">
-                <Clock size={12} />
-                <span style={{ fontSize: 12 }}>{current.readTime} menit baca</span>
+            <div className="flex flex-col gap-3 mb-6">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5 font-semibold text-slate-700" style={{ fontSize: 14 }}>
+                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[11px]">📰</div>
+                  {current.source}
+                </div>
+                
+                {current.author && (
+                  <>
+                    <div className="w-1 h-1 rounded-full bg-slate-300" />
+                    <span className="text-slate-600 font-medium" style={{ fontSize: 13 }}>Oleh: {current.author}</span>
+                  </>
+                )}
+                
+                <div className="w-1 h-1 rounded-full bg-slate-300" />
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <Clock size={13} />
+                  <span style={{ fontSize: 13 }}>{current.readTime} mnt baca</span>
+                </div>
               </div>
-              <div className="w-1 h-1 rounded-full bg-neutral-200" />
-              <span className="text-neutral-400" style={{ fontSize: 12 }}>{current.publishedAt}</span>
-              <div className="w-1 h-1 rounded-full bg-neutral-200" />
-              <div className="flex items-center gap-1.5 font-semibold text-slate-600" style={{ fontSize: 13 }}>
-                <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px]">📰</div>
-                {current.source}
-              </div>
+
+              {current.pubTimestamp && (
+                <div className="text-slate-500 font-medium tracking-wide flex items-center" style={{ fontSize: 12.5 }}>
+                  Diunggah: {new Date(current.pubTimestamp).toLocaleDateString("id-ID", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }).replace(/\./g, ':')} WIB
+                </div>
+              )}
             </div>
 
             {/* Title */}

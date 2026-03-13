@@ -237,46 +237,47 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
 
   return (
     <div
-      className="fixed inset-0 z-[200]"
-      style={{ background: "rgba(0,0,0,0.9)" }}
+      className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center p-3 pb-safe"
+      style={{ background: "rgba(0,0,0,0.9)", paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
       onClick={onClose}
     >
-      {/* Scrollable sheet dari bawah */}
+      {/* Floating sheet / dialog */}
       <div
-        className="absolute bottom-0 left-0 right-0 flex flex-col rounded-t-3xl overflow-hidden"
-        style={{ maxHeight: "calc(96dvh - env(safe-area-inset-top, 0px))", background: "#111", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        className="w-full max-w-lg flex flex-col rounded-[2rem] overflow-hidden shadow-2xl relative animate-in slide-in-from-bottom-8 duration-300"
+        style={{ maxHeight: "calc(96dvh - env(safe-area-inset-top, 0px))", background: "#111" }}
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="w-10 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }} />
+        <div className="flex justify-center pt-4 pb-1 shrink-0 z-10 absolute left-0 right-0 top-0 pointer-events-none">
+          <div className="w-12 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.4)", backdropFilter: "blur(4px)" }} />
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pb-3 shrink-0">
+        {/* Header - now absolute and transparent/blurred over the image for immersive feel */}
+        <div className="flex items-center justify-between px-5 pt-7 pb-4 shrink-0 absolute top-0 left-0 right-0 z-10"
+             style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%)" }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-black shrink-0"
-              style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 11 }}>OC</div>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black shrink-0 shadow-lg border border-white/10"
+              style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 13 }}>OC</div>
             <div>
-              <p className="text-white font-bold" style={{ fontSize: 13 }}>otakucafe.id</p>
-              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{relativeTime(draft.createdAt)}</p>
+              <p className="text-white font-bold tracking-wide" style={{ fontSize: 14, textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>otakucafe.id</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>{relativeTime(draft.createdAt)}</p>
             </div>
           </div>
           <button onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.1)" }}>
-            <X size={14} color="white" />
+            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10 active:scale-95 transition-transform"
+            style={{ background: "rgba(0,0,0,0.5)" }}>
+            <X size={15} color="white" />
           </button>
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
+        <div className="flex-1 overflow-y-auto min-h-0 container-snap" style={{ WebkitOverflowScrolling: "touch" }}>
 
-          {/* ── Image preview (1:1 square crop seperti Instagram) ── */}
-          <div className="relative w-full shrink-0" style={{ aspectRatio: "1/1", background: "#1a1a1a" }}>
+          {/* ── Image preview (Fullscreen bleed, no gaps left/right) ── */}
+          <div className="relative w-full shrink-0 flex items-center justify-center bg-[#0a0a0a]" style={{ minHeight: "45vh" }}>
             {hasImage ? (
               <img src={draft.template!.imageDataUrl!} alt="preview"
-                className="w-full h-full" style={{ objectFit: "contain" }} />
+                className="w-full h-auto max-h-[75vh]" style={{ objectFit: "cover", display: "block" }} />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                 <ImageIcon size={36} strokeWidth={1} color="rgba(255,255,255,0.2)" />
