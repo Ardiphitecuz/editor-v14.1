@@ -38,6 +38,12 @@ function resizeToMax(img: HTMLImageElement, maxDim: number): HTMLCanvasElement {
   return canvas;
 }
 
+/** Deteksi iOS — lebih konservatif dengan memory */
+function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 export interface UpscaleOptions {
   onProgress?: (pct: number) => void;
   onStatus?:   (msg: string)  => void;
@@ -61,8 +67,12 @@ export async function upscaleImage(src: string, opts: UpscaleOptions = {}): Prom
 
   const img = await loadImage(src);
 
-  // Batasi input max 500px agar hasil 4x tidak OOM di HP (500 × 4 = 2000px)
-  const MAX_DIM = 500;
+  // iOS butuh dimensi lebih kecil untuk hindari OOM crash / page reload
+  const MAX_DIM = isIOS() ? 300 : 500;
+  // patchSize lebih kecil = lebih aman di memory, lebih lambat tapi tidak crash
+  const PATCH_SIZE = isIOS() ? 32 : 48;
+  const PADDING = isIOS() ? 2 : 4;
+
   let inputSrc: string;
   if (img.naturalWidth > MAX_DIM || img.naturalHeight > MAX_DIM) {
     const resized = resizeToMax(img, MAX_DIM);
@@ -76,8 +86,8 @@ export async function upscaleImage(src: string, opts: UpscaleOptions = {}): Prom
 
   const result = await upscaler.upscale(inputSrc, {
     output: 'base64',
-    patchSize: 48,   // tile lebih kecil agar aman di HP
-    padding: 4,
+    patchSize: PATCH_SIZE,
+    padding: PADDING,
     progress: (pct: number) => {
       const mapped = 10 + Math.round(pct * 90);
       onProgress?.(mapped);

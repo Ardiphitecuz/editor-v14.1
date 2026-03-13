@@ -106,10 +106,13 @@ function Slider({ label, value, min, max, step = 1, onChange, suffix = "" }: { l
 function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef({ active: false, pointerId: -1, value });
+  // Simpan onChange di ref supaya useEffect tidak perlu re-run setiap render
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
+
   const MIN = -30; const MAX = 30;
   const pct = ((value - MIN) / (MAX - MIN)) * 100;
 
-  // Selalu update stateRef.value agar closure di listener selalu punya nilai terbaru
   stateRef.current.value = value;
 
   useEffect(() => {
@@ -128,14 +131,14 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
       stateRef.current.active = true;
       stateRef.current.pointerId = e.pointerId;
       el.setPointerCapture(e.pointerId);
-      onChange(getVal(e.clientX));
+      onChangeRef.current(getVal(e.clientX));
     };
 
     const onMove = (e: PointerEvent) => {
       if (!stateRef.current.active || e.pointerId !== stateRef.current.pointerId) return;
       e.preventDefault();
       e.stopPropagation();
-      onChange(getVal(e.clientX));
+      onChangeRef.current(getVal(e.clientX));
     };
 
     const onUp = (e: PointerEvent) => {
@@ -144,7 +147,6 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
       el.releasePointerCapture(e.pointerId);
     };
 
-    // Block touchmove langsung di elemen agar document listener tidak intercept
     const blockTouch = (e: TouchEvent) => {
       if (stateRef.current.active) {
         e.preventDefault();
@@ -153,22 +155,22 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
       }
     };
 
-    el.addEventListener('pointerdown',   onDown,      { passive: false });
-    el.addEventListener('pointermove',   onMove,      { passive: false });
+    el.addEventListener('pointerdown',   onDown,     { passive: false });
+    el.addEventListener('pointermove',   onMove,     { passive: false });
     el.addEventListener('pointerup',     onUp);
     el.addEventListener('pointercancel', onUp);
-    el.addEventListener('touchmove',     blockTouch,  { passive: false, capture: true });
-    el.addEventListener('touchstart',    blockTouch,  { passive: false, capture: true });
+    el.addEventListener('touchmove',     blockTouch, { passive: false, capture: true });
+    el.addEventListener('touchstart',    blockTouch, { passive: false, capture: true });
 
     return () => {
       el.removeEventListener('pointerdown',   onDown);
       el.removeEventListener('pointermove',   onMove);
       el.removeEventListener('pointerup',     onUp);
       el.removeEventListener('pointercancel', onUp);
-      el.removeEventListener('touchmove',     blockTouch,  { capture: true } as any);
-      el.removeEventListener('touchstart',    blockTouch,  { capture: true } as any);
+      el.removeEventListener('touchmove',     blockTouch, { capture: true } as any);
+      el.removeEventListener('touchstart',    blockTouch, { capture: true } as any);
     };
-  }, [onChange]);
+  }, []); // deps kosong — listeners hanya dipasang sekali, onChange via ref
 
   return (
     <div className="flex flex-col gap-1.5" data-slider="true" style={{ touchAction: "none" }}>
