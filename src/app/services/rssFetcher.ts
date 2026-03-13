@@ -137,9 +137,19 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
     );
 
     const pubDate = item.querySelector("pubDate, published, updated")?.textContent ?? "";
+
+    // Ambil link artikel — WordPress RSS kadang punya <link> kosong (atom:link self-closing)
+    // Fallback chain: link text → link href → guid (isPermaLink) → guid text
+    const linkEl = Array.from(item.querySelectorAll("link")).find(el =>
+      (el.textContent?.trim().startsWith("http")) || (el.getAttribute("href")?.startsWith("http"))
+    );
+    const guidEl = item.querySelector("guid");
+    const guidIsPermalink = guidEl?.getAttribute("isPermaLink") !== "false";
+    const guidUrl = guidIsPermalink ? (guidEl?.textContent?.trim() ?? "") : "";
     const link =
-      item.querySelector("link")?.textContent?.trim() ||
-      item.querySelector("link")?.getAttribute("href") ||
+      linkEl?.textContent?.trim() ||
+      linkEl?.getAttribute("href") ||
+      guidUrl ||
       "";
 
     // Prioritas: content:encoded (konten HTML penuh) > description > summary > content
@@ -224,9 +234,11 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
       // Validasi: jika semua artikel punya judul identik, rss2json salah baca feed
       // (sering terjadi pada WordPress feed dengan CDATA title) → fallback ke XML parser
       const titles = articles.map(a => a.title);
-      const allSame = titles.length > 1 && titles.every(t => t === titles[0]);
-      if (!allSame) return articles;
-      // allSame = true → lanjut ke XML parser di bawah
+      const links = articles.map(a => (a as any).originalUrl ?? "");
+      const allTitleSame = titles.length > 1 && titles.every(t => t === titles[0]);
+      const allLinkSame = links.length > 1 && links.every(l => l && l === links[0]);
+      if (!allTitleSame && !allLinkSame) return articles;
+      // rss2json salah baca feed → fallback ke XML parser
     }
   }
 
