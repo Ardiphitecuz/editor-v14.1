@@ -204,37 +204,36 @@ function ArticleRow({ article, onClick, displayTitle }: { article: Article; onCl
 // ── Pull-to-refresh indicator ────────────────────────────────────────────────
 function PullToRefreshIndicator({ pullY, ready, refreshing }: { pullY: number; ready: boolean; refreshing: boolean }) {
   const frame = useCatFrame();
-  const catH = 56;
+  const catH = 48;
   const catW = catH * (150 / 90);
   const maxPull = 72;
   const progress = Math.min(pullY / maxPull, 1);
 
   return (
     <div
-      className="absolute top-0 left-0 right-0 flex flex-col items-center justify-end pointer-events-none"
-      style={{ height: Math.max(0, pullY), zIndex: 20, overflow: "hidden", transition: refreshing ? "height 0.2s" : "none" }}
+      className="flex items-center gap-2 px-3 py-1.5 rounded-2xl shadow-lg"
+      style={{
+        background: "rgba(255,255,255,0.97)",
+        backdropFilter: "blur(10px)",
+        border: "1px solid rgba(0,0,0,0.07)",
+        opacity: progress,
+        transform: `scale(${0.85 + progress * 0.15}) translateY(${(1 - progress) * -10}px)`,
+        transition: "opacity 0.1s, transform 0.1s",
+      }}
     >
-      <div className="flex flex-col items-center pb-1" style={{ opacity: progress }}>
-        {/* Kucing — overflow hidden agar sprite sheet tidak bocor ke atas */}
-        <div style={{ width: catW, height: catH, overflow: "hidden", flexShrink: 0 }}>
-          <img
-            src={catFrameUrl(frame)}
-            alt=""
-            draggable={false}
-            style={{
-              width: catW,
-              height: catH,
-              display: "block",
-              transform: `rotate(${ready || refreshing ? 0 : (1 - progress) * -15}deg)`,
-              transition: "transform 0.2s",
-              objectFit: "fill",
-            }}
-          />
-        </div>
-        <p style={{ fontSize: 10, fontWeight: 700, color: "#a09890", marginTop: 2 }}>
-          {refreshing ? "Memperbarui..." : ready ? "Lepas untuk refresh ↑" : "Tarik untuk refresh"}
-        </p>
-      </div>
+      <img
+        src={catFrameUrl(frame)}
+        alt=""
+        draggable={false}
+        style={{
+          height: catH, width: catW, flexShrink: 0,
+          transform: ready || refreshing ? "none" : `rotate(${(1 - progress) * -12}deg)`,
+          transition: "transform 0.15s",
+        }}
+      />
+      <p style={{ fontSize: 11, fontWeight: 700, color: "#a09890", whiteSpace: "nowrap" }}>
+        {refreshing ? "Memperbarui..." : ready ? "Lepas ↑" : "Tarik untuk refresh"}
+      </p>
     </div>
   );
 }
@@ -257,51 +256,44 @@ export function HomePage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const PTR_THRESHOLD = 72;
 
-  // Native non-passive touch handlers — dipasang langsung ke DOM agar e.preventDefault() bisa block browser scroll
+  // Touch handlers di WINDOW — pakai window.scrollY supaya tidak confuse dg overflow-y-auto div
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
+    function getScrollTop() { return window.scrollY || document.documentElement.scrollTop || 0; }
 
     function onTouchStart(e: TouchEvent) {
-      if (el!.scrollTop > 0) return;
+      if (getScrollTop() > 2) return;
       ptrRef.current.startY = e.touches[0].clientY;
       ptrRef.current.active = true;
     }
 
     function onTouchMove(e: TouchEvent) {
       if (!ptrRef.current.active) return;
-      if (el!.scrollTop > 0) { ptrRef.current.active = false; return; }
+      if (getScrollTop() > 2) { ptrRef.current.active = false; setPullY(0); return; }
       const rawDy = e.touches[0].clientY - ptrRef.current.startY;
-      // Hanya aktifkan PTR kalau drag ke bawah (rawDy > 0)
-      // Kalau ke atas, biarkan scroll normal berjalan
       if (rawDy <= 0) { ptrRef.current.active = false; return; }
       const damped = Math.min(rawDy * 0.45, PTR_THRESHOLD + 20);
       ptrRef.current.pullY = damped;
       setPullY(damped);
       setPtrReady(damped >= PTR_THRESHOLD);
-      // Blokir browser native overscroll/refresh hanya saat benar-benar menarik ke bawah
-      if (damped > 4) e.preventDefault();
+      if (damped > 8) e.preventDefault();
     }
 
     function onTouchEnd() {
       if (!ptrRef.current.active) return;
       ptrRef.current.active = false;
-      if (ptrRef.current.pullY >= PTR_THRESHOLD) {
-        refresh();
-      }
+      if (ptrRef.current.pullY >= PTR_THRESHOLD) refresh();
       ptrRef.current.pullY = 0;
       setPullY(0);
       setPtrReady(false);
     }
 
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false }); // non-passive agar e.preventDefault() bekerja
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
     };
   }, [refresh]);
   const allArticles = fetchedArticles;
@@ -389,11 +381,14 @@ export function HomePage() {
       {/* Body — PTR zone */}
       <div
         ref={scrollRef}
-        className="flex-1 pb-24 lg:pb-6 relative overflow-y-auto"
-        style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+        className="flex-1 pb-24 lg:pb-6 relative"
       >
-        {/* Pull-to-refresh indicator */}
-        <PullToRefreshIndicator pullY={pullY} ready={ptrReady} refreshing={loading} />
+        {/* Pull-to-refresh indicator — fixed pill di bawah header */}
+        {pullY > 0 && (
+          <div className="fixed left-0 right-0 flex justify-center pointer-events-none z-50" style={{ top: 60 }}>
+            <PullToRefreshIndicator pullY={pullY} ready={ptrReady} refreshing={loading} />
+          </div>
+        )}
 
         {/* Refresh bar — tipis di atas, muncul saat ada artikel tapi sedang update */}
         {showRefreshBar && (
