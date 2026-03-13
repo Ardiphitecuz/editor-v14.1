@@ -219,7 +219,15 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
   // ① rss2json — paling lengkap, skip untuk Google News
   if (!feedUrl.includes("news.google.com")) {
     const j = await fetchRss2Json(feedUrl);
-    if (j) return articlesFromR2J(source, j, limit);
+    if (j) {
+      const articles = articlesFromR2J(source, j, limit);
+      // Validasi: jika semua artikel punya judul identik, rss2json salah baca feed
+      // (sering terjadi pada WordPress feed dengan CDATA title) → fallback ke XML parser
+      const titles = articles.map(a => a.title);
+      const allSame = titles.length > 1 && titles.every(t => t === titles[0]);
+      if (!allSame) return articles;
+      // allSame = true → lanjut ke XML parser di bawah
+    }
   }
 
   // ② Server proxy /api/rss
