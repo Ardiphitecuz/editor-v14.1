@@ -4,7 +4,7 @@ import { ARTICLES } from "../data/articles";
 type Listener = () => void;
 
 const SAVED_KEY = "otaku_saved_ids";
-const CACHE_KEY = "otaku_articles_cache_v10"; // v10 = fix hashId + fix DOMParser title/link bug
+const CACHE_KEY = "otaku_articles_cache_v11"; // v11 = invalidate cache lama dari Vercel
 const CACHE_TTL = 1000 * 60 * 120; // 2 jam — survive tab close, langsung tampil saat buka ulang
 
 interface ArticleCache {

@@ -555,20 +555,28 @@ app.get('/api/rss', async (req, res) => {
       return res.status(400).json({ success: false, error: 'URL is required' });
     }
 
-    const response = await axios.get(url, axiosConfig(url, {
-      timeout: 15000,
-      responseType: 'text',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; RSSAggregator/1.0)',
-        'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-      },
-      maxRedirects: 5,
-    }));
-
-    const contentType = response.headers['content-type'] ?? 'text/xml';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=300'); // cache 5 menit
-    res.send(response.data);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await axios.get(url, axiosConfig(url, {
+        timeout: 25000,
+        responseType: 'text',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Feedfetcher-Google; +http://www.google.com/feedfetcher.html)',
+          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+          'Cache-Control': 'no-cache',
+        },
+        maxRedirects: 5,
+      }));
+      clearTimeout(timer);
+      const contentType = response.headers['content-type'] ?? 'text/xml';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.send(response.data);
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (error) {
     console.error('RSS proxy error:', error.message);
     res.status(500).json({ success: false, error: error.message });
