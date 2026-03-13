@@ -86,17 +86,19 @@ interface CatOverlayProps {
 }
 
 export function CatOverlay({ label = "Memproses...", dim = true, progress }: CatOverlayProps) {
+  // Pakai fixed agar animasi tidak diblokir oleh transform/scale parent
+  // dan tetap jalan meski main thread sedang berat (TensorFlow inference)
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-50"
-      style={{ background: dim ? "rgba(0,0,0,0.55)" : "transparent", backdropFilter: dim ? "blur(2px)" : "none" }}
+      className="fixed inset-0 flex flex-col items-center justify-center gap-4 z-[9999]"
+      style={{ background: dim ? "rgba(0,0,0,0.6)" : "transparent", backdropFilter: dim ? "blur(3px)" : "none" }}
     >
-      <LoadingCat trackWidth={160} catHeight={68} />
-      <div className="flex flex-col items-center gap-1">
-        <p style={{ fontSize: 12, fontWeight: 700, color: dim ? "white" : "#555" }}>{label}</p>
+      <LoadingCat trackWidth={180} catHeight={72} />
+      <div className="flex flex-col items-center gap-2">
+        <p style={{ fontSize: 13, fontWeight: 700, color: dim ? "white" : "#555" }}>{label}</p>
         {progress !== undefined && (
-          <div className="rounded-full overflow-hidden" style={{ width: 120, height: 4, background: dim ? "rgba(255,255,255,0.2)" : "#f0ede9" }}>
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: "#ff742f" }} />
+          <div className="rounded-full overflow-hidden" style={{ width: 140, height: 5, background: dim ? "rgba(255,255,255,0.25)" : "#f0ede9" }}>
+            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: "linear-gradient(90deg,#ff742f,#ff9a5c)" }} />
           </div>
         )}
       </div>

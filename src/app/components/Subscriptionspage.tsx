@@ -300,7 +300,7 @@ export function SubscriptionsPage() {
       <div ref={headerRef} className="sticky top-0 z-30 border-b"
         style={{ background: "rgba(252,249,245,0.97)", backdropFilter: "blur(16px)", borderColor: "#ede8e2" }}>
         <div className="px-4 pt-4 pb-3">
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#ff742f", letterSpacing: "0.08em" }}>☕ SUMBER BERITA</p>
+          <p className="text-neutral-400" style={{ fontSize: 13 }}>Sumber Berita</p>
           <h1 style={{ fontSize: 26, fontWeight: 900, color: "#1a1a1a", lineHeight: 1.1, letterSpacing: "-0.01em" }}>
             Sources
           </h1>
