@@ -6,6 +6,7 @@ import { Flame, Clock, ChevronRight, Search, RefreshCw, WifiOff, Settings } from
 import { LazyImage } from "./ui/LazyImage";
 import { useCatFrame, catFrameUrl } from "./LoadingCat";
 import { MascotEmptyState } from "./MascotEmptyState";
+import { ArticleReaderModal } from "./ArticleReaderModal";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -247,6 +248,8 @@ export function HomePage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
+  const [activeArticle, setActiveArticle] = useState<Article | null>(null);
+
   const { articles: fetchedArticles, loading, progressMsg, progressDone, progressTotal, errors, fromCache, refresh } = useNews();
 
   // ── Pull-to-refresh state ────────────────────────────────────────────────
@@ -337,7 +340,10 @@ export function HomePage() {
   const heroArticle = featured[0] ?? allArticles[0];
   const sidebarArticles = allArticles.filter(a => a.id !== heroArticle?.id).slice(0, 6);
 
-  const goToArticle = (id: string) => navigate(`/artikel/${id}`);
+  const goToArticle = (id: string) => {
+    const art = allArticles.find(a => a.id === id);
+    if (art) setActiveArticle(art);
+  };
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
@@ -559,6 +565,13 @@ export function HomePage() {
           )
         )}
       </div>
+
+      {/* Floating Reader Modal */}
+      <ArticleReaderModal 
+        article={activeArticle} 
+        isOpen={!!activeArticle} 
+        onClose={() => setActiveArticle(null)} 
+      />
     </div>
   );
 }

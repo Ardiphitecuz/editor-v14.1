@@ -11,12 +11,59 @@ import type { Article } from "../data/articles";
 export const RSS2JSON         = "https://api.rss2json.com/v1/api.json?rss_url=";
 export const SERVER_RSS_PROXY = "/api/rss?url=";
 export const SERVER_PROXY     = "/api/proxy?url=";
-export const PUBLIC_PROXIES   = [
+export const PROXY_SERVERS = [
+  {
+      name: "AllOrigins (Raw)", 
+      getUrl: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+      parse: async (res: Response) => await res.text()
+  },
+  {
+      name: "CorsProxy.io",
+      getUrl: (target: string) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
+      parse: async (res: Response) => await res.text()
+  },
+  {
+      name: "CodeTabs Proxy",
+      getUrl: (target: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`,
+      parse: async (res: Response) => await res.text()
+  },
+  {
+      name: "ThingProxy",
+      getUrl: (target: string) => `https://thingproxy.freeboard.io/fetch/${target}`,
+      parse: async (res: Response) => await res.text()
+  },
+  {
+      name: "AllOrigins (JSON)",
+      getUrl: (target: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&_=${Date.now()}`,
+      parse: async (res: Response) => {
+          try {
+              const text = await res.text();
+              if (!text) return null;
+              const json = JSON.parse(text);
+              return json.contents;
+          } catch (e) { return null; }
+      }
+  }
+];
+
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 12000): Promise<Response> {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), timeout);
+  try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      return response;
+  } finally {
+      clearTimeout(timerId);
+  }
+}
+
+export const PUBLIC_PROXIES = [
   "https://api.codetabs.com/v1/proxy?quest=",       // paling reliable, jarang block
   "https://corsproxy.io/?",
   "https://api.allorigins.win/raw?url=",
   "https://thingproxy.freeboard.io/fetch/",          // fallback tambahan
 ];
+
 
 // ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────
 export const ALLOWED_TAGS = new Set([
