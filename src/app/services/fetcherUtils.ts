@@ -419,17 +419,12 @@ export function proxyImgInHtml(html: string): string {
     if (AD_IMG_PATTERN.test(src)) return '';
     return match;
   });
-  // Strip <a> external yang hanya berisi <img> (banner iklan)
+  // Strip <a> yang wraps <img> ke domain iklan yang diketahui
   cleaned = cleaned.replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>\s*(<img[^>]+>)\s*<\/a>/gi, (match, href, img) => {
-    try {
-      // Jika href ke domain lain dan isinya hanya gambar = banner
-      const srcMatch = img.match(/src=["']([^"']+)["']/i);
-      if (srcMatch && AD_IMG_PATTERN.test(srcMatch[1])) return '';
-      // External link wrapping only an img = sponsored banner
-      const hrefUrl = new URL(href, window.location.origin);
-      if (hrefUrl.hostname !== window.location.hostname) return '';
-    } catch {}
-    return match;
+    if (AD_IMG_PATTERN.test(href)) return '';
+    const srcMatch = img.match(/src=["']([^"']+)["']/i);
+    if (srcMatch && AD_IMG_PATTERN.test(srcMatch[1])) return '';
+    return match; // biarkan — mungkin gambar artikel yang dibungkus link
   });
   // Strip "スポンサードリンク" / "スポンサーリンク" teks
   cleaned = cleaned.replace(/<[^>]+>[^<]*(スポンサー[ドー]リンク|スポンサーリンク|Sponsored Links?)[^<]*<\/[^>]+>/gi, '');

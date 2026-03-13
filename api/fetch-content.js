@@ -86,18 +86,6 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
     const href = el.getAttribute('href') ?? '';
     const resolved = resolveUrl(href, baseUrl, pageUrl);
 
-    // Deteksi banner iklan: <a> ke domain lain yang isinya hanya <img> (tanpa teks)
-    // Yaraon/blog JP: sponsor banner selalu <a href="eksternal"><img /></a>
-    if (resolved) {
-      try {
-        const hrefHost = new URL(resolved).hostname;
-        const isExternal = hrefHost && hrefHost !== pageUrl.hostname && !hrefHost.endsWith('.' + pageUrl.hostname);
-        const onlyImg = el.children.length === 1 && el.children[0].tagName?.toLowerCase() === 'img';
-        const noText = (el.textContent ?? '').trim().length === 0;
-        if (isExternal && (onlyImg || noText)) { el.remove(); return; }
-      } catch {}
-    }
-
     Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
     if (resolved) { el.setAttribute('href', resolved); el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
     Array.from(el.childNodes).forEach(c => sanitizeNode(c, contentDoc, baseUrl, pageUrl, articleTitle));
