@@ -118,20 +118,26 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
 // ── Ekstrak raw item blocks dari XML string (sebelum DOMParser) ──────────────
 // DOMParser text/html mode memperlakukan <link> sebagai void element (tanpa textContent)
 // sehingga URL artikel hilang. Solusi: extract link & guid dari raw string dulu.
-function extractRawLinks(rawText: string): Map<number, { link: string; guid: string }> {
-  const result = new Map<number, { link: string; guid: string }>();
+function extractRawItems(rawText: string): Map<number, { link: string; guid: string; title: string }> {
+  const result = new Map<number, { link: string; guid: string; title: string }>();
   const itemPattern = /<item[\s>]([\s\S]*?)<\/item>/gi;
   let match: RegExpExecArray | null;
   let i = 0;
   while ((match = itemPattern.exec(rawText)) !== null) {
     const block = match[1];
-    // Regex extract <link>URL</link> — tangani URL langsung dalam tag
+    // Extract <link>URL</link>
     const linkMatch = block.match(/<link[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
-    // Regex extract <guid>URL</guid>
+    // Extract <guid>URL</guid>
     const guidMatch = block.match(/<guid[^>]*>\s*(https?:\/\/[^\s<"]+)/i);
+    // Extract <title> — tangani CDATA dan teks biasa
+    // DOMParser text/html memperlakukan <title> sebagai document title → textContent kosong/salah
+    const titleMatch =
+      block.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i) ||
+      block.match(/<title[^>]*>([^<]{1,300})<\/title>/i);
     result.set(i++, {
       link: linkMatch?.[1]?.trim() ?? "",
       guid: guidMatch?.[1]?.trim() ?? "",
+      title: titleMatch?.[1]?.trim() ?? "",
     });
   }
   return result;
@@ -145,7 +151,7 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 
   // Pre-extract links dari raw string sebelum DOMParser
   // (DOMParser text/html mode membuat <link> void element → textContent kosong)
-  const rawLinks = extractRawLinks(clean);
+  const rawLinks = extractRawItems(clean);
 
   let xml = new DOMParser().parseFromString(clean, "text/xml");
   if (xml.querySelector("parsererror")) {
@@ -159,10 +165,14 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
     u?.startsWith("http://") ? u.replace("http://", "https://") : u;
 
   return items.map((item, i) => {
-    const rawTitle = item.querySelector("title")?.textContent ?? "Untitled";
+    // Raw title dari regex (sebelum DOMParser) lebih reliable untuk CDATA
+    // DOMParser text/html mode memperlakukan <title> sebagai document.title
+    const rawTitleRegex = rawLinks.get(i)?.title ?? "";
+    const rawTitleDom = item.querySelector("title")?.textContent ?? "";
+    const rawTitle = rawTitleRegex || rawTitleDom;
     const title = decodeHtmlEntities(
       rawTitle.replace(/<!\[CDATA\[/gi, "").replace(/\]\]>/gi, "").trim()
-    );
+    ) || "Untitled";
 
     const pubDate = item.querySelector("pubDate, published, updated")?.textContent ?? "";
 
@@ -281,6 +291,7 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
       const filledLinks = links.filter(l => l && l.startsWith("http"));
       const allLinkSame = filledLinks.length > 1 && filledLinks.every(l => l === filledLinks[0]);
       const mostLinkEmpty = filledLinks.length < articles.length * 0.5;
+
       if (!allTitleSame && !allLinkSame && !mostLinkEmpty) return articles;
       // rss2json data invalid → fallback ke XML parser
     }
