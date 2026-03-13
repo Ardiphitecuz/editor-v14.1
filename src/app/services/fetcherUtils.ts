@@ -531,8 +531,21 @@ export async function fetchArticleContent(
       "script,style,noscript,iframe,nav,header,footer,aside,form,menu,svg,canvas," +
       "[role='navigation'],[role='banner'],[role='complementary'],[role='contentinfo']," +
       ".nav,.navigation,.menu,.sidebar,.footer,.header,.advertisement,.promo,.related," +
-      "[class*='share'],[class*='social'],[class*='comment'],[class*='recommend']"
+      "[class*='share'],[class*='social'],[class*='comment'],[class*='recommend']," +
+      "[class*='related'],[class*='ranking'],[class*='popular'],[class*='pickup']," +
+      "[class*='ad-'],[class*='-ad'],[id*='ad-'],[id*='-ad'],[class*='adsbygoogle']," +
+      "[class*='widget'],[class*='newsletter'],[class*='subscribe'],[class*='banner']"
     ).forEach(el => el.remove());
+
+    // Potong konten setelah heading "Artikel Terkait" / "Related"
+    const RELATED_RE = /^(artikel\s*terkait|related|baca\s*juga|lihat\s*juga|you\s*may\s*(also\s*)?(like|read)|関連記事|おすすめ|人気記事)$/i;
+    doc.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach(h => {
+      if (RELATED_RE.test((h.textContent ?? "").trim())) {
+        let next = h.nextSibling;
+        while (next) { const r = next; next = r.nextSibling; r.parentNode?.removeChild(r); }
+        h.remove();
+      }
+    });
 
     /**
      * Readability scoring — sama seperti algoritma Mozilla Readability:

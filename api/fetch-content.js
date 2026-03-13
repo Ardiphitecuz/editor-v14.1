@@ -10,7 +10,7 @@ import { Readability } from '@mozilla/readability';
 export const config = { maxDuration: 30 };
 
 // ── Konstanta di scope module ─────────────────────────────────────────────────
-const NOISE_PATTERN = /\b(sidebar|widget|related|recommend|rekomendasi|artikel[\s_-]terkait|baca[\s_-]juga|lihat[\s_-]juga|more[\s_-]post|also[\s_-]read|you[\s_-]may|share|social|comment|disqus|newsletter|subscribe|advertisement|sponsor|banner|promo|popular|trending|tag[\s_-]list|breadcrumb|pagination|post[\s_-]nav|author[\s_-]box|author[\s_-]bio|byline|related[\s_-]post|more[\s_-]from|read[\s_-]next|next[\s_-]article|prev[\s_-]article|floating|sticky[\s_-]bar|cookie|gdpr|popup|modal|overlay|entry[\s_-]meta|entry[\s_-]header|post[\s_-]meta|post[\s_-]header|post[\s_-]info|post[\s_-]category|cat[\s_-]links|post[\s_-]author|entry[\s_-]author|article[\s_-]header|article[\s_-]meta|article[\s_-]info|sharedaddy|jetpack|addtoany)\b/i;
+const NOISE_PATTERN = /\b(sidebar|widget|related|recommend|rekomendasi|artikel[\s_-]terkait|baca[\s_-]juga|lihat[\s_-]juga|more[\s_-]post|also[\s_-]read|you[\s_-]may|share|social|comment|disqus|newsletter|subscribe|advertisement|sponsor|banner|promo|popular|trending|tag[\s_-]list|breadcrumb|pagination|post[\s_-]nav|author[\s_-]box|author[\s_-]bio|byline|related[\s_-]post|more[\s_-]from|read[\s_-]next|next[\s_-]article|prev[\s_-]article|floating|sticky[\s_-]bar|cookie|gdpr|popup|modal|overlay|entry[\s_-]meta|entry[\s_-]header|post[\s_-]meta|post[\s_-]header|post[\s_-]info|post[\s_-]category|cat[\s_-]links|post[\s_-]author|entry[\s_-]author|article[\s_-]header|article[\s_-]meta|article[\s_-]info|sharedaddy|jetpack|addtoany|ranking|matome[\s_-]list|pickup|osusume|kanren|tags?[\s_-]box|tag[\s_-]cloud|wp[\s_-]block[\s_-](?:tag|category|archive|latest)|post[\s_-]tags|article[\s_-]tags|after[\s_-]post|below[\s_-]post|post[\s_-]bottom|article[\s_-]bottom|content[\s_-]bottom|single[\s_-]bottom|entry[\s_-]bottom|inner[\s_-]related|yarpp|nrelate|contextly|zergnet|taboola|outbrain|revcontent|mgid|ads?[\s_-](?:area|container|wrapper|box|unit|slot|block)|google[\s_-]ad|dfp|adsbygoogle)\b/i;
 
 // ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────
 // PERBAIKAN: Menambahkan 'div', 'iframe', 'video', 'audio', 'source' agar embed dan struktur deteksi iklan tidak pecah
@@ -305,17 +305,43 @@ export default async function handler(req, res) {
       if (!el.querySelector('img,iframe,video') && !(el.textContent ?? '').trim()) el.remove();
     });
 
-    // Post-pass: link density
-    // Sekarang fitur ini BERHASIL karena tag <div class="related-post"> tidak di-unwrap di tahap Sanitizer
-    contentElement.querySelectorAll('ul,ol,p,div').forEach(el => {
+    // Post-pass: link density — buang blok navigasi/artikel-terkait
+    contentElement.querySelectorAll('ul,ol,p,div,section').forEach(el => {
       const totalText = (el.textContent ?? '').replace(/\s+/g, '').length;
       if (!totalText) { el.remove(); return; }
       let linkText = 0;
-      el.querySelectorAll('a').forEach(a => { linkText += (a.textContent ?? '').replace(/\s+/g, '').length; });
+      const links = el.querySelectorAll('a');
+      links.forEach(a => { linkText += (a.textContent ?? '').replace(/\s+/g, '').length; });
       const density = linkText / totalText;
-      const threshold = (el.tagName === 'P' || el.tagName === 'DIV') ? 0.85 : 0.75;
-      // Jangan hapus jika blok ini ternyata berisi media (gambar/video)
-      if (density >= threshold && !el.querySelector('img,iframe,video')) el.remove();
+      // Threshold lebih agresif: div/section 70%, ul/ol/p 60%
+      const threshold = (el.tagName === 'UL' || el.tagName === 'OL') ? 0.60
+        : (el.tagName === 'P') ? 0.70
+        : 0.70; // div, section
+      // Jangan hapus jika berisi media atau terlalu sedikit link (bukan nav)
+      if (density >= threshold && links.length >= 2 && !el.querySelector('img,iframe,video')) el.remove();
+    });
+
+    // Post-pass: hapus blok berisi banyak link artikel (artikel terkait tanpa class)
+    // Deteksi: li berisi hanya <a> dengan href ke domain yang sama
+    const pageHost = pageUrl.hostname;
+    contentElement.querySelectorAll('ul,ol').forEach(list => {
+      const items = list.querySelectorAll('li');
+      if (items.length < 2) return;
+      let internalLinkItems = 0;
+      items.forEach(li => {
+        const links = li.querySelectorAll('a');
+        const text = (li.textContent ?? '').replace(/\s+/g, ' ').trim();
+        // Li yang isinya hampir semuanya link internal
+        if (links.length >= 1) {
+          const linkHrefs = Array.from(links).map(a => a.getAttribute('href') ?? '');
+          const hasInternal = linkHrefs.some(h => h.includes(pageHost) || h.startsWith('/'));
+          if (hasInternal && text.length < 150) internalLinkItems++;
+        }
+      });
+      // Jika >60% item berisi link internal pendek → artikel terkait
+      if (internalLinkItems / items.length > 0.6 && !list.querySelector('img,iframe,video')) {
+        list.remove();
+      }
     });
 
     // Post-pass: hapus <p> yang isinya hanya satu link (biasanya baca juga)
@@ -328,6 +354,28 @@ export default async function handler(req, res) {
         if (outside <= 15 && !p.querySelector('img,iframe,video')) p.remove();
       }
     });
+
+    // Post-pass: potong semua konten setelah heading "Artikel Terkait" / "Related" / "Baca Juga"
+    // Di WordPress/blog, artikel terkait hampir selalu di akhir konten setelah heading ini
+    const RELATED_HEADING = /^(artikel\s*terkait|related\s*(post|artikel|article)?|baca\s*juga|lihat\s*juga|you\s*may\s*(also\s*)?(like|read)|more\s*(from|article)|関連記事|おすすめ記事|人気記事|こちらもどうぞ)$/i;
+    const headings = Array.from(contentElement.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+    for (const heading of headings) {
+      const text = (heading.textContent ?? '').trim();
+      if (RELATED_HEADING.test(text)) {
+        // Hapus heading ini dan semua elemen setelahnya
+        let next = heading.nextSibling;
+        while (next) {
+          const toRemove = next;
+          next = next.nextSibling;
+          toRemove.parentNode?.removeChild(toRemove);
+        }
+        heading.remove();
+        break;
+      }
+    }
+
+    // Post-pass: hapus elemen iklan inline (script, ins.adsbygoogle, div[id*=ad])
+    contentElement.querySelectorAll('ins,script,[id*="ad-"],[id*="-ad"],[id*="ads"],[class*="adsbygoogle"],[class*="ad-slot"],[class*="advertisement"]').forEach(el => el.remove());
 
     const contentHtml = contentElement.innerHTML.trim();
     if (!contentHtml) {
