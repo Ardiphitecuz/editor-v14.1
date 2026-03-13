@@ -21,7 +21,7 @@ import type { NewsSource } from "./sourceManager";
 import {
   TRACKING_IMG_URL,
   hashId, guessCategory,
-  fetchWithFallback,
+  fetchFullContentRacing,
 } from "./fetcherUtils";
 
 // ── Thumbnail hunter ──────────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ export async function fetchFromWebsite(source: NewsSource, limit = 15): Promise<
 
   let html: string;
   try {
-    html = await fetchWithFallback(rawUrl);
+    html = await fetchFullContentRacing(rawUrl);
   } catch {
     return [];
   }

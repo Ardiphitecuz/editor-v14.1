@@ -69,6 +69,73 @@ export const PUBLIC_PROXIES = [
   "https://cors-anywhere.herokuapp.com/",
 ];
 
+export const FULL_CONTENT_PROXIES = [
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+  (url: string) => `https://cors-anywhere.herokuapp.com/${url}`
+];
+
+/**
+ * Polyfill-like Promise.any implementation for environments where it might be missing
+ * or to have a consistent racing behavior.
+ */
+export function promiseAny<T>(promises: Promise<T>[]): Promise<T> {
+  return new Promise((resolve, reject) => {
+    if (promises.length === 0) return reject(new Error("No promises"));
+    let errors = 0;
+    promises.forEach(p =>
+      Promise.resolve(p).then(resolve).catch(() => {
+        errors++;
+        if (errors === promises.length) reject(new Error("All promises failed"));
+      })
+    );
+  });
+}
+
+/**
+ * Racing proxy fetch specifically optimized for full article content.
+ * Uses standard headers and multiple proxies to bypass blocking.
+ */
+export async function fetchFullContentRacing(targetUrl: string): Promise<string> {
+  const promises = FULL_CONTENT_PROXIES.map(async (getProxyUrl) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000 * 2); // 30s for full content
+      try {
+          const res = await fetch(getProxyUrl(targetUrl), { 
+              signal: controller.signal,
+              headers: {
+                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+              }
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          
+          // Validasi: Pastikan hasil balikan adalah HTML artikel yang panjang
+          if (text && text.length > 500 && text.includes('<html')) return text;
+          throw new Error("Invalid Content");
+      } finally {
+          clearTimeout(timeoutId);
+      }
+  });
+
+  return promiseAny(promises);
+}
+
+/**
+ * Converts simple Markdown (**bold**, _italic_) to HTML tags
+ */
+export function simpleMdToHtml(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.*?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/_(.*?)_/g, '<em>$1</em>');
+}
+
+
 // ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────
 export const ALLOWED_TAGS = new Set([
   "p", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -647,8 +714,18 @@ export async function fetchArticleContent(
 
   // ② Browser DOMParser fallback — Readability heuristic
   try {
-    const html = await fetchWithFallback(url, 12000);
+    const html = await fetchFullContentRacing(url);
     const doc = new DOMParser().parseFromString(html, "text/html");
+
+    // ── Bypass Lazy Load & Proxy Images ───────────────────────────────
+    doc.querySelectorAll("img").forEach(img => {
+      const realSrc = img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original") || img.getAttribute("src");
+      if (realSrc && realSrc.startsWith("http")) {
+        img.src = `https://wsrv.nl/?url=${encodeURIComponent(realSrc)}`;
+      }
+      img.removeAttribute("loading");
+      img.setAttribute("decoding", "async");
+    });
 
     // Buang elemen noise
     doc.querySelectorAll(

@@ -6,7 +6,7 @@ import {
   Sparkles, RefreshCw, Check, Copy, BookmarkPlus, Edit3, Clock 
 } from "lucide-react";
 import type { Article } from "../data/articles";
-import { PROXY_SERVERS, fetchWithTimeout, handleImgError } from "../services/fetcherUtils";
+import { PROXY_SERVERS, fetchWithTimeout, handleImgError, fetchFullContentRacing, simpleMdToHtml } from "../services/fetcherUtils";
 import { articleStore } from "../store/articleStore";
 import { draftStore } from "../store/draftStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
@@ -115,129 +115,125 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, article]);
 
-  // ── Proxy Racing Engine ─────────────────────────────────────────────────
-  const loadFullContent = async (targetArticle: Article) => {
-    if (!targetArticle.originalUrl) return;
+// ── Proxy Racing Engine ─────────────────────────────────────────────────
+const loadFullContent = async (targetArticle: Article) => {
+  if (!targetArticle.originalUrl) return;
 
-    setLoadingCode(true);
-    setContentOpacity(0.5);
+  setLoadingCode(true);
+  setContentOpacity(0.5);
 
-    let htmlContent: string | null = null;
+  let htmlContent: string | null = null;
 
+  try {
+    htmlContent = await fetchFullContentRacing(targetArticle.originalUrl!);
+  } catch {
+    console.warn("[Modal] Semua proxy gagal untuk load konten penuh.");
+  }
+
+
+  if (htmlContent) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, "text/html");
+
+    // Set base URL
     try {
-      htmlContent = await new Promise<string>((resolve, reject) => {
-        let errors = 0;
-        const proxies = PROXY_SERVERS.map(async (proxy) => {
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), 15000);
-          try {
-            const res = await fetch(proxy.getUrl(targetArticle.originalUrl!), { signal: controller.signal });
-            clearTimeout(t);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const text = await proxy.parse(res);
-            if (text && text.length > 500) return text;
-            throw new Error("too short");
-          } catch (err) { clearTimeout(t); throw err; }
-        });
-        proxies.forEach(p => p.then(resolve).catch(() => {
-          errors++;
-          if (errors === proxies.length) reject(new Error("All proxies failed"));
-        }));
-      });
-    } catch {
-      console.warn("[Modal] Semua proxy gagal untuk load konten penuh.");
-    }
+      const baseTag = doc.createElement("base");
+      baseTag.href = new URL(targetArticle.originalUrl!).origin;
+      doc.head.appendChild(baseTag);
+    } catch {}
 
-    if (htmlContent) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlContent, "text/html");
+    // ── 0. Bypass Lazy Load & Proxy Images ─────────────────────────────
+    doc.querySelectorAll("img").forEach(img => {
+      // Pindahkan data-src ke src jika src kosong atau placeholder
+      const realSrc = img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original") || img.getAttribute("src");
+      if (realSrc && realSrc.startsWith("http")) {
+        // Gunakan wsrv.nl sebagai proxy utama untuk gambar di dalam artikel
+        img.src = `https://wsrv.nl/?url=${encodeURIComponent(realSrc)}`;
+      }
+      img.removeAttribute("loading"); // Biarkan browser handle loading default
+      img.setAttribute("decoding", "async");
+    });
 
-      // Set base URL
-      try {
-        const baseTag = doc.createElement("base");
-        baseTag.href = new URL(targetArticle.originalUrl).origin;
-        doc.head.appendChild(baseTag);
-      } catch {}
+    // ── 1. Pulihkan lite-youtube → iframe ────────────────────────────────
 
-      // ── 1. Pulihkan lite-youtube → iframe ────────────────────────────────
-      doc.querySelectorAll("lite-youtube, [data-youtube-id]").forEach(el => {
-        const vid = el.getAttribute("videoid") || el.getAttribute("data-youtube-id") || el.id;
-        if (!vid) return;
-        const iframe = doc.createElement("iframe");
-        iframe.src = `https://www.youtube.com/embed/${vid}`;
-        iframe.width = "100%"; iframe.height = "315";
-        iframe.setAttribute("frameborder", "0"); iframe.setAttribute("allowfullscreen", "true");
-        el.replaceWith(iframe);
-      });
+    doc.querySelectorAll("lite-youtube, [data-youtube-id]").forEach(el => {
+      const vid = el.getAttribute("videoid") || el.getAttribute("data-youtube-id") || el.id;
+      if (!vid) return;
+      const iframe = doc.createElement("iframe");
+      iframe.src = `https://www.youtube.com/embed/${vid}`;
+      iframe.width = "100%"; iframe.height = "315";
+      iframe.setAttribute("frameborder", "0"); iframe.setAttribute("allowfullscreen", "true");
+      el.replaceWith(iframe);
+    });
 
-      // ── 2. Hapus selectors sampah standar ───────────────────────────────
-      const junkSelectors = [
-        "script", "style", "nav", "footer", "header", "aside",
-        ".ads", ".ad", ".advertisement", ".sidebar", "#sidebar",
-        ".related", ".recommended", ".trending", ".newsletter",
-        ".social-share", ".comments", "#comments", ".footer-meta",
-        ".tags", ".breadcrumb", ".cookie-notice", ".popup",
-        "[class*='widget']", "[class*='promo']", "[class*='banner']"
-      ];
-      doc.querySelectorAll(junkSelectors.join(",")).forEach(el => el.remove());
+    // ── 2. Hapus selectors sampah standar ───────────────────────────────
+    const junkSelectors = [
+      "script", "style", "nav", "footer", "header", "aside",
+      ".ads", ".ad", ".advertisement", ".sidebar", "#sidebar",
+      ".related", ".recommended", ".trending", ".newsletter",
+      ".social-share", ".comments", "#comments", ".footer-meta",
+      ".tags", ".breadcrumb", ".cookie-notice", ".popup",
+      "[class*='widget']", "[class*='promo']", "[class*='banner']"
+    ];
+    doc.querySelectorAll(junkSelectors.join(",")).forEach(el => el.remove());
 
-      // ── 3. Truncate Ekstrem — cari elemen dengan keyword lalu hapus + semua saudara setelahnya ──
-      const TRUNCATE_KEYWORDS = [
-        "Etiquetado:", "Fuentes:", "Vía:", "Baca juga", "Baca Juga",
-        "Te podría interesar", "Te podria interesar", "Leer más",
-        "Tags:", "Filed under:", "Related Posts"
-      ];
-      const traverse = (root: Element) => {
-        const children = Array.from(root.children);
-        for (const child of children) {
-          const txt = child.textContent?.trim() || "";
-          if (TRUNCATE_KEYWORDS.some(kw => txt.startsWith(kw) || txt.includes(kw))) {
-            // Hapus elemen ini dan semua saudara sesudahnya (nextElementSibling)
-            let toRemove: Element | null = child;
-            while (toRemove) {
-              const next = toRemove.nextElementSibling;
-              try { toRemove.remove(); } catch {}
-              toRemove = next;
-            }
-            return; // Stop traversal on this branch
+    // ── 3. Truncate Ekstrem — cari elemen dengan keyword lalu hapus + semua saudara setelahnya ──
+    const TRUNCATE_KEYWORDS = [
+      "Etiquetado:", "Fuentes:", "Vía:", "Baca juga", "Baca Juga",
+      "Te mungkin tertarik", "Te podria interesar", "Leer lebih",
+      "Tags:", "Filed under:", "Related Posts"
+    ];
+    const traverse = (root: Element) => {
+      const children = Array.from(root.children);
+      for (const child of children) {
+        const txt = child.textContent?.trim() || "";
+        if (TRUNCATE_KEYWORDS.some(kw => txt.startsWith(kw) || txt.includes(kw))) {
+          // Hapus elemen ini dan semua saudara sesudahnya (nextElementSibling)
+          let toRemove: Element | null = child;
+          while (toRemove) {
+            const next = toRemove.nextElementSibling;
+            try { toRemove.remove(); } catch {}
+            toRemove = next;
           }
-          traverse(child);
+          return; // Stop traversal on this branch
         }
-      };
-      if (doc.body) traverse(doc.body);
-
-      // ── 4. Tautan Siluman — hapus <p> dengan teks = teks link di dalamnya ─
-      doc.querySelectorAll("p").forEach(p => {
-        const pText = p.textContent?.trim() || "";
-        if (!pText) { p.remove(); return; }
-        const links = p.querySelectorAll("a");
-        if (links.length === 0) return;
-        const linkTexts = Array.from(links).map(a => a.textContent?.trim() || "");
-        const combined = linkTexts.join("").trim();
-        // Jika teks p hampir sama dengan gabungan teks link, ini tautan siluman
-        if (combined.length > 0 && (pText === combined || pText.replace(/\s+/g, "") === combined.replace(/\s+/g, ""))) {
-          p.remove();
-        }
-      });
-
-      // ── 5. Jalankan Readability ──────────────────────────────────────────
-      let finalHtml = "";
-      try {
-        const reader = new Readability(doc.cloneNode(true) as Document);
-        const parsed = reader.parse();
-        if (parsed?.content) finalHtml = parsed.content;
-      } catch (err) {
-        console.warn("[Modal] Readability error:", err);
+        traverse(child);
       }
+    };
+    if (doc.body) traverse(doc.body);
 
-      if (finalHtml) {
-        setDisplayArticle(prev => prev ? { ...prev, contentHtml: finalHtml, _fullFetched: true } as any : null);
+    // ── 4. Tautan Siluman — hapus <p> dengan teks = teks link di dalamnya ─
+    doc.querySelectorAll("p").forEach(p => {
+      const pText = p.textContent?.trim() || "";
+      if (!pText) { p.remove(); return; }
+      const links = p.querySelectorAll("a");
+      if (links.length === 0) return;
+      const linkTexts = Array.from(links).map(a => a.textContent?.trim() || "");
+      const combined = linkTexts.join("").trim();
+      // Jika teks p hampir sama dengan gabungan teks link, ini tautan siluman
+      if (combined.length > 0 && (pText === combined || pText.replace(/\s+/g, "") === combined.replace(/\s+/g, ""))) {
+        p.remove();
       }
+    });
+
+    // ── 5. Jalankan Readability ──────────────────────────────────────────
+    let finalHtml = "";
+    try {
+      const reader = new Readability(doc.cloneNode(true) as Document);
+      const parsed = reader.parse();
+      if (parsed?.content) finalHtml = parsed.content;
+    } catch (err) {
+      console.warn("[Modal] Readability error:", err);
     }
 
-    setLoadingCode(false);
-    setContentOpacity(1);
-  };
+    if (finalHtml) {
+      setDisplayArticle(prev => prev ? { ...prev, contentHtml: finalHtml, _fullFetched: true } as any : null);
+    }
+  }
+
+  setLoadingCode(false);
+  setContentOpacity(1);
+};
 
 
   // ── Tool Actions ────────────────────────────────────────────────────────
@@ -537,9 +533,9 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
 
       {/* ── AI Result Popup ─────────────────────────────────────────── */}
       {aiPopup && (
-        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm shadow-2xl"
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm shadow-2xl"
           onClick={(e) => { if (e.target === e.currentTarget) { setAiPopup(null); setAiCloudUrl(null); } }}>
-          <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl bg-white overflow-hidden flex flex-col md:max-h-[85vh] animate-in slide-in-from-bottom-5">
+          <div className="w-[92%] sm:max-w-lg rounded-3xl bg-white overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-5">
             <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-500">
@@ -553,7 +549,7 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
             </div>
             
             <div className="flex-1 overflow-y-auto px-5 pb-3">
-              <h2 className="text-xl font-bold text-slate-900 leading-snug mb-4">{aiPopup.title}</h2>
+              <h2 className="text-xl font-bold text-slate-900 leading-snug mb-4" dangerouslySetInnerHTML={{ __html: simpleMdToHtml(aiPopup.title) }} />
               <div className="flex flex-col gap-3">
                 {(aiPopup.content ?? []).map((p, i) => (
                   <p key={i} className="text-slate-600 leading-relaxed text-[15px] text-justify">{p}</p>
@@ -562,44 +558,23 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
             </div>
 
             <div className="flex flex-col gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50 shrink-0">
-              <button onClick={() => {
-                  navigator.clipboard.writeText([aiPopup.title, "", ...(aiPopup.content ?? [])].join("\n\n"));
-                  setAiCopied(true); setTimeout(() => setAiCopied(false), 2000);
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all bg-white border border-slate-200 text-slate-700 shadow-sm active:scale-95">
-                {aiCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />} 
-                {aiCopied ? "Tersalin!" : "Salin Artikel"}
-              </button>
-
-              {aiCloudUrl ? (
-                <button onClick={() => { navigator.clipboard.writeText(aiCloudUrl); showToast("Link cloud disalin!"); }}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold bg-green-500 text-white shadow-sm hover:bg-green-600 active:scale-95">
-                  <Share2 size={16} /> Copy Link Publik
-                </button>
-              ) : (
-                <button onClick={handleAiCloudSave} disabled={aiCloudSaving}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold bg-blue-500 text-white shadow-sm hover:bg-blue-600 active:scale-95 disabled:opacity-50">
-                  {aiCloudSaving ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  {aiCloudSaving ? "Menyimpan..." : "Simpan Offline ke Cloud"}
-                </button>
-              )}
-
-              <div className="flex gap-2 mt-1">
+              <div className="flex gap-2">
                 <button onClick={() => {
                     draftStore.create({
-                      articleTitle: article!.title, aiTitle: aiPopup.title, aiContent: aiPopup.content,
+                      articleTitle: article!.title, aiTitle: simpleMdToHtml(aiPopup.title), aiContent: aiPopup.content,
                       source: article!.source ?? "", imageUrl: article!.image ?? "", template: null,
                     });
                     setAiPopup(null); setAiCloudUrl(null); onClose(); navigate("/jelajahi");
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold bg-white border border-slate-200 text-slate-600">
+                  className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold bg-white border border-slate-200 text-slate-600 active:scale-95 transition-all">
                   <BookmarkPlus size={14} /> Simpan Draft
                 </button>
                 <button onClick={() => {
+                    const formattedTitle = simpleMdToHtml(aiPopup.title);
                     onClose();
-                    navigate("/editor", { state: { titleHtml: aiPopup.title, aiContent: aiPopup.content, source: article!.source, bgUrl: article!.image, fromDraft: true, articleTitle: article!.title, imageUrl: article!.image } });
+                    navigate("/editor", { state: { titleHtml: formattedTitle, aiContent: aiPopup.content, source: article!.source, bgUrl: article!.image, fromDraft: true, articleTitle: article!.title, imageUrl: article!.image } });
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold bg-gradient-to-br from-orange-500 to-orange-400 text-white">
+                  className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold bg-gradient-to-br from-orange-500 to-orange-400 text-white active:scale-95 transition-all">
                   <Edit3 size={14} /> Editor
                 </button>
               </div>

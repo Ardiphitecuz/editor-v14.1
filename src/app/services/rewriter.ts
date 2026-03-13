@@ -76,7 +76,7 @@ const PROMPT_NEWS = `Kamu adalah editor berita profesional media online Indonesi
 Tulis ulang artikel dari bahasa asing menjadi artikel berita Bahasa Indonesia yang formal, informatif, dan enak dibaca.
 
 ATURAN:
-- Judul: max 80 karakter, gaya berita Indonesia
+- Judul: max 80 karakter, gaya berita Indonesia. Gunakan BOLD (contoh: **Headline**) pada kata kunci yang paling penting/menarik.
 - Isi: 4-6 paragraf, masing-masing 2-4 kalimat, BAHASA INDONESIA baku
 - Summary: 1-2 kalimat ringkas, max 150 karakter
 - Kategori: Hot Topic | Breaking | Trending | Discuss | Opinion | Analisis | Review | Exclusive
@@ -88,7 +88,7 @@ const PROMPT_COMMUNITY = `Kamu adalah editor media online Indonesia yang ahli me
 Baca topik diskusi berikut, pahami konteksnya, lalu tulis artikel berita feature Bahasa Indonesia yang menarik.
 
 CARA MENULIS:
-- Judul: catchy, mencerminkan inti diskusi, max 80 karakter
+- Judul: catchy, mencerminkan inti diskusi, max 80 karakter. Gunakan BOLD (contoh: **Sesuatu**) pada kata kunci utama.
 - Paragraf 1: jelaskan topik/isu yang sedang viral
 - Paragraf 2-4: rangkum pendapat dan reaksi netizen secara berimbang
 - Paragraf 5: konteks & kesimpulan
