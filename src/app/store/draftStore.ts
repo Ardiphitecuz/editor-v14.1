@@ -84,11 +84,19 @@ type DraftMeta = Omit<Draft, "template"> & {
 };
 
 function stripImage(draft: Draft): DraftMeta {
+  if (!draft.template) {
+    return { ...draft, template: null };
+  }
+
+  // Pisahkan imageDataUrl agar tidak ikut masuk ke save localStorage
+  const { imageDataUrl, ...restTemplate } = draft.template;
+
   return {
     ...draft,
-    template: draft.template
-      ? { ...draft.template, hasImage: !!draft.template.imageDataUrl, imageDataUrl: undefined as any }
-      : null,
+    template: {
+      ...restTemplate,
+      hasImage: !!imageDataUrl,
+    } as Omit<DraftTemplate, "imageDataUrl"> & { hasImage: boolean }
   };
 }
 
@@ -166,6 +174,22 @@ export const draftStore = {
     }
     notify();
     return id;
+  },
+
+  /** Menyimpan atau menimpa draft utuh (berguna untuk import dari cloud) */
+  async save(draft: Draft): Promise<void> {
+    const existingIdx = _drafts.findIndex(d => d.id === draft.id);
+    if (existingIdx >= 0) {
+      _drafts[existingIdx] = draft;
+    } else {
+      _drafts = [draft, ..._drafts];
+    }
+    persist(_drafts);
+    if (draft.template?.imageDataUrl) {
+      try { await idbSet(draft.id, draft.template.imageDataUrl); }
+      catch(e) { console.warn("[draftStore] IDB set error:", e); }
+    }
+    notify();
   },
 
   /** Update template (setelah user edit di editor lalu simpan) */

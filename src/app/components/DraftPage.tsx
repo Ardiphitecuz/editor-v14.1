@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
   FileText, Image as ImageIcon, Trash2, PlusCircle,
-  Download, Copy, Check,
+  Download, Copy, Check, Cloud, CloudDownload,
   Clock, X, Instagram,
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
@@ -108,6 +108,10 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
   const [captionText, setCaptionText] = useState<string>(() =>
     [...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
   );
+  // Cloud save state
+  const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudId, setCloudId] = useState<string | null>(null);
+
   const [rewriting, setRewriting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -199,6 +203,34 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
         imageUrl: draft.imageUrl,
       }
     });
+  }
+
+  async function handleCloudSave() {
+    setCloudSaving(true);
+    setCloudId(null);
+    try {
+      const res = await fetch('/api/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCloudId(data.id);
+      } else {
+        alert("Gagal simpan ke cloud: " + (data.error || "Unknown"));
+      }
+    } catch (e) {
+      alert("Error network: " + e);
+    } finally {
+      setCloudSaving(false);
+    }
+  }
+
+  function handleCopyCloudId() {
+    if (!cloudId) return;
+    navigator.clipboard.writeText(cloudId).catch(() => {});
+    alert("Kode berhasil disalin: " + cloudId);
   }
 
   const hasImage = !!draft.template?.imageDataUrl;
@@ -304,6 +336,35 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
               </div>
             </div>
 
+            {/* Tombol Simpan ke Cloud */}
+            {captionMode === "view" && (
+              <div className="mt-4 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)", display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {!cloudId ? (
+                  <button 
+                    onClick={handleCloudSave}
+                    disabled={cloudSaving}
+                    className="flex items-center justify-center gap-2 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }}
+                  >
+                    <Cloud size={14} color="white" />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "white" }}>
+                      {cloudSaving ? "Mengunggah..." : "Simpan Draf ke Cloud"}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}>
+                    <div>
+                      <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700, display: 'block', marginBottom: 2 }}>KODE DRAF CLOUD</span>
+                      <span style={{ fontSize: 16, color: "white", fontWeight: 900, letterSpacing: '2px' }}>{cloudId}</span>
+                    </div>
+                    <button onClick={handleCopyCloudId} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(34,197,94,0.2)" }}>
+                      <Copy size={13} color="#22c55e" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Teks caption */}
             {captionMode === "view" ? (
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
@@ -371,6 +432,11 @@ export function DraftPage() {
   const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
+  // Cloud Load State
+  const [showCloudInput, setShowCloudInput] = useState(false);
+  const [cloudInputId, setCloudInputId] = useState("");
+  const [cloudLoading, setCloudLoading] = useState(false);
+
   useEffect(() => {
     window.scrollTo({ top: 0 });
     // Reload imageDataUrl dari IDB setiap mount — handle iOS GC atau navigasi kembali
@@ -383,11 +449,14 @@ export function DraftPage() {
     if (!headerRef.current) return;
     const totalOffset = headerRef.current.offsetHeight + 84; // 84 = bottom nav
     document.documentElement.style.setProperty("--header-h", `${totalOffset}px`);
-    return () => document.documentElement.style.removeProperty("--header-h");
+    return () => {
+      document.documentElement.style.removeProperty("--header-h");
+    };
   }, []);
 
   useEffect(() => {
-    return draftStore.subscribe(() => setDrafts(draftStore.getAll()));
+    const unsubscribe = draftStore.subscribe(() => setDrafts(draftStore.getAll()));
+    return () => { unsubscribe(); };
   }, []);
 
   function handleDelete(id: string, e: React.MouseEvent) {
@@ -402,6 +471,29 @@ export function DraftPage() {
     setDeleteConfirm(null);
   }
 
+  async function handleLoadFromCloud() {
+    if (!cloudInputId.trim()) return;
+    setCloudLoading(true);
+    try {
+      const res = await fetch(`/api/drafts?id=${cloudInputId.trim()}`);
+      const data = await res.json();
+      if (res.ok && data) {
+        // Jika ID belum ada di lokal, tambahkan prefix biar tidak crash
+        const newDraft = { ...data, id: `cloud_${Date.now()}` };
+        draftStore.save(newDraft);
+        setShowCloudInput(false);
+        setCloudInputId("");
+        alert("Draf berhasil diunduh dari cloud!");
+      } else {
+        alert("Gagal load draft: " + (data.error || "Not found"));
+      }
+    } catch (e) {
+      alert("Network error: " + e);
+    } finally {
+      setCloudLoading(false);
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
       {/* Header */}
@@ -412,12 +504,22 @@ export function DraftPage() {
             <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a1a", lineHeight: 1.1 }}>
               Draft
             </h1>
-            <span
-              className="px-2.5 py-1 rounded-full"
-              style={{ fontSize: 11, fontWeight: 700, background: drafts.length ? "#ff742f" : "#f0ede9", color: drafts.length ? "white" : "#999" }}
-            >
-              {drafts.length} draft
-            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCloudInput(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-transform active:scale-95"
+                style={{ background: "rgba(255,116,47,0.1)", border: "1px solid rgba(255,116,47,0.2)" }}
+              >
+                <CloudDownload size={14} color="#ff742f" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#ff742f" }}>Unduh Cloud</span>
+              </button>
+              <span
+                className="px-2.5 py-1 rounded-full flex items-center justify-center"
+                style={{ fontSize: 11, fontWeight: 700, background: drafts.length ? "#ff742f" : "#f0ede9", color: drafts.length ? "white" : "#999" }}
+              >
+                {drafts.length}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -497,6 +599,43 @@ export function DraftPage() {
                 style={{ background: "#ef4444", color: "white", fontSize: 13 }}
               >
                 Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Input Cloud ID */}
+      {showCloudInput && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => !cloudLoading && setShowCloudInput(false)}>
+          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="font-bold text-[#1a1a1a] text-lg">Unduh Draf Cloud</h3>
+              <p className="text-neutral-500 text-xs mt-1">Masukkan 6 digit kode draf dari perangkat lain untuk melanjutkan editing di perangkat ini.</p>
+            </div>
+            <input
+              type="text"
+              placeholder="Contoh: a8x9f2"
+              value={cloudInputId}
+              onChange={e => setCloudInputId(e.target.value)}
+              className="w-full bg-[#f8f5f1] border border-[#f0ede9] rounded-xl px-4 py-3 text-sm font-bold tracking-[2px] text-center focus:outline-none focus:border-[#ff742f]"
+              autoComplete="off"
+            />
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowCloudInput(false)}
+                disabled={cloudLoading}
+                className="flex-1 py-3 rounded-xl font-bold text-neutral-500 bg-[#f5f5f5]"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleLoadFromCloud}
+                disabled={cloudLoading || !cloudInputId.trim()}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-[#ff742f] to-[#ff9a5c] disabled:opacity-50"
+              >
+                {cloudLoading ? 'Mencari...' : 'Unduh'}
               </button>
             </div>
           </div>

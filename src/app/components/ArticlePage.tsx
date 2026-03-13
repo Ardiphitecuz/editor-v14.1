@@ -144,6 +144,44 @@ export function ArticlePage() {
   // AI popup state
   const [aiPopup, setAiPopup] = useState<Article | null>(null);
   const [aiCopied, setAiCopied] = useState(false);
+  const [aiCloudUrl, setAiCloudUrl] = useState<string | null>(null);
+  const [aiCloudSaving, setAiCloudSaving] = useState(false);
+
+  // Bagikan ke Cloud (Simpan)
+  const handleAiCloudSave = async () => {
+    if (!aiPopup) return;
+    setAiCloudSaving(true);
+    try {
+      // Struktur mirip dengan draft agar compatible
+      const payload = {
+        articleTitle: article.title,
+        aiTitle: aiPopup.title,
+        aiContent: aiPopup.content,
+        source: article.source ?? "",
+        imageUrl: article.image ?? "",
+        isMagazine: true, // penanda
+        createdAt: new Date().toISOString(),
+      };
+
+      const res = await fetch("/api/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal simpan ke cloud");
+      
+      const shareUrl = `${window.location.origin}/drafts?load=${data.id}`;
+      setAiCloudUrl(shareUrl);
+      showToast("Tersimpan Publik! Link siap dibagikan.");
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Gagal: ${err.message}`);
+    } finally {
+      setAiCloudSaving(false);
+    }
+  };
+
   // Toast
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2200); };
@@ -464,7 +502,7 @@ export function ArticlePage() {
             {aiPopup && (
               <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
                 style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
-                onClick={(e) => { if (e.target === e.currentTarget) setAiPopup(null); }}>
+                onClick={(e) => { if (e.target === e.currentTarget) { setAiPopup(null); setAiCloudUrl(null); } }}>
                 <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col"
                   style={{ maxHeight: "85vh" }}>
                   {/* Header */}
@@ -475,7 +513,7 @@ export function ArticlePage() {
                       </div>
                       <span style={{ fontSize: 14, fontWeight: 800, color: "#1a1a1a" }}>Hasil AI</span>
                     </div>
-                    <button onClick={() => setAiPopup(null)} className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
+                    <button onClick={() => { setAiPopup(null); setAiCloudUrl(null); }} className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
                       <X size={15} className="text-neutral-500" />
                     </button>
                   </div>
@@ -500,8 +538,30 @@ export function ArticlePage() {
                       {aiCopied ? <Check size={15} /> : <Copy size={15} />}
                       <span style={{ fontSize: 13, fontWeight: 700 }}>{aiCopied ? "Tersalin!" : "Salin Artikel"}</span>
                     </button>
+                    {/* Row 1.5: Simpan Publik / Cloud Share */}
+                    {aiCloudUrl ? (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(aiCloudUrl);
+                          showToast("Link cloud disalin!");
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl transition-all active:scale-95"
+                        style={{ background: "#22c55e", color: "white" }}>
+                        <Share2 size={15} />
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>Copy Link Publik</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleAiCloudSave}
+                        disabled={aiCloudSaving}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl transition-all active:scale-95 disabled:opacity-60"
+                        style={{ background: "linear-gradient(135deg,#3b82f6,#60a5fa)", color: "white" }}>
+                        {aiCloudSaving ? <RefreshCw size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{aiCloudSaving ? "Menyimpan..." : "Simpan Offline ke Cloud"}</span>
+                      </button>
+                    )}
                     {/* Row 2: Simpan ke Draft + Buat Postingan */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mt-1">
                       <button
                         onClick={() => {
                           // Simpan ke draft tanpa template
@@ -514,22 +574,24 @@ export function ArticlePage() {
                             template: null,
                           });
                           setAiPopup(null);
+                          setAiCloudUrl(null);
                           navigate("/jelajahi");
                         }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl transition-all active:scale-95"
                         style={{ background: "#f0ede9", color: "#555" }}>
                         <BookmarkPlus size={14} />
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>Simpan Draft</span>
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>Simpan Draft Lokal</span>
                       </button>
                       <button
                         onClick={() => {
                           setAiPopup(null);
+                          setAiCloudUrl(null);
                           navigate("/editor", { state: { titleHtml: aiPopup!.title, aiContent: aiPopup!.content, source: article.source, bgUrl: article.image, fromDraft: true, articleTitle: article.title, imageUrl: article.image } });
                         }}
                         className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
                         style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", color: "white" }}>
                         <Edit3 size={14} />
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>Buat Postingan</span>
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>Buat Postingan Editor</span>
                       </button>
                     </div>
                   </div>

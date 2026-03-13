@@ -2,6 +2,8 @@
 import axios from 'axios';
 import { parseHTML } from 'linkedom';
 import { Readability } from '@mozilla/readability';
+import { put, head } from '@vercel/blob';
+import crypto from 'crypto';
 
 export const config = { maxDuration: 30 };
 
@@ -122,6 +124,32 @@ async function handle(req, res) {
     const pageUrl = new URL(url);
     const baseUrl = pageUrl.origin;
     const isJapaneseSite = /\.jp(\/|$)/.test(url) || /[\u3040-\u30ff\u4e00-\u9faf]/.test(url);
+
+    // ── Cek Cache di Vercel Blob ───────────────────────────────────────────────
+    const urlHash = crypto.createHash('sha256').update(url).digest('hex').substring(0, 16);
+    const cachePath = `cache/article_${urlHash}.json`;
+    
+    // Pastikan token Vercel Blob ada
+    const hasBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
+    
+    if (hasBlob) {
+      try {
+        const cacheMeta = await head(cachePath);
+        if (cacheMeta && cacheMeta.url) {
+          // File cache ditemukan, langsung unduh JSON dari Blob URL
+          const cacheReq = await axios.get(cacheMeta.url, { timeout: 8000 });
+          if (cacheReq.status === 200 && cacheReq.data && cacheReq.data.title) {
+            console.log(`[Cache Hit] Memuat artikel dari Vercel Blob: ${cachePath}`);
+            return res.status(200).json({ success: true, ...cacheReq.data });
+          }
+        }
+      } catch (err) {
+        // Abaikan error 404 (file belum ada), lanjut scraping
+        if (err.message && !err.message.includes('BlobNotFoundError')) {
+          console.warn('[Cache Read Error]', err.message);
+        }
+      }
+    }
 
     const fetchWithFallback = async (targetUrl) => {
       const baseHeaders = { 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8', 'Accept-Encoding': 'gzip, deflate, br', 'Cache-Control': 'no-cache' };
@@ -451,14 +479,51 @@ async function handle(req, res) {
     // Post-pass: hapus elemen iklan inline (script, ins.adsbygoogle, div[id*=ad])
     contentElement.querySelectorAll('ins,script,[id*="ad-"],[id*="-ad"],[id*="ads"],[class*="adsbygoogle"],[class*="ad-slot"],[class*="advertisement"]').forEach(el => el.remove());
 
-    const contentHtml = contentElement.innerHTML.trim();
-    if (!contentHtml) return res.json({ success: false, error: 'No content after sanitization', items: [] });
+    const finalHtml = Array.from(contentElement.childNodes)
+      .map(n => n.nodeType === 1 ? n.outerHTML : (n.textContent ?? ''))
+      .join('');
 
-    const plainText = (contentElement.textContent ?? '').replace(/\s+/g, ' ').trim();
-    return res.json({
-      success: true,
-      items: [{ title: article.title ?? '', description: plainText.slice(0, 200), image: ogImage, summary: article.excerpt ?? plainText.slice(0, 200), contentHtml }],
-    });
+    const plainText = (contentElement.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const payloadResponse = {
+      items: [{
+        title: article.title || articleTitle || '',
+        description: plainText.slice(0, 200),
+        image: ogImage,
+        summary: article.excerpt || plainText.slice(0, 200),
+        contentHtml: finalHtml,
+        byline: article.byline || '',
+        siteName: article.siteName || '',
+        textContent: plainText,
+        length: article.length || plainText.length,
+        sourceUrl: url,
+      }]
+    };
+
+    // ── Simpan ke Vercel Blob Cache (Background) ─────────────────────────────
+    const mainItem = payloadResponse.items[0];
+    if (hasBlob && mainItem && mainItem.contentHtml && mainItem.contentHtml.length > 500) {
+      // Jalankan background upload tanpa memblokir response
+      const uploadPromise = put(cachePath, JSON.stringify(payloadResponse), {
+        access: 'public',
+        contentType: 'application/json',
+      }).then((meta) => {
+        console.log(`[Cache Write] Artikel baru disimpan ke Vercel Blob: ${meta.url}`);
+      }).catch(err => {
+        console.warn(`[Cache Write Error] Gagal menyimpan ke Blob:`, err.message);
+      });
+      
+      // Tunggu maksimal 1.5 detik. Bila kelamaan, tetap lanjut respon.
+      // (Di serverless, proses background yang murni un-awaited beresiko mati terbunuh jika container beku)
+      await Promise.race([
+        uploadPromise,
+        new Promise(r => setTimeout(r, 1500))
+      ]);
+    }
+
+    return res.status(200).json({ success: true, ...payloadResponse });
 
   } catch (error) {
     const msg = error.message ?? String(error);
