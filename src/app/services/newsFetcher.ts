@@ -132,16 +132,18 @@ export async function fetchAllSources(
 
   onProgress?.("Selesai", enabled.length, enabled.length);
 
-  // ── Dedup: buang duplikat berdasarkan URL (exact) saja
-  // Jangan dedup by title — beberapa sumber (misal Somoskudasai) punya judul
-  // identik di feed mereka untuk artikel berbeda, sehingga dedup title
-  // akan membuang artikel yang valid.
+  // ── Dedup: URL exact match ATAU judul sangat mirip dengan URL kosong/sama
   const seenUrls = new Set<string>();
+  const seenTitles = new Set<string>();
   all = all.filter(a => {
-    const url = (a as any).originalUrl || (a as any).url || a.id || "";
-    if (!url) return true;
-    if (seenUrls.has(url)) return false;
-    seenUrls.add(url);
+    const url = (a as any).originalUrl || (a as any).url || "";
+    const titleKey = a.title.trim().toLowerCase().slice(0, 80);
+    // Selalu buang jika URL sama (duplikat nyata)
+    if (url && seenUrls.has(url)) return false;
+    // Buang jika judul sama DAN tidak punya URL unik (artikel broken dari feed)
+    if (!url && seenTitles.has(titleKey)) return false;
+    if (url) seenUrls.add(url);
+    seenTitles.add(titleKey);
     return true;
   });
 

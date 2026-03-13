@@ -324,11 +324,15 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
     drawSourceBars(ctx,source,articleSource,136,2544,true);
   }
 
-  // Gunakan Blob URL — jauh lebih handal dari dataURL di mobile iOS/Android
+  // Gunakan JPEG dataURL untuk thumbnail draft — lebih kecil dari PNG, persisten lintas session
+  // Blob URL TIDAK boleh disimpan ke IDB karena hangus saat tab/session reload
   return new Promise((resolve,reject)=>{
     canvas.toBlob((blob)=>{
       if(!blob||blob.size<100){reject(new Error("Canvas kosong"));return;}
-      resolve(URL.createObjectURL(blob));
-    },"image/png");
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("FileReader gagal"));
+      reader.readAsDataURL(blob);
+    },"image/jpeg", 0.88); // JPEG 88% — cukup tajam, ukuran ~3x lebih kecil dari PNG
   });
 }
