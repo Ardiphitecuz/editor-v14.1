@@ -12,9 +12,10 @@ export const RSS2JSON         = "https://api.rss2json.com/v1/api.json?rss_url=";
 export const SERVER_RSS_PROXY = "/api/rss?url=";
 export const SERVER_PROXY     = "/api/proxy?url=";
 export const PUBLIC_PROXIES   = [
+  "https://api.codetabs.com/v1/proxy?quest=",       // paling reliable, jarang block
   "https://corsproxy.io/?",
   "https://api.allorigins.win/raw?url=",
-  "https://api.codetabs.com/v1/proxy?quest=",
+  "https://thingproxy.freeboard.io/fetch/",          // fallback tambahan
 ];
 
 // ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────

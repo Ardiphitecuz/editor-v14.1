@@ -286,10 +286,10 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
     }
   }
 
-  // ② Server proxy /api/rss
+  // ② Server proxy /api/rss — timeout 25s karena beberapa feed lambat
   try {
     const res = await fetch(SERVER_RSS_PROXY + encodeURIComponent(feedUrl), {
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(25000),
     });
     if (res.ok) {
       const text = await res.text();
