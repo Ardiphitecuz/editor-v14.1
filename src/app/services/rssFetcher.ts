@@ -111,6 +111,7 @@ function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[
       pubTimestamp: rawPubTimestamp(item.pubDate),
       hot: i < 2,
       originalUrl: item.link || undefined,
+      _rawDescription: item.description ?? item.content ?? "",
     } as any;
   });
 }
@@ -287,13 +288,29 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
       // 1. Semua judul identik → rss2json salah baca CDATA title
       // 2. Semua link identik (dan ada isinya) → rss2json salah baca link
       // 3. Mayoritas link kosong → rss2json tidak dapat link sama sekali
-      const allTitleSame = titles.length > 1 && titles.every(t => t === titles[0]);
       const filledLinks = links.filter(l => l && l.startsWith("http"));
       const allLinkSame = filledLinks.length > 1 && filledLinks.every(l => l === filledLinks[0]);
       const mostLinkEmpty = filledLinks.length < articles.length * 0.5;
 
+      // Deteksi judul identik/hampir identik (Levenshtein terlalu berat, pakai slice perbandingan)
+      const titleSet = new Set(titles.map(t => t.trim().toLowerCase().slice(0, 60)));
+      const allTitleSame = titles.length > 1 && titleSet.size <= 1;
+
+      // Jika link valid tapi judul semua sama → judul salah baca (CDATA bug rss2json)
+      // Jangan fallback ke XML parser (mungkin timeout di Vercel) —
+      // gunakan description/summary sebagai judul pengganti langsung di sini
+      if (allTitleSame && !allLinkSame && !mostLinkEmpty) {
+        return articles.map((a, idx) => {
+          const raw = (a as any)._rawDescription ?? a.summary ?? "";
+          const cleaned = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+          // Kalimat pertama dari description sebagai judul
+          const sentenceTitle = cleaned.split(/(?<=[.!?。])\s+/)[0].trim().slice(0, 100);
+          return { ...a, title: sentenceTitle || a.title };
+        });
+      }
+
       if (!allTitleSame && !allLinkSame && !mostLinkEmpty) return articles;
-      // rss2json data invalid → fallback ke XML parser
+      // rss2json data invalid (link kosong/sama) → fallback ke XML parser
     }
   }
 
