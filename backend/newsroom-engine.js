@@ -183,27 +183,55 @@ async function parseRSS(url, pioneer = false) {
 
     if (!content) return { rss_url: url };
 
+    // ── Pre-parse Clean: Fix rss-parser CDATA bugs by stripping spaces before CDATA (e.g., WordPress) ──
+    content = content.replace(/<([a-zA-Z0-9_:]+)([^>]*)>\s+<!\[CDATA\[/gi, '<$1$2><![CDATA[');
+    content = content.replace(/\]\]>\s+<\/([a-zA-Z0-9_:]+)>/gi, ']]></$1>');
+
     // Parse RSS/Atom string
     const data = await rssParser.parseString(content);
 
     // ── Title fix universal: rss-parser di Vercel/Node22+ salah baca CDATA title ──
-    // Deteksi: semua item punya title sama → fallback ke regex extraction dari raw XML.
+    // Deteksi: Banyak item punya title sama → fallback ke regex extraction dari raw XML.
     const rawItems = data.items || [];
     if (rawItems.length > 1) {
       const titles = rawItems.map(function(i) { return (i.title || '').trim(); });
       const uniqueTitles = new Set(titles.map(function(t) { return t.toLowerCase().slice(0, 60); }));
-      if (uniqueTitles.size <= 1) {
-        console.log('[parseRSS] All titles identical (' + (titles[0]||'').slice(0,50) + '...), fixing titles via regex for:', url);
-        var itemBlockRe = /<item[\s>]([\s\S]*?)<\/item>/gi;
+      
+      // Jika jumlah judul unik sangat sedikit dibandingkan total item (indikasi duplikat massal)
+      if (uniqueTitles.size <= Math.max(1, Math.floor(rawItems.length / 2))) {
+        console.log('[parseRSS] Duplicated titles detected (' + uniqueTitles.size + '/' + rawItems.length + '), fixing titles via regex for:', url);
+        
+        var itemBlockRe = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
         var mi2;
-        var idx2 = 0;
-        while ((mi2 = itemBlockRe.exec(content)) !== null && idx2 < rawItems.length) {
+        while ((mi2 = itemBlockRe.exec(content)) !== null) {
           var block2 = mi2[1];
-          var cdataMatch2 = block2.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i);
-          var textMatch2  = block2.match(/<title[^>]*>([^<]{1,400})<\/title>/i);
-          var extracted2  = ((cdataMatch2 && cdataMatch2[1]) || (textMatch2 && textMatch2[1]) || '').trim();
-          if (extracted2) rawItems[idx2].title = extracted2;
-          idx2++;
+          var cdataMatch2 = block2.match(/<title[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/title>/i);
+          var textMatch2  = block2.match(/<title[^>]*>\s*([^<]{1,400})\s*<\/title>/i);
+          var extractedTitle = ((cdataMatch2 && cdataMatch2[1]) || (textMatch2 && textMatch2[1]) || '').trim();
+          
+          if (extractedTitle) {
+            // Coba temukan item yang sesuai menggunakan link
+            var linkMatch1 = block2.match(/<link[^>]*href=["']([^"']+)["']/i);
+            var linkMatch2 = block2.match(/<link[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/link>/i);
+            var linkMatch3 = block2.match(/<link[^>]*>\s*([^<]+)\s*<\/link>/i);
+            var extractedLink = (
+               (linkMatch1 ? linkMatch1[1] : null) || 
+               (linkMatch2 ? linkMatch2[1] : null) || 
+               (linkMatch3 ? linkMatch3[1] : null) || 
+               ''
+            ).trim();
+            
+            if (extractedLink) {
+              // Cari di rawItems berdasarkan id atau link
+              var targetItem = rawItems.find(function(i) {
+                  var ilink = i.link || i.id || '';
+                  return ilink && (ilink.includes(extractedLink) || extractedLink.includes(ilink));
+              });
+              if (targetItem) {
+                 targetItem.title = extractedTitle;
+              }
+            }
+          }
         }
       }
     }
