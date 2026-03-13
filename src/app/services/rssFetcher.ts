@@ -35,26 +35,51 @@ function promiseAny<T>(promises: Promise<T>[]): Promise<T> {
   });
 }
 
-// ── Cara akurat ambil link (Atom/RSS/Google News) ───────────────────────────
+// ── Cara AKURAT ambil link per-item (mencegah merangkap channel-level link) ─
 function getAccurateLink(itemNode: Element): string {
-  let link = "";
-  const linkNodes = itemNode.querySelectorAll("link");
-  for (const node of Array.from(linkNodes)) {
-    if (node.getAttribute("rel") === "replies") continue;
-    const href = node.getAttribute("href");
-    if (href && href.startsWith("http")) { link = href; break; }
-    const txt = node.textContent?.trim();
-    if (txt?.startsWith("http")) { link = txt; break; }
-  }
-  if (!link) {
-    const guid = itemNode.querySelector("guid");
-    if (guid?.getAttribute("isPermaLink") !== "false") {
-      const g = guid?.textContent?.trim();
-      if (g?.startsWith("http")) link = g;
+  // 1. Coba `:scope > link` — HANYA direct child, bukan link dari <channel> atau elemen nested lain
+  //    Ini adalah fix utama untuk bug "semua artikel satu URL"
+  try {
+    const directLinks = Array.from(itemNode.querySelectorAll(":scope > link"));
+    for (const node of directLinks) {
+      // Lewati link komentar/replies
+      const rel = node.getAttribute("rel");
+      if (rel === "replies" || rel === "comments" || rel === "alternate comments") continue;
+
+      const href = node.getAttribute("href");
+      if (href && href.startsWith("http")) return href;
+
+      const txt = node.textContent?.trim();
+      if (txt && txt.startsWith("http")) return txt;
+    }
+  } catch {
+    // Beberapa browser lama tidak support :scope — fallback ke cara manual
+    const children = Array.from(itemNode.children).filter(el => el.tagName.toLowerCase() === "link");
+    for (const node of children) {
+      const rel = node.getAttribute("rel");
+      if (rel === "replies" || rel === "comments") continue;
+      const href = node.getAttribute("href");
+      if (href && href.startsWith("http")) return href;
+      const txt = node.textContent?.trim();
+      if (txt && txt.startsWith("http")) return txt;
     }
   }
-  return link || "#";
+
+  // 2. Fallback: guid jika isPermaLink tidak di-set ke "false"
+  const guid = itemNode.querySelector("guid");
+  if (guid && guid.getAttribute("isPermaLink") !== "false") {
+    const g = guid.textContent?.trim();
+    if (g && g.startsWith("http")) return g;
+  }
+
+  // 3. Fallback terakhir: guid apa pun bentuknya asalkan dimulai http
+  const anyGuid = itemNode.querySelector("guid")?.textContent?.trim();
+  if (anyGuid && anyGuid.startsWith("http")) return anyGuid;
+
+  // 4. Gagal total — kembalikan string unik agar tidak menimpa artikel lain di Set
+  return `fallback://${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
+
 
 // ── Ekstraksi gambar cerdas (lazy-load-aware) ───────────────────────────────
 function extractSmartImage(node: Element, fallbackCat: string): string {
@@ -126,16 +151,21 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
 
   const upgrade = (u: string) => u?.startsWith("http://") ? u.replace("http://", "https://") : u;
 
-  // Anti-Duplikasi berdasarkan URL akurat
+  // Anti-Duplikasi berdasarkan URL valid (bukan fallback)
   const uniqueUrls = new Set<string>();
   const deduped: Element[] = [];
   for (const item of allItems) {
     const lnk = getAccurateLink(item);
-    if (lnk !== "#" && uniqueUrls.has(lnk)) continue;
-    if (lnk !== "#") uniqueUrls.add(lnk);
+    const isValidUrl = lnk.startsWith("http");
+    // Jika URL valid: cek duplikat. Jika URL fallback (fallback://...): lolos tanpa cek.
+    if (isValidUrl) {
+      if (uniqueUrls.has(lnk)) continue; // Buang duplikat
+      uniqueUrls.add(lnk);
+    }
     deduped.push(item);
     if (deduped.length >= limit) break;
   }
+
 
   return deduped.map((item, i) => {
     // Title
