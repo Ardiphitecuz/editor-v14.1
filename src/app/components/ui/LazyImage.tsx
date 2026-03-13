@@ -57,6 +57,7 @@ export function LazyImage({
   ...rest
 }: LazyImageProps) {
   const [inView, setInView] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Observe kapan elemen masuk viewport (+ 350px buffer)
