@@ -106,7 +106,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
   // Caption state
   const [captionMode, setCaptionMode] = useState<"view" | "edit">("view");
   const [captionText, setCaptionText] = useState<string>(() =>
-    [stripHtml(initialDraft.aiTitle), "", ...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
+    [...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
   );
   const [rewriting, setRewriting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -115,7 +115,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
   useEffect(() => {
     setDraft(initialDraft);
     setCaptionText(
-      [stripHtml(initialDraft.aiTitle), "", ...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
+      [...(initialDraft.aiContent ?? []), "", `Sumber: ${initialDraft.source}`].join("\n")
     );
   }, [initialDraft.id]);
 
@@ -212,7 +212,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
       {/* Scrollable sheet dari bawah */}
       <div
         className="absolute bottom-0 left-0 right-0 flex flex-col rounded-t-3xl overflow-hidden"
-        style={{ maxHeight: "96vh", background: "#111" }}
+        style={{ maxHeight: "calc(96dvh - env(safe-area-inset-top, 0px))", background: "#111", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle */}
@@ -371,7 +371,11 @@ export function DraftPage() {
   const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+    // Reload imageDataUrl dari IDB setiap mount — handle iOS GC atau navigasi kembali
+    draftStore.reloadImages().catch(() => {});
+  }, []);
 
   // Ukur tinggi header + navbar untuk empty state height
   const headerRef = useRef<HTMLDivElement>(null);

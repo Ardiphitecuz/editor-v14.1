@@ -186,4 +186,9 @@ export const draftStore = {
     _listeners.add(listener);
     return () => _listeners.delete(listener);
   },
+
+  /** Paksa reload semua imageDataUrl dari IDB — panggil saat page mount */
+  async reloadImages(): Promise<void> {
+    await loadImages();
+  },
 };
