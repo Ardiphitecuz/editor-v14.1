@@ -84,6 +84,24 @@ function upperCase(str) {
   return str.toUpperCase();
 }
 
+// Hapus HTML tags dan decode entitas HTML untuk preview description
+function stripHtml(html) {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]+>/g, ' ')          // hapus semua HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&[a-zA-Z]+;/g, ' ')      // hapus entitas HTML yang tersisa
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 300);                     // batasi panjang description preview
+}
+
 // ── Fetch dengan fallback UA + SSL ────────────────────────────────────────────
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -213,8 +231,9 @@ function normalizeItem(item) {
     title: { value: item.title || '' },
     links: item.link ? [{ href: item.link }] : [],
     link: item.link || '',
-    // Fix: pakai content:encoded juga agar gambar inline bisa diekstrak
-    description: { value: item['content:encoded'] || item.contentSnippet || item.summary || item.content || '' },
+    // contentSnippet otomatis di-strip HTML oleh rss-parser, cocok untuk preview
+    // content:encoded disimpan di field content untuk ekstraksi gambar inline
+    description: { value: item.contentSnippet || item.summary || '' },
     content: { value: item['content:encoded'] || item.content || '' },
     published: item.isoDate || item.pubDate ? new Date(item.isoDate || item.pubDate) : null,
     updated: item.isoDate ? new Date(item.isoDate) : null,
@@ -333,8 +352,8 @@ async function processRssItem(item, head, pioneer) {
         if (!image_og || !ldjson) {
           let html = CACHE.get(key_html);
 
-          // Hanya fetch HTML jika belum ada gambar sama sekali
-          if (!html && images.length === 0) {
+          // Fetch HTML untuk mendapatkan og:image per artikel (bukan hanya jika tidak ada gambar)
+          if (!html) {
             html = await fetchUrl(link, {
               timeout: pioneer ? 2000 : 3000,  // timeout singkat, prioritas kecepatan
               headers: { 'Range': 'bytes=0-32768' },  // 32KB cukup untuk meta tags
@@ -344,8 +363,10 @@ async function processRssItem(item, head, pioneer) {
 
           if (html) {
             if (!image_og) {
-              const REGEX_IMAGE = /<meta[^>]*property=["']\w+:image["'][^>]*content=["']([^"']*)["'][^>]*>/;
-              image_og = html.match(REGEX_IMAGE)?.[1];
+              const REGEX_IMAGE = /<meta[^>]*property=["']\w+:image["'][^>]*content=["']([^"']{10,})["'][^>]*>/;
+              image_og = html.match(REGEX_IMAGE)?.[1]
+                ?? html.match(/<meta[^>]*content=["']([^"']{10,})["'][^>]*property=["']\w+:image["'][^>]*>/)?.[1]
+                ?? html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']{10,})["'][^>]*>/)?.[1];
               if (image_og) CACHE.set(key_image, image_og);
             }
 
@@ -362,8 +383,12 @@ async function processRssItem(item, head, pioneer) {
           }
         }
 
-        if (image_og && images.length === 0) {
-          images.push(image_og);
+        // Prioritaskan og:image per artikel di atas gambar generik dari RSS feed
+        if (image_og) {
+          // Cek apakah images[0] sudah sama dengan og:image — hindari duplikasi
+          if (images[0] !== image_og) {
+            images.unshift(image_og);
+          }
         }
       } catch (ex) { console.error(ex); }
     }
@@ -383,7 +408,7 @@ async function processRssItem(item, head, pioneer) {
       title: item?.title?.value,
       author: item?.author?.name || item?.['dc:subject'] ||
         safeHost(link).split('.').slice(-3).filter(x => !x.includes('www')).sort((a, b) => b.length - a.length)[0],
-      description: item?.description?.value || item?.content?.value || item?.['media:description']?.value || '',
+      description: stripHtml(item?.description?.value || item?.content?.value || item?.['media:description']?.value || ''),
       published: item?.published,
       updated: item?.updated,
       images: images.filter(x => x && typeof x === 'string'),
@@ -445,13 +470,24 @@ export async function fetchRSSLinks({ urls, limit = 12, pioneer = false }) {
 
       const result = {
         ...head,
-        items: rss_items
-          .map(p => p.value)
-          .filter(x => x)
-          // Jangan buang item tanpa published — pakai tanggal sekarang sebagai fallback
-          .map(x => x.published ? x : { ...x, published: new Date() })
-          .filter(x => new Date(x.published) > LAST_MONTH)
-          .sort((a, b) => (b.images?.length - a.images?.length) || (new Date(b.published) - new Date(a.published))),
+        items: (() => {
+          const seenLinks = new Set();
+          return rss_items
+            .map(p => p.value)
+            .filter(x => x)
+            // Jangan buang item tanpa published — pakai tanggal sekarang sebagai fallback
+            .map(x => x.published ? x : { ...x, published: new Date() })
+            .filter(x => new Date(x.published) > LAST_MONTH)
+            // Deduplikasi berdasarkan URL artikel
+            .filter(x => {
+              const key = x.link || x.title;
+              if (seenLinks.has(key)) return false;
+              seenLinks.add(key);
+              return true;
+            })
+            // Sort hanya berdasarkan tanggal (terbaru dulu) — tidak acak berdasarkan image count
+            .sort((a, b) => new Date(b.published) - new Date(a.published));
+        })(),
       };
 
       render[order] = result;
