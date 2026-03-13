@@ -364,30 +364,49 @@ async function handle(req, res) {
     // Hapus overlay Pinterest yang inject sebagai sibling dari img
     contentElement.querySelectorAll('a[href*="pinterest.com/pin"]').forEach(el => el.remove());
 
-    // Post-pass: hapus duplikasi judul di awal konten (Yaraon pattern)
-    // Yaraon: setelah gambar hero, ada <a>judul</a> + <ul><li>tanggal</li><li>komentar</li></ul>
-    // Ini adalah header artikel yang ikut masuk ke Readability
-    const firstImgIdx = Array.from(contentElement.children).findIndex(el => el.querySelector('img') || el.tagName === 'IMG');
-    if (firstImgIdx >= 0) {
-      // Cek elemen setelah gambar pertama — jika <a> atau <p><a> dengan teks panjang mirip judul
-      let checkEl = contentElement.children[firstImgIdx + 1];
-      if (checkEl) {
-        const checkText = (checkEl.textContent ?? '').trim();
-        const isLikelyTitleRepeat = checkText.length > 20 && checkText.length < 200 &&
-          checkEl.querySelectorAll('a').length >= 1 &&
-          !checkEl.querySelector('img,iframe');
-        if (isLikelyTitleRepeat) {
-          // Hapus juga elemen berikutnya jika berisi list metadata (tanggal, komentar)
-          const nextEl = checkEl.nextElementSibling;
-          if (nextEl && (nextEl.tagName === 'UL' || nextEl.tagName === 'OL')) {
-            const items = nextEl.querySelectorAll('li');
-            const looksLikeMeta = Array.from(items).every(li => {
-              const t = (li.textContent ?? '').trim();
-              return t.length < 60 || /^\d{4}[.\-\/]\d{2}[.\-\/]\d{2}/.test(t) || /コメント|件|comment/i.test(t);
-            });
-            if (looksLikeMeta) nextEl.remove();
+    // Post-pass: Yaraon — hapus semua elemen sebelum komentar pertama
+    // Konten asli Yaraon adalah kumpulan komentar pembaca, dimulai dengan "1："atau "1:"
+    // Semua yang sebelumnya (banner, judul duplikat, tanggal, metadata) harus dibuang
+    if (pageUrl.hostname.includes('yaraon')) {
+      const children = Array.from(contentElement.children);
+      // Cari elemen pertama yang teksnya dimulai dengan "1：" atau "1:" (komentar pertama)
+      let firstCommentIdx = -1;
+      for (let i = 0; i < children.length; i++) {
+        const t = (children[i].textContent ?? '').trim();
+        if (/^1[：:]\s*\S/.test(t) || /^1[：:]\s*$/.test(t)) {
+          firstCommentIdx = i;
+          break;
+        }
+        // Juga deteksi jika <p> isinya dimulai angka+titik dua (format komentar Yaraon)
+        if (children[i].tagName === 'P' || children[i].tagName === 'DIV') {
+          const inner = children[i].querySelectorAll('p,span,b,strong');
+          for (const sub of Array.from(inner)) {
+            if (/^1[：:]\s*\S/.test((sub.textContent ?? '').trim())) {
+              firstCommentIdx = i;
+              break;
+            }
           }
-          checkEl.remove();
+          if (firstCommentIdx >= 0) break;
+        }
+      }
+      // Hapus semua elemen sebelum komentar pertama
+      if (firstCommentIdx > 0) {
+        children.slice(0, firstCommentIdx).forEach(el => el.remove());
+      }
+    }
+
+    // Post-pass: Somoskudasai — potong dari bawah jika ada blok thumbnail artikel terkait
+    // Somoskudasai menyusun artikel terkait di akhir konten sebagai grid gambar kecil
+    // Deteksi: ≥3 <img> berurutan dalam satu container tanpa banyak teks
+    if (pageUrl.hostname.includes('somoskudasai')) {
+      const children = Array.from(contentElement.children);
+      for (let i = children.length - 1; i >= Math.floor(children.length * 0.5); i--) {
+        const el = children[i];
+        const imgs = el.querySelectorAll('img');
+        const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        // Block dengan banyak gambar tapi sedikit teks = artikel terkait grid
+        if (imgs.length >= 2 && text.length < 100) {
+          el.remove();
         }
       }
     }
