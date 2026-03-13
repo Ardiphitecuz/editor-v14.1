@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { handleImgError } from "../../services/fetcherUtils";
 
 // Inline SVG placeholder — tidak butuh request jaringan
 const SKELETON_SVG =
@@ -56,9 +57,6 @@ export function LazyImage({
   ...rest
 }: LazyImageProps) {
   const [inView, setInView] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  // errorStage: 0 = belum error, 1 = proxy gagal → coba direct, 2 = direct gagal → fallback, 3 = fallback gagal
-  const [errorStage, setErrorStage] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Observe kapan elemen masuk viewport (+ 350px buffer)
@@ -87,24 +85,10 @@ export function LazyImage({
   // Reset saat src berubah
   useEffect(() => {
     setLoaded(false);
-    setErrorStage(0);
   }, [src]);
 
-  // Urutan percobaan:
-  //  stage 0 → proxied src
-  //  stage 1 → src langsung (tanpa proxy)
-  //  stage 2 → fallback (proxied)
-  //  stage 3 → sembunyikan
-  function getEffectiveSrc(): string {
-    if (!inView) return SKELETON_SVG;
-    const rawSrc = src || fallback;
-    if (errorStage === 0) return noProxy ? rawSrc : toProxied(rawSrc);
-    if (errorStage === 1) return rawSrc; // coba direct
-    if (errorStage === 2) return toProxied(fallback);
-    return SKELETON_SVG; // sembunyikan
-  }
-
-  const effectiveSrc = getEffectiveSrc();
+  const rawSrc = src || fallback;
+  const initialSrc = inView ? (noProxy ? rawSrc : toProxied(rawSrc)) : SKELETON_SVG;
 
   return (
     <div
@@ -118,7 +102,7 @@ export function LazyImage({
       }}
     >
       {/* Skeleton shimmer — tampil saat belum loaded */}
-      {!loaded && errorStage < 3 && (
+      {!loaded && (
         <div
           aria-hidden
           style={{
@@ -132,9 +116,10 @@ export function LazyImage({
         />
       )}
 
-      {errorStage < 3 && (
+      {inView && (
         <img
-          src={effectiveSrc}
+          src={initialSrc}
+          data-original-src={rawSrc} // Store real original URL for fallback logic
           alt={alt}
           className={className}
           style={{
@@ -151,7 +136,7 @@ export function LazyImage({
           }}
           onError={(e) => {
             setLoaded(false);
-            setErrorStage(s => s + 1);
+            handleImgError(e, rawSrc);
             (onError as React.ReactEventHandler<HTMLImageElement>)?.(e);
           }}
           {...rest}

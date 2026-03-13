@@ -33,12 +33,16 @@ export const PROXY_SERVERS = [
       parse: async (res: Response) => await res.text()
   },
   {
+      name: "CORS Anywhere",
+      getUrl: (target: string) => `https://cors-anywhere.herokuapp.com/${target}`,
+      parse: async (res: Response) => await res.text()
+  },
+  {
       name: "AllOrigins (JSON)",
       getUrl: (target: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&_=${Date.now()}`,
       parse: async (res: Response) => {
           try {
               const text = await res.text();
-              if (!text) return null;
               const json = JSON.parse(text);
               return json.contents;
           } catch (e) { return null; }
@@ -58,12 +62,12 @@ export async function fetchWithTimeout(url: string, options: RequestInit = {}, t
 }
 
 export const PUBLIC_PROXIES = [
-  "https://api.codetabs.com/v1/proxy?quest=",       // paling reliable, jarang block
-  "https://corsproxy.io/?",
   "https://api.allorigins.win/raw?url=",
-  "https://thingproxy.freeboard.io/fetch/",          // fallback tambahan
+  "https://corsproxy.io/?",
+  "https://api.codetabs.com/v1/proxy?quest=",
+  "https://thingproxy.freeboard.io/fetch/",
+  "https://cors-anywhere.herokuapp.com/",
 ];
-
 
 // ── Allowlist — hanya tag tipografi yang diizinkan ────────────────────────────
 export const ALLOWED_TAGS = new Set([
@@ -99,6 +103,52 @@ export const FALLBACK_IMAGES: Record<string, string> = {
   "Analisis":  "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
   "default":   "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80",
 };
+
+export function handleImgError(e: any | Event, originalUrl?: string) {
+  const target = e.target as HTMLImageElement;
+  if (!target || target.tagName !== 'IMG') return;
+
+  const currentFallback = parseInt(target.getAttribute('data-fallback') || '0', 10);
+  if (currentFallback >= 5) return; // Stop after 5 tries
+
+  const nextFallback = currentFallback + 1;
+  target.setAttribute('data-fallback', nextFallback.toString());
+
+  // Use the explicitly provided url or extract the original from data-original-src
+  if (originalUrl && !target.getAttribute('data-original-src')) {
+     target.setAttribute('data-original-src', originalUrl);
+  }
+  const rawSrc = target.getAttribute('data-original-src') || originalUrl || target.src;
+  
+  if (!rawSrc.startsWith('http')) return;
+
+  const cleanSrc = rawSrc.replace(/^https?:\/\//i, '');
+  const encodedSrc = encodeURIComponent(rawSrc);
+
+  switch (nextFallback) {
+    case 1:
+      // Lapis 1: wsrv.nl
+      target.src = `https://wsrv.nl/?url=${cleanSrc}`;
+      break;
+    case 2:
+      // Lapis 2: bypass.me/proxy
+      target.src = `https://bypass.me/proxy?url=${encodedSrc}`;
+      break;
+    case 3:
+      // Lapis 3: AllOrigins Raw
+      target.src = `https://api.allorigins.win/raw?url=${encodedSrc}`;
+      break;
+    case 4:
+      // Lapis 4: CorsProxy.io
+      target.src = `https://corsproxy.io/?${encodedSrc}`;
+      break;
+    case 5:
+      // Lapis 5: Jetpack Photon (i0.wp.com)
+      target.src = `https://i0.wp.com/${cleanSrc}`;
+      break;
+  }
+}
+
 export const fallbackImg = (cat: string) =>
   FALLBACK_IMAGES[cat] ?? FALLBACK_IMAGES["default"];
 

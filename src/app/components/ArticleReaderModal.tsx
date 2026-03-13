@@ -6,18 +6,12 @@ import {
   Sparkles, RefreshCw, Check, Copy, BookmarkPlus, Edit3, Clock 
 } from "lucide-react";
 import type { Article } from "../data/articles";
-import { PROXY_SERVERS, fetchWithTimeout } from "../services/fetcherUtils";
+import { PROXY_SERVERS, fetchWithTimeout, handleImgError } from "../services/fetcherUtils";
 import { articleStore } from "../store/articleStore";
 import { draftStore } from "../store/draftStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function proxyImg(src: string | undefined | null): string {
-  if (!src) return "";
-  if (src.startsWith('/') || src.startsWith('data:')) return src;
-  return '/api/img?url=' + encodeURIComponent(src);
-}
-
 const CATEGORY_COLORS: Record<string, string> = {
   "Hot Topic": "#ff742f", "Breaking": "#e53e3e", "Trending": "#805ad5",
   "Discuss": "#2b6cb0", "Opinion": "#2f855a", "Analisis": "#b7791f",
@@ -92,13 +86,19 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
 
   // ── Initialize & Auto-Fetch ─────────────────────────────────────────────
   useEffect(() => {
+    const bodyEl = modalBodyRef.current;
+    if (bodyEl) {
+      bodyEl.scrollTop = 0;
+      // Delegasi event di level parent untuk menangkap error fallback 5 Lapis dari dalam Konten <body>
+      bodyEl.addEventListener("error", handleImgError as EventListener, true);
+    }
+
     if (isOpen && article) {
       document.body.style.overflow = "hidden";
       setDisplayArticle(article);
       setIsSaved(articleStore.isSaved(article.id));
       setIsTranslated(false);
       setTranslatedArticle(null);
-      if (modalBodyRef.current) modalBodyRef.current.scrollTop = 0;
 
       // Check if we need to auto fetch full content
       const txt = cleanHTML(article.contentHtml || article.summary || "");
@@ -109,7 +109,10 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
       document.body.style.overflow = "";
       setDisplayArticle(null);
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => { 
+      document.body.style.overflow = ""; 
+      if (bodyEl) bodyEl.removeEventListener("error", handleImgError as EventListener, true);
+    };
   }, [isOpen, article]);
 
   // ── Proxy Racing Engine ─────────────────────────────────────────────────
@@ -318,7 +321,8 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
           
           {/* Hero Image */}
           <div className="relative w-full h-[320px] md:h-[420px] bg-slate-100">
-            <img src={proxyImg(current.image) || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1000"} 
+            <img src={current.image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1000"} 
+                 onError={handleImgError as any}
                  className="w-full h-full object-cover" 
                  alt={current.title} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
