@@ -1,14 +1,15 @@
 import { useNavigate, useLocation } from "react-router";
 import {
-  Home, BookMarked, Bookmark, Rss, PlusCircle, ChevronDown,
+  Home, BookMarked, Bookmark, Rss, PlusCircle, ChevronDown, Settings,
 } from "lucide-react";
 
-// Menu sama persis dengan BottomNav mobile
+// Menu sama persis dengan BottomNav mobile + Settings
 const NAV_ITEMS = [
-  { label: "Home",    path: "/",              icon: Home },
-  { label: "Draft",   path: "/jelajahi",      icon: BookMarked },
-  { label: "Saved",   path: "/simpan",        icon: Bookmark },
-  { label: "Sources", path: "/subscriptions", icon: Rss },
+  { label: "Home",     path: "/",               icon: Home },
+  { label: "Draft",    path: "/jelajahi",       icon: BookMarked },
+  { label: "Saved",    path: "/simpan",         icon: Bookmark },
+  { label: "Sources",  path: "/subscriptions",  icon: Rss },
+  { label: "Settings", path: "/pengaturan",     icon: Settings },
 ];
 
 export function SideNav() {
