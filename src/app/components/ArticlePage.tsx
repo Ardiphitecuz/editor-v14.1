@@ -601,7 +601,7 @@ export function ArticlePage() {
                       }
                     });
                   }}
-                  dangerouslySetInnerHTML={{ __html: proxyImgInHtml((article as any).contentHtml) }}
+                  dangerouslySetInnerHTML={{ __html: proxyImgInHtml((article as any).contentHtml, article.image ?? undefined) }}
                 />
               </>
             ) : (article.blocks && article.blocks.length > 0) ? (

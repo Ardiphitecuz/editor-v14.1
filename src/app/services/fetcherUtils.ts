@@ -412,22 +412,32 @@ export function sanitizeHtml(rawHtml: string, baseUrl: string): string {
 // Domain/keyword iklan yang harus distrip dari konten artikel
 const AD_IMG_PATTERN = /fanza|dmm\.co\.jp|a8\.net|valuecommerce|accesstrade|linkshare|affiliate|banner|adnw|adstir|shinobi\.jp|ninja\.co\.jp\/ad|googlesyndication|doubleclick|pagead|adsbygoogle/i;
 
-export function proxyImgInHtml(html: string): string {
+export function proxyImgInHtml(html: string, heroImageUrl?: string): string {
   if (!html) return '';
+
   // Strip gambar dari domain iklan
   let cleaned = html.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, (match, src) => {
     if (AD_IMG_PATTERN.test(src)) return '';
+    // Strip gambar dengan dimensi eksplisit kecil (≤200px) — thumbnail artikel terkait
+    const wMatch = match.match(/\bwidth=["']?(\d+)/i);
+    const hMatch = match.match(/\bheight=["']?(\d+)/i);
+    const w = wMatch ? parseInt(wMatch[1]) : 0;
+    const h = hMatch ? parseInt(hMatch[1]) : 0;
+    if ((w > 0 && w <= 200) || (h > 0 && h <= 200)) return '';
     return match;
   });
+
   // Strip <a> yang wraps <img> ke domain iklan yang diketahui
   cleaned = cleaned.replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>\s*(<img[^>]+>)\s*<\/a>/gi, (match, href, img) => {
     if (AD_IMG_PATTERN.test(href)) return '';
     const srcMatch = img.match(/src=["']([^"']+)["']/i);
     if (srcMatch && AD_IMG_PATTERN.test(srcMatch[1])) return '';
-    return match; // biarkan — mungkin gambar artikel yang dibungkus link
+    return match;
   });
-  // Strip "スポンサードリンク" / "スポンサーリンク" teks
-  cleaned = cleaned.replace(/<[^>]+>[^<]*(スポンサー[ドー]リンク|スポンサーリンク|Sponsored Links?)[^<]*<\/[^>]+>/gi, '');
+
+  // Strip スポンサードリンク teks
+  cleaned = cleaned.replace(/<[^>]+>[^<]*(スポンサー[ドー]?リンク|Sponsored Links?)[^<]*<\/[^>]+>/gi, '');
+
   return cleaned;
 }
 

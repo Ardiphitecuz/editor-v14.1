@@ -240,6 +240,38 @@ async function handle(req, res) {
     const articleTitle = (article.title ?? '').trim().toLowerCase();
     Array.from(contentElement.childNodes).forEach(node => sanitizeNode(node, contentDoc, baseUrl, url, articleTitle));
 
+    // ── Strip judul duplikat & thumbnail di awal konten ──────────────────────
+    // Judul dan hero image sudah ditampilkan terpisah di atas artikel.
+
+    // Hapus semua heading yang teksnya mirip judul artikel
+    contentElement.querySelectorAll('h1,h2,h3').forEach(h => {
+      const t = (h.textContent ?? '').trim().toLowerCase();
+      const limit = 40;
+      if (t.length > 10 && (
+        t === articleTitle ||
+        articleTitle.slice(0, limit) === t.slice(0, limit) ||
+        (articleTitle.length > 20 && t.includes(articleTitle.slice(0, limit))) ||
+        (t.length > 20 && articleTitle.includes(t.slice(0, limit)))
+      )) h.remove();
+    });
+
+    // Hapus <img> pertama jika filename sama dengan ogImage (thumbnail sudah ada di atas)
+    if (ogImage) {
+      const firstImg = contentElement.querySelector('img');
+      if (firstImg) {
+        const ogFile = ogImage.split('/').pop()?.split('?')[0] ?? '';
+        const srcFile = (firstImg.getAttribute('src') ?? '').split('/').pop()?.split('?')[0] ?? '';
+        if (ogFile && srcFile && ogFile === srcFile) firstImg.remove();
+      }
+    }
+
+    // Hapus gambar dengan dimensi eksplisit kecil (≤200px) — thumbnail artikel terkait
+    contentElement.querySelectorAll('img').forEach(img => {
+      const w = parseInt(img.getAttribute('width') ?? '0');
+      const h = parseInt(img.getAttribute('height') ?? '0');
+      if ((w > 0 && w <= 200) || (h > 0 && h <= 200)) img.remove();
+    });
+
     contentElement.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,div').forEach(el => {
       if (!el.querySelector('img,iframe,video') && !(el.textContent ?? '').trim()) el.remove();
     });
