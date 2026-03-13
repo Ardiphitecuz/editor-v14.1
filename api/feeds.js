@@ -3,27 +3,7 @@ import { handleFeedsRequest } from '../backend/newsroom-engine.js';
 
 export const config = { maxDuration: 30 };
 
-// ── Core logic ────────────────────────────────────────────────────────────────
-async function handle(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method Not Allowed. Use POST or GET.' });
-  }
-
-  return handleFeedsRequest(req, res);
-}
-
-// ── Vercel export ─────────────────────────────────────────────────────────────
-export default handle;
-
 // ── Netlify adapter ───────────────────────────────────────────────────────────
-export const handler = netlifyAdapter(handle);
-
 function netlifyAdapter(fn) {
   return async (event) => {
     let statusCode = 200;
@@ -53,3 +33,24 @@ function netlifyAdapter(fn) {
     return { statusCode, headers, body };
   };
 }
+
+// ── Core logic ────────────────────────────────────────────────────────────────
+async function handle(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method Not Allowed. Use POST or GET.' });
+  }
+
+  return handleFeedsRequest(req, res);
+}
+
+// ── Vercel export ─────────────────────────────────────────────────────────────
+export default handle;
+
+// ── Netlify export ─────────────────────────────────────────────────────────────
+export const handler = netlifyAdapter(handle);
