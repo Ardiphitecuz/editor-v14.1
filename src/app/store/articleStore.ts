@@ -49,7 +49,15 @@ class ArticleStore {
   }
 
   set(articles: Article[]) {
-    this.articles = articles.length > 0 ? articles : ARTICLES;
+    const seenUrls = new Set<string>();
+    const uniqueArticles = articles.filter(a => {
+      const key = a.originalUrl || a.title;
+      if (seenUrls.has(key)) return false;
+      seenUrls.add(key);
+      return true;
+    });
+
+    this.articles = uniqueArticles.length > 0 ? uniqueArticles : ARTICLES;
     persistArticles(this.articles);
     this.listeners.forEach((fn) => fn());
   }

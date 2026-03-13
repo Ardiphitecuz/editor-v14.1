@@ -13,7 +13,7 @@
 import type { Article } from "../data/articles";
 import type { NewsSource } from "./sourceManager";
 import {
-  RSS2JSON, SERVER_RSS_PROXY, PUBLIC_PROXIES,
+  PUBLIC_PROXIES, PROXY_SERVERS, fetchWithTimeout,
   TRACKING_IMG_URL,
   hashId, decodeHtmlEntities, relTime, rawPubTimestamp, guessCategory,
   fallbackImg, sanitizeHtml, scoreContent, extractPlainParagraphs,
@@ -43,79 +43,6 @@ function buildFromRssContent(
   return { contentHtml: finalHtml, content, heroImage, sufficient };
 }
 
-// ── rss2json ──────────────────────────────────────────────────────────────────
-async function fetchRss2Json(feedUrl: string): Promise<any> {
-  try {
-    // &_t= untuk bust rss2json server-side cache (cache 1 jam di sisi mereka)
-    const cacheBust = Math.floor(Date.now() / (60 * 60 * 1000)); // berubah tiap 1 jam
-    const res = await fetch(`${RSS2JSON}${encodeURIComponent(feedUrl)}&count=20&_t=${cacheBust}`, {
-      signal: AbortSignal.timeout(30000), // timeout diperpanjang jadi 30 detik
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.status === "ok" && data.items?.length ? data : null;
-  } catch { return null; }
-}
-
-function articlesFromR2J(source: NewsSource, data: any, limit: number): Article[] {
-  const upgrade = (u: string) =>
-    u?.startsWith("http://") ? u.replace("http://", "https://") : u;
-
-  return data.items.slice(0, limit).map((item: any, i: number) => {
-    const title = decodeHtmlEntities(item.title ?? "Untitled");
-    const cat = guessCategory(title, item.categories ?? []);
-    const baseUrl = item.link || source.url;
-
-    // Selalu pilih konten TERPANJANG:
-    // rss2json memetakan content:encoded → item.content, description → item.description
-    // Jika content lebih pendek dari description, berarti feed hanya punya summary di content:encoded
-    // → pakai yang lebih panjang karena lebih lengkap
-    const candidates = [item.content, item.description].filter(Boolean);
-    const rawContent = candidates.reduce(
-      (best: string, cur: string) => (cur?.length ?? 0) > (best?.length ?? 0) ? cur : best,
-      ""
-    );
-
-    const parsed = buildFromRssContent(
-      rawContent, baseUrl,
-      source.rssContentSufficient === true || undefined,
-      title
-    );
-
-    const enclosureImg = Array.isArray(item.enclosures)
-      ? item.enclosures.find((e: any) => e.type?.startsWith("image") && e.link)?.link
-      : null;
-
-    const heroImage =
-      (item.thumbnail && !TRACKING_IMG_URL.test(item.thumbnail) && item.thumbnail.startsWith("http"))
-        ? upgrade(item.thumbnail)
-        : (enclosureImg && !TRACKING_IMG_URL.test(enclosureImg))
-        ? upgrade(enclosureImg)
-        : (parsed.heroImage && !TRACKING_IMG_URL.test(parsed.heroImage))
-        ? upgrade(parsed.heroImage)
-        : fallbackImg(cat);
-
-    return {
-      id: hashId((item.link || item.pubDate || String(i)) + source.id + title.slice(0, 30)),
-      category: cat,
-      title,
-      summary: parsed.content[0] || title,
-      content: [], // Kosongkan agar tidak render paragraf saja
-      source: source.name,
-      sourceId: source.id,
-      author: typeof item.author === "string" && item.author.length > 0 ? item.author : undefined,
-      rssContentSufficient: parsed.sufficient,
-      image: heroImage,
-      contentHtml: parsed.contentHtml || undefined, // HTML hasil sanitasi
-      readTime: Math.max(1, Math.ceil(scoreContent(parsed.contentHtml) / 1000)),
-      publishedAt: relTime(item.pubDate),
-      pubTimestamp: rawPubTimestamp(item.pubDate),
-      hot: i < 2,
-      originalUrl: item.link || undefined,
-      _rawDescription: item.description ?? item.content ?? "",
-    } as any;
-  });
-}
 
 // ── XML parser ────────────────────────────────────────────────────────────────
 function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Article[] {
@@ -234,40 +161,35 @@ function parseXmlFeed(source: NewsSource, rawText: string, limit: number): Artic
   });
 }
 
+function promiseAny<T>(promises: Promise<T>[]): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let errors = 0;
+    if (promises.length === 0) return reject(new Error("No promises"));
+    promises.forEach(p => Promise.resolve(p).then(resolve).catch(() => {
+      errors++;
+      if (errors === promises.length) reject(new Error("All promises were rejected"));
+    }));
+  });
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Article[]> {
   const feedUrl = source.feedUrl ?? source.url;
 
-  // ① rss2json — paling lengkap, skip untuk Google News
-  if (!feedUrl.includes("news.google.com")) {
-    const j = await fetchRss2Json(feedUrl);
-    if (j) {
-      return articlesFromR2J(source, j, limit);
+  const promises = PROXY_SERVERS.map(async (proxy) => {
+    const res = await fetchWithTimeout(proxy.getUrl(feedUrl), {}, 12000);
+    if (!res.ok) throw new Error("Gagal fetch");
+    const text = await proxy.parse(res);
+    if (text && text.length > 200) {
+      return parseXmlFeed(source, text, limit);
     }
-  }
+    throw new Error("Response is empty");
+  });
 
-  // ② Server proxy /api/rss — timeout 25s karena beberapa feed lambat
   try {
-    const res = await fetch(SERVER_RSS_PROXY + encodeURIComponent(feedUrl), {
-      signal: AbortSignal.timeout(25000),
-    });
-    if (res.ok) {
-      const text = await res.text();
-      if (text.length > 200) return parseXmlFeed(source, text, limit);
-    }
-  } catch { /* lanjut */ }
-
-  // ③ Public CORS proxies
-  for (const proxy of PUBLIC_PROXIES) {
-    try {
-      const res = await fetch(proxy + encodeURIComponent(feedUrl), {
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (text.length > 200) return parseXmlFeed(source, text, limit);
-    } catch { /* coba berikutnya */ }
+    return await promiseAny(promises);
+  } catch (error) {
+    console.warn(`Semua proxy gagal untuk feed: ${feedUrl}`);
+    return [];
   }
-
-  return [];
 }

@@ -157,6 +157,35 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
       ];
       doc.querySelectorAll(junkSelectors.join(",")).forEach(el => el.remove());
 
+      // Membersihkan teks metadata Spanyol/Jepang/Indo & link siluman
+      const badKeywords = ['Etiquetado:', 'Fuentes:', 'Vía:', 'Baca juga', 'Te podría interesar', 'Te podria interesar'];
+      const nodesToRemove: Element[] = [];
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+      let node = walker.nextNode();
+      
+      while (node) {
+        const el = node as Element;
+        // Deteksi node P, DIV, atau Header yang mengandung keyword terlarang
+        if (el.tagName === 'P' || el.tagName === 'DIV' || /^H[1-6]$/.test(el.tagName)) {
+           const text = el.textContent?.trim() || "";
+           if (badKeywords.some(kw => text.includes(kw))) {
+              nodesToRemove.push(el);
+           }
+        }
+        // Deteksi node P yang murni hanya berisi tag <a> (Link Siluman)
+        if (el.tagName === 'P' && el.innerHTML.trim() !== '') {
+           const textWithoutLinks = el.innerHTML.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '').replace(/<br\s*\/?>/gi, '').trim();
+           if (textWithoutLinks.length < 5 && el.querySelectorAll('a').length > 0) {
+              nodesToRemove.push(el);
+           }
+        }
+        node = walker.nextNode();
+      }
+
+      nodesToRemove.forEach(n => {
+        try { n.remove(); } catch(e) {}
+      });
+
       let finalHtml = "";
       try {
         const reader = new Readability(doc.cloneNode(true) as Document);

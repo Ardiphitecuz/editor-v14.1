@@ -109,18 +109,22 @@ export function handleImgError(e: any | Event, originalUrl?: string) {
   if (!target || target.tagName !== 'IMG') return;
 
   const currentFallback = parseInt(target.getAttribute('data-fallback') || '0', 10);
-  if (currentFallback >= 5) return; // Stop after 5 tries
+  if (currentFallback >= 4) return; // Stop after 4 tries
 
   const nextFallback = currentFallback + 1;
   target.setAttribute('data-fallback', nextFallback.toString());
 
-  // Use the explicitly provided url or extract the original from data-original-src
+  // Use the explicitly provided url or extract the original from data-original-src, data-src, or data-lazy-src
   if (originalUrl && !target.getAttribute('data-original-src')) {
      target.setAttribute('data-original-src', originalUrl);
   }
-  const rawSrc = target.getAttribute('data-original-src') || originalUrl || target.src;
+  const rawSrc = target.getAttribute('data-original-src') 
+                 || originalUrl 
+                 || target.getAttribute('data-src') 
+                 || target.getAttribute('data-lazy-src') 
+                 || target.src;
   
-  if (!rawSrc.startsWith('http')) return;
+  if (!rawSrc || !rawSrc.startsWith('http')) return;
 
   const cleanSrc = rawSrc.replace(/^https?:\/\//i, '');
   const encodedSrc = encodeURIComponent(rawSrc);
@@ -128,7 +132,7 @@ export function handleImgError(e: any | Event, originalUrl?: string) {
   switch (nextFallback) {
     case 1:
       // Lapis 1: wsrv.nl
-      target.src = `https://wsrv.nl/?url=${cleanSrc}`;
+      target.src = `https://wsrv.nl/?url=${encodedSrc}`;
       break;
     case 2:
       // Lapis 2: bypass.me/proxy
@@ -139,11 +143,7 @@ export function handleImgError(e: any | Event, originalUrl?: string) {
       target.src = `https://api.allorigins.win/raw?url=${encodedSrc}`;
       break;
     case 4:
-      // Lapis 4: CorsProxy.io
-      target.src = `https://corsproxy.io/?${encodedSrc}`;
-      break;
-    case 5:
-      // Lapis 5: Jetpack Photon (i0.wp.com)
+      // Lapis 4: Jetpack Photon (i0.wp.com)
       target.src = `https://i0.wp.com/${cleanSrc}`;
       break;
   }
