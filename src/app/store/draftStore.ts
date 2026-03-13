@@ -126,6 +126,11 @@ async function loadImages() {
   const updated: Draft[] = [];
   for (const draft of _drafts) {
     if (draft.template) {
+      // Jika sudah ada di memory (misal baru disimpan), skip IDB query
+      if (draft.template.imageDataUrl) {
+        updated.push(draft);
+        continue;
+      }
       try {
         const img = await idbGet(draft.id);
         updated.push({ ...draft, template: { ...draft.template, imageDataUrl: img } });
@@ -148,29 +153,31 @@ export const draftStore = {
 
   get(id: string): Draft | undefined { return _drafts.find(d => d.id === id); },
 
-  /** Buat draft baru, kembalikan id */
-  create(data: Omit<Draft, "id" | "createdAt" | "updatedAt">): string {
+  /** Buat draft baru, kembalikan id. imageDataUrl di-await ke IDB sebelum resolve. */
+  async create(data: Omit<Draft, "id" | "createdAt" | "updatedAt">): Promise<string> {
     const id = "draft_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
     const draft: Draft = { ...data, id, createdAt: Date.now(), updatedAt: Date.now() };
     _drafts = [draft, ..._drafts];
     persist(_drafts);
-    // Simpan imageDataUrl ke IDB jika ada
+    // Await IDB write selesai dulu sebelum notify — agar reload langsung dapat gambar
     if (draft.template?.imageDataUrl) {
-      idbSet(id, draft.template.imageDataUrl).catch(e => console.warn("[draftStore] IDB set error:", e));
+      try { await idbSet(id, draft.template.imageDataUrl); }
+      catch(e) { console.warn("[draftStore] IDB set error:", e); }
     }
     notify();
     return id;
   },
 
   /** Update template (setelah user edit di editor lalu simpan) */
-  updateTemplate(id: string, template: DraftTemplate) {
+  async updateTemplate(id: string, template: DraftTemplate): Promise<void> {
     _drafts = _drafts.map(d =>
       d.id === id ? { ...d, template, updatedAt: Date.now() } : d
     );
     persist(_drafts);
-    // Simpan / update imageDataUrl di IDB
+    // Await IDB write selesai sebelum notify
     if (template.imageDataUrl) {
-      idbSet(id, template.imageDataUrl).catch(e => console.warn("[draftStore] IDB set error:", e));
+      try { await idbSet(id, template.imageDataUrl); }
+      catch(e) { console.warn("[draftStore] IDB set error:", e); }
     }
     notify();
   },

@@ -1202,9 +1202,9 @@ export function EditorPage() {
         };
         const existingDraftId = locationState?.draftId;
         if (existingDraftId && draftStore.get(existingDraftId)) {
-          draftStore.updateTemplate(existingDraftId, draftTemplate);
+          await draftStore.updateTemplate(existingDraftId, draftTemplate);
         } else {
-          draftStore.create({
+          await draftStore.create({
             articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
             aiTitle: titleHtml,
             aiContent: locationState?.aiContent ?? [],
