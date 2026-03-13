@@ -89,7 +89,6 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
     const bodyEl = modalBodyRef.current;
     if (bodyEl) {
       bodyEl.scrollTop = 0;
-      // Delegasi event di level parent untuk menangkap error fallback 5 Lapis dari dalam Konten <body>
       bodyEl.addEventListener("error", handleImgError as EventListener, true);
     }
 
@@ -100,9 +99,9 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
       setIsTranslated(false);
       setTranslatedArticle(null);
 
-      // Check if we need to auto fetch full content
-      const txt = cleanHTML(article.contentHtml || article.summary || "");
-      if (txt.length < 500 || txt.includes("...")) {
+      // Selalu coba fetch konten penuh — proxy racing akan handle jika sudah ada konten
+      // Tidak ada syarat panjang — biarkan loadFullContent yang memutuskan
+      if (article.originalUrl) {
         loadFullContent(article);
       }
     } else {
@@ -113,6 +112,7 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
       document.body.style.overflow = ""; 
       if (bodyEl) bodyEl.removeEventListener("error", handleImgError as EventListener, true);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, article]);
 
   // ── Proxy Racing Engine ─────────────────────────────────────────────────
@@ -123,85 +123,122 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
     setContentOpacity(0.5);
 
     let htmlContent: string | null = null;
-    try {
-      const promises = PROXY_SERVERS.map(async (proxy) => {
-        const response = await fetchWithTimeout(proxy.getUrl(targetArticle.originalUrl!), {}, 15000);
-        if (!response.ok) throw new Error("Gagal");
-        const text = await proxy.parse(response);
-        if (text && text.length > 500) return text;
-        throw new Error("Kosong");
-      });
 
+    try {
       htmlContent = await new Promise<string>((resolve, reject) => {
         let errors = 0;
-        promises.forEach(p => p.then(resolve).catch(() => {
+        const proxies = PROXY_SERVERS.map(async (proxy) => {
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 15000);
+          try {
+            const res = await fetch(proxy.getUrl(targetArticle.originalUrl!), { signal: controller.signal });
+            clearTimeout(t);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const text = await proxy.parse(res);
+            if (text && text.length > 500) return text;
+            throw new Error("too short");
+          } catch (err) { clearTimeout(t); throw err; }
+        });
+        proxies.forEach(p => p.then(resolve).catch(() => {
           errors++;
-          if (errors === promises.length) reject(new Error("All promises failed"));
+          if (errors === proxies.length) reject(new Error("All proxies failed"));
         }));
       });
-    } catch (e) {
-      console.warn("Semua proxy gagal untuk load konten penuh");
+    } catch {
+      console.warn("[Modal] Semua proxy gagal untuk load konten penuh.");
     }
 
     if (htmlContent) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlContent, "text/html");
-      const baseTag = doc.createElement("base");
-      baseTag.href = new URL(targetArticle.originalUrl).origin;
-      doc.head.appendChild(baseTag);
 
+      // Set base URL
+      try {
+        const baseTag = doc.createElement("base");
+        baseTag.href = new URL(targetArticle.originalUrl).origin;
+        doc.head.appendChild(baseTag);
+      } catch {}
+
+      // ── 1. Pulihkan lite-youtube → iframe ────────────────────────────────
+      doc.querySelectorAll("lite-youtube, [data-youtube-id]").forEach(el => {
+        const vid = el.getAttribute("videoid") || el.getAttribute("data-youtube-id") || el.id;
+        if (!vid) return;
+        const iframe = doc.createElement("iframe");
+        iframe.src = `https://www.youtube.com/embed/${vid}`;
+        iframe.width = "100%"; iframe.height = "315";
+        iframe.setAttribute("frameborder", "0"); iframe.setAttribute("allowfullscreen", "true");
+        el.replaceWith(iframe);
+      });
+
+      // ── 2. Hapus selectors sampah standar ───────────────────────────────
       const junkSelectors = [
-        "script", "style", "nav", "footer", "header", "aside", ".ads", ".ad", ".advertisement", 
-        ".sidebar", "#sidebar", ".related", ".recommended", ".trending", ".newsletter", ".social-share",
-        ".comments", "#comments", ".footer-meta", ".tags", ".breadcrumb"
+        "script", "style", "nav", "footer", "header", "aside",
+        ".ads", ".ad", ".advertisement", ".sidebar", "#sidebar",
+        ".related", ".recommended", ".trending", ".newsletter",
+        ".social-share", ".comments", "#comments", ".footer-meta",
+        ".tags", ".breadcrumb", ".cookie-notice", ".popup",
+        "[class*='widget']", "[class*='promo']", "[class*='banner']"
       ];
       doc.querySelectorAll(junkSelectors.join(",")).forEach(el => el.remove());
 
-      // Membersihkan teks metadata Spanyol/Jepang/Indo & link siluman
-      const badKeywords = ['Etiquetado:', 'Fuentes:', 'Vía:', 'Baca juga', 'Te podría interesar', 'Te podria interesar'];
-      const nodesToRemove: Element[] = [];
-      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
-      let node = walker.nextNode();
-      
-      while (node) {
-        const el = node as Element;
-        // Deteksi node P, DIV, atau Header yang mengandung keyword terlarang
-        if (el.tagName === 'P' || el.tagName === 'DIV' || /^H[1-6]$/.test(el.tagName)) {
-           const text = el.textContent?.trim() || "";
-           if (badKeywords.some(kw => text.includes(kw))) {
-              nodesToRemove.push(el);
-           }
+      // ── 3. Truncate Ekstrem — cari elemen dengan keyword lalu hapus + semua saudara setelahnya ──
+      const TRUNCATE_KEYWORDS = [
+        "Etiquetado:", "Fuentes:", "Vía:", "Baca juga", "Baca Juga",
+        "Te podría interesar", "Te podria interesar", "Leer más",
+        "Tags:", "Filed under:", "Related Posts"
+      ];
+      const traverse = (root: Element) => {
+        const children = Array.from(root.children);
+        for (const child of children) {
+          const txt = child.textContent?.trim() || "";
+          if (TRUNCATE_KEYWORDS.some(kw => txt.startsWith(kw) || txt.includes(kw))) {
+            // Hapus elemen ini dan semua saudara sesudahnya (nextElementSibling)
+            let toRemove: Element | null = child;
+            while (toRemove) {
+              const next = toRemove.nextElementSibling;
+              try { toRemove.remove(); } catch {}
+              toRemove = next;
+            }
+            return; // Stop traversal on this branch
+          }
+          traverse(child);
         }
-        // Deteksi node P yang murni hanya berisi tag <a> (Link Siluman)
-        if (el.tagName === 'P' && el.innerHTML.trim() !== '') {
-           const textWithoutLinks = el.innerHTML.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '').replace(/<br\s*\/?>/gi, '').trim();
-           if (textWithoutLinks.length < 5 && el.querySelectorAll('a').length > 0) {
-              nodesToRemove.push(el);
-           }
-        }
-        node = walker.nextNode();
-      }
+      };
+      if (doc.body) traverse(doc.body);
 
-      nodesToRemove.forEach(n => {
-        try { n.remove(); } catch(e) {}
+      // ── 4. Tautan Siluman — hapus <p> dengan teks = teks link di dalamnya ─
+      doc.querySelectorAll("p").forEach(p => {
+        const pText = p.textContent?.trim() || "";
+        if (!pText) { p.remove(); return; }
+        const links = p.querySelectorAll("a");
+        if (links.length === 0) return;
+        const linkTexts = Array.from(links).map(a => a.textContent?.trim() || "");
+        const combined = linkTexts.join("").trim();
+        // Jika teks p hampir sama dengan gabungan teks link, ini tautan siluman
+        if (combined.length > 0 && (pText === combined || pText.replace(/\s+/g, "") === combined.replace(/\s+/g, ""))) {
+          p.remove();
+        }
       });
 
+      // ── 5. Jalankan Readability ──────────────────────────────────────────
       let finalHtml = "";
       try {
         const reader = new Readability(doc.cloneNode(true) as Document);
         const parsed = reader.parse();
         if (parsed?.content) finalHtml = parsed.content;
-      } catch (err) {}
+      } catch (err) {
+        console.warn("[Modal] Readability error:", err);
+      }
 
       if (finalHtml) {
-        // Update state article with full content
-        setDisplayArticle(prev => prev ? { ...prev, contentHtml: finalHtml, _fullFetched: true } : null);
+        setDisplayArticle(prev => prev ? { ...prev, contentHtml: finalHtml, _fullFetched: true } as any : null);
       }
     }
 
     setLoadingCode(false);
     setContentOpacity(1);
   };
+
 
   // ── Tool Actions ────────────────────────────────────────────────────────
   const handleSave = () => {
@@ -467,14 +504,22 @@ export function ArticleReaderModal({ article, isOpen, onClose }: ArticleReaderMo
               dangerouslySetInnerHTML={{ __html: current.contentHtml || `<p>${current.summary}</p>` }}
             />
             
-            {/* Fallback Read Original */}
-            {!loadingCode && (current.contentHtml || current.summary)?.length < 600 && (
+            {/* Fallback — hanya tampil jika loading selesai & konten masih pendek */}
+            {!loadingCode && (current.contentHtml || current.summary || "").length < 400 && (
                <div className="mt-8 p-6 bg-slate-50 rounded-2xl text-center border border-slate-100">
-                  <p className="text-slate-500 mb-4 font-medium text-sm">Artikel penuh ini mungkin dibatasi oleh situs asal.</p>
-                  <a href={current.originalUrl!} target="_blank" rel="noreferrer" 
-                     className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700">
-                    Buka Website Asli <ExternalLink size={16} />
-                  </a>
+                  <p className="text-slate-500 mb-4 font-medium text-sm">Konten penuh belum berhasil dimuat.</p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      onClick={() => current.originalUrl && loadFullContent(current as any)}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"
+                    >
+                      <RefreshCw size={15} /> Coba Lagi
+                    </button>
+                    <a href={current.originalUrl!} target="_blank" rel="noreferrer"
+                       className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600 underline underline-offset-2">
+                      <ExternalLink size={13} /> Buka Web Asli
+                    </a>
+                  </div>
                </div>
             )}
             

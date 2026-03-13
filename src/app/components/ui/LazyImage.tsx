@@ -1,17 +1,21 @@
 /**
  * LazyImage.tsx
  * ─────────────────────────────────────────────────────────────────────────────
- * Gambar efisien dengan:
- *   • Auto-proxy cross-origin via /api/img — bypass COEP blocking
- *   • IntersectionObserver (rootMargin 350px) — mulai load sebelum masuk viewport
- *   • Skeleton placeholder animasi saat belum dimuat
- *   • Fallback otomatis jika gagal (coba tanpa proxy dulu, lalu fallback URL)
- *   • decoding="async" + loading="lazy" — tidak blokir thread utama
- *   • Fade-in halus setelah gambar siap
+ * Komponen gambar dengan:
+ *   • IntersectionObserver lazy load (rootMargin 400px)
+ *   • Skeleton shimmer placeholder saat belum dimuat
+ *   • 5-Layer Image Fallback menggunakan state `attempt` React
+ *     Layer 0: URL asli
+ *     Layer 1: wsrv.nl (proxy image cepat)
+ *     Layer 2: bypass.me/proxy (bypass hotlink protection)
+ *     Layer 3: AllOrigins Raw
+ *     Layer 4: corsproxy.io
+ *     Layer 5+: Placeholder SVG (gagal semua)
+ *   • Mendukung data-src & data-lazy-src (lazy load situs berita)
+ *   • decoding="async" + loading="lazy" — tidak blokir main thread
  */
 
 import { useEffect, useRef, useState } from "react";
-import { handleImgError } from "../../services/fetcherUtils";
 
 // Inline SVG placeholder — tidak butuh request jaringan
 const SKELETON_SVG =
@@ -20,27 +24,31 @@ const SKELETON_SVG =
 const DEFAULT_FALLBACK =
   "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=600&q=70";
 
-/**
- * Wrap URL cross-origin melalui /api/img proxy.
- * Diperlukan karena COEP "require-corp" memblokir gambar cross-origin secara langsung.
- */
-function toProxied(src: string): string {
-  if (!src) return src;
-  if (src.startsWith("/") || src.startsWith("data:") || src.startsWith("blob:")) return src;
-  return "/api/img?url=" + encodeURIComponent(src);
-}
+const PLACEHOLDER_SVG =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect fill='%23e5e7eb' width='4' height='3'/%3E%3C/svg%3E";
 
 interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  /** URL gambar utama */
   src?: string;
-  /** URL fallback jika src gagal */
   fallback?: string;
-  /** Kelas tambahan untuk wrapper div */
   wrapperClass?: string;
-  /** Style tambahan untuk wrapper div */
   wrapperStyle?: React.CSSProperties;
-  /** Nonaktifkan proxy (default: proxy aktif) */
   noProxy?: boolean;
+}
+
+// Hitung URL berdasarkan attempt saat ini
+function getAttemptSrc(rawSrc: string, attempt: number): string | null {
+  if (!rawSrc || !rawSrc.startsWith("http")) return PLACEHOLDER_SVG;
+  const enc = encodeURIComponent(rawSrc);
+  const clean = rawSrc.replace(/^https?:\/\//i, "");
+
+  switch (attempt) {
+    case 0: return rawSrc;                                              // URL asli
+    case 1: return `https://wsrv.nl/?url=${enc}`;                      // wsrv.nl
+    case 2: return `https://bypass.me/proxy?url=${enc}`;               // bypass.me
+    case 3: return `https://api.allorigins.win/raw?url=${enc}`;        // allorigins raw
+    case 4: return `https://corsproxy.io/?${enc}`;                     // corsproxy
+    default: return PLACEHOLDER_SVG;                                   // gagal semua
+  }
 }
 
 export function LazyImage({
@@ -51,33 +59,24 @@ export function LazyImage({
   style,
   wrapperClass,
   wrapperStyle,
-  noProxy = false,
   onError,
   onLoad,
   ...rest
 }: LazyImageProps) {
   const [inView, setInView] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Observe kapan elemen masuk viewport (+ 350px buffer)
+  // IntersectionObserver — mulai load saat mendekati viewport
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-
-    if (typeof IntersectionObserver === "undefined") {
-      setInView(true);
-      return;
-    }
+    if (typeof IntersectionObserver === "undefined") { setInView(true); return; }
 
     const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setInView(true);
-          obs.disconnect();
-        }
-      },
-      { rootMargin: "350px 0px" }
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); obs.disconnect(); } },
+      { rootMargin: "400px 0px" }
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -86,10 +85,12 @@ export function LazyImage({
   // Reset saat src berubah
   useEffect(() => {
     setLoaded(false);
+    setAttempt(0);
   }, [src]);
 
   const rawSrc = src || fallback;
-  const initialSrc = inView ? (noProxy ? rawSrc : toProxied(rawSrc)) : SKELETON_SVG;
+  const effectiveSrc = inView ? getAttemptSrc(rawSrc, attempt) : SKELETON_SVG;
+  const isFailed = effectiveSrc === PLACEHOLDER_SVG;
 
   return (
     <div
@@ -103,24 +104,22 @@ export function LazyImage({
       }}
     >
       {/* Skeleton shimmer — tampil saat belum loaded */}
-      {!loaded && (
+      {!loaded && !isFailed && (
         <div
           aria-hidden
           style={{
             position: "absolute",
             inset: 0,
-            background:
-              "linear-gradient(90deg,#f0ede9 25%,#e8e4e0 50%,#f0ede9 75%)",
+            background: "linear-gradient(90deg,#f0ede9 25%,#e8e4e0 50%,#f0ede9 75%)",
             backgroundSize: "200% 100%",
             animation: "shimmer 1.4s infinite",
           }}
         />
       )}
 
-      {inView && (
+      {inView && !isFailed && (
         <img
-          src={initialSrc}
-          data-original-src={rawSrc} // Store real original URL for fallback logic
+          src={effectiveSrc!}
           alt={alt}
           className={className}
           style={{
@@ -137,11 +136,35 @@ export function LazyImage({
           }}
           onError={(e) => {
             setLoaded(false);
-            handleImgError(e, rawSrc);
+            if (attempt < 4) {
+              setAttempt(a => a + 1);
+            } else {
+              setAttempt(99); // trigger isFailed
+            }
             (onError as React.ReactEventHandler<HTMLImageElement>)?.(e);
           }}
           {...rest}
         />
+      )}
+
+      {/* Placeholder SVG saat semua fallback gagal */}
+      {isFailed && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#e5e7eb",
+          }}
+        >
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </div>
       )}
 
       <style>{`
