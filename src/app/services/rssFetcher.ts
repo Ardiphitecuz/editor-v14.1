@@ -296,21 +296,9 @@ export async function fetchFromRSS(source: NewsSource, limit = 15): Promise<Arti
       const titleSet = new Set(titles.map(t => t.trim().toLowerCase().slice(0, 60)));
       const allTitleSame = titles.length > 1 && titleSet.size <= 1;
 
-      // Jika link valid tapi judul semua sama → judul salah baca (CDATA bug rss2json)
-      // Jangan fallback ke XML parser (mungkin timeout di Vercel) —
-      // gunakan description/summary sebagai judul pengganti langsung di sini
-      if (allTitleSame && !allLinkSame && !mostLinkEmpty) {
-        return articles.map((a, idx) => {
-          const raw = (a as any)._rawDescription ?? a.summary ?? "";
-          const cleaned = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-          // Kalimat pertama dari description sebagai judul
-          const sentenceTitle = cleaned.split(/(?<=[.!?。])\s+/)[0].trim().slice(0, 100);
-          return { ...a, title: sentenceTitle || a.title };
-        });
-      }
-
       if (!allTitleSame && !allLinkSame && !mostLinkEmpty) return articles;
-      // rss2json data invalid (link kosong/sama) → fallback ke XML parser
+      // rss2json data invalid (judul/link sama atau kosong) → fallback ke XML parser
+      // XML parser (extractRawItems) bisa baca CDATA title dengan benar
     }
   }
 
