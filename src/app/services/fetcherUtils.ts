@@ -409,9 +409,31 @@ export function sanitizeHtml(rawHtml: string, baseUrl: string): string {
  * (satu spasi antara "img" dan "src") karena [^>]+ butuh ≥1 karakter lalu \s lagi.
  * Fix: gunakan lookahead/lookbehind sederhana — replace semua src= dalam <img> tag.
  */
+// Domain/keyword iklan yang harus distrip dari konten artikel
+const AD_IMG_PATTERN = /fanza|dmm\.co\.jp|a8\.net|valuecommerce|accesstrade|linkshare|affiliate|banner|adnw|adstir|shinobi\.jp|ninja\.co\.jp\/ad|googlesyndication|doubleclick|pagead|adsbygoogle/i;
+
 export function proxyImgInHtml(html: string): string {
-  // Proxy dimatikan: kembalikan html asli tanpa modifikasi
-  return html ?? '';
+  if (!html) return '';
+  // Strip gambar dari domain iklan
+  let cleaned = html.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, (match, src) => {
+    if (AD_IMG_PATTERN.test(src)) return '';
+    return match;
+  });
+  // Strip <a> external yang hanya berisi <img> (banner iklan)
+  cleaned = cleaned.replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>\s*(<img[^>]+>)\s*<\/a>/gi, (match, href, img) => {
+    try {
+      // Jika href ke domain lain dan isinya hanya gambar = banner
+      const srcMatch = img.match(/src=["']([^"']+)["']/i);
+      if (srcMatch && AD_IMG_PATTERN.test(srcMatch[1])) return '';
+      // External link wrapping only an img = sponsored banner
+      const hrefUrl = new URL(href, window.location.origin);
+      if (hrefUrl.hostname !== window.location.hostname) return '';
+    } catch {}
+    return match;
+  });
+  // Strip "スポンサードリンク" / "スポンサーリンク" teks
+  cleaned = cleaned.replace(/<[^>]+>[^<]*(スポンサー[ドー]リンク|スポンサーリンク|Sponsored Links?)[^<]*<\/[^>]+>/gi, '');
+  return cleaned;
 }
 
 // ── Content scoring ───────────────────────────────────────────────────────────

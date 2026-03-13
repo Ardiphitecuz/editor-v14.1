@@ -23,7 +23,7 @@ const REMOVE_WITH_CONTENT = new Set([
   'nav','header','footer','aside','menu','svg','canvas',
 ]);
 
-const TRACKING_IMG = /feedburner|doubleclick|google-analytics|googletagmanager|pixel\.|analytics|share\.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\//i;
+const TRACKING_IMG = /feedburner|doubleclick|google-analytics|googletagmanager|pixel\.|analytics|share\.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\/|fanza|dmm\.co\.jp|a8\.net|valuecommerce|accesstrade|linkshare|affiliate|banner|sponsored|ad\.nicovideo|impress\.jp\/ad|shinobi\.jp|ninja\.co\.jp\/ad/i;
 const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here|続きを読む|もっと見る)\.?$/i;
 
 const PUBLIC_PROXY_PREFIXES = [
@@ -84,8 +84,21 @@ function sanitizeNode(node, contentDoc, baseUrl, pageUrl, articleTitle) {
   }
   if (tag === 'a') {
     const href = el.getAttribute('href') ?? '';
-    Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
     const resolved = resolveUrl(href, baseUrl, pageUrl);
+
+    // Deteksi banner iklan: <a> ke domain lain yang isinya hanya <img> (tanpa teks)
+    // Yaraon/blog JP: sponsor banner selalu <a href="eksternal"><img /></a>
+    if (resolved) {
+      try {
+        const hrefHost = new URL(resolved).hostname;
+        const isExternal = hrefHost && hrefHost !== pageUrl.hostname && !hrefHost.endsWith('.' + pageUrl.hostname);
+        const onlyImg = el.children.length === 1 && el.children[0].tagName?.toLowerCase() === 'img';
+        const noText = (el.textContent ?? '').trim().length === 0;
+        if (isExternal && (onlyImg || noText)) { el.remove(); return; }
+      } catch {}
+    }
+
+    Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
     if (resolved) { el.setAttribute('href', resolved); el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
     Array.from(el.childNodes).forEach(c => sanitizeNode(c, contentDoc, baseUrl, pageUrl, articleTitle));
     return;
@@ -256,6 +269,35 @@ async function handle(req, res) {
         let linkTotal = 0;
         anchors.forEach(a => linkTotal += (a.textContent ?? '').trim().length);
         if ((p.textContent ?? '').trim().length - linkTotal <= 15 && !p.querySelector('img,iframe,video')) p.remove();
+      }
+    });
+
+    // Post-pass: hapus blok "judul + tanggal + komentar" khas Yaraon
+    // Pattern: <a>judul artikel</a> diikuti tanggal (YYYY.MM.DD) dan "N件のコメント"
+    contentElement.querySelectorAll('a').forEach(a => {
+      const aText = (a.textContent ?? '').trim().toLowerCase();
+      const artText = articleTitle.toLowerCase();
+      // Link dengan teks sangat mirip judul artikel (>70% sama)
+      if (aText.length > 20 && artText.length > 20) {
+        const shorter = Math.min(aText.length, artText.length);
+        const common = aText.slice(0, shorter) === artText.slice(0, shorter);
+        if (common) {
+          // Hapus parent block yang berisi link ini + sibling (tanggal, komentar)
+          const parent = a.parentElement;
+          if (parent && parent !== contentElement) parent.remove();
+          else a.remove();
+        }
+      }
+    });
+
+    // Post-pass: hapus teks "スポンサードリンク" (sponsored link header Yaraon)
+    contentElement.querySelectorAll('p,div,span').forEach(el => {
+      const t = (el.textContent ?? '').trim();
+      if (t === 'スポンサードリンク' || t === 'スポンサーリンク' || /^sponsored\s*(link)?$/i.test(t)) {
+        // Hapus elemen ini dan sibling berikutnya (biasanya berisi banner)
+        let next = el.nextSibling;
+        if (next) { const r = next; next = r.nextSibling; r.parentNode?.removeChild(r); }
+        el.remove();
       }
     });
 
