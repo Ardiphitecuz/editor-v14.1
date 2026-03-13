@@ -24,7 +24,7 @@ const REMOVE_WITH_CONTENT = new Set([
 ]);
 
 const TRACKING_IMG = /feedburner|doubleclick|google-analytics|googletagmanager|pixel\.|analytics|share\.|adserver|pagead|adsystem|scorecardresearch|quantserve|omniture|chartbeat|\/ads\/|\/ad\/|fanza|dmm\.co\.jp|a8\.net|valuecommerce|accesstrade|linkshare|affiliate|banner|sponsored|ad\.nicovideo|impress\.jp\/ad|shinobi\.jp|ninja\.co\.jp\/ad/i;
-const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here|続きを読む|もっと見る)\.?$/i;
+const NOISE_TEXT_EXACT = /^(advertisement|iklan|sponsored|promo|share(?: this)?|follow us|subscribe(?: now)?|sign up|comments?|related|read more|selengkapnya|baca juga|lihat juga|artikel terkait|rekomendasi|back to top|load more|see more|click here|続きを読む|もっと見る|te\s*podr[ií]a\s*interesar|también\s*te\s*(puede|podr[ií]a)|quizás\s*te|ads?)\.?$/i;
 
 const PUBLIC_PROXY_PREFIXES = [
   'https://api.allorigins.win/raw?url=',
@@ -395,25 +395,43 @@ async function handle(req, res) {
       }
     }
 
+    // Post-pass: hapus blok "Te podría interesar" / "ADS" beserta seluruh isinya
+    // Berlaku untuk semua sumber (terutama Somoskudasai)
+    const INTERESAR_RE = /te\s*podr[ií]a\s*interesar|también\s*te\s*(puede|podr[ií]a)|quizás\s*te|^\s*ads?\s*$/i;
+    contentElement.querySelectorAll('*').forEach(el => {
+      const t = (el.textContent ?? '').trim();
+      if (INTERESAR_RE.test(t) && t.length < 60) {
+        // Hapus seluruh ancestor block terdekat yang berisi ini + konten setelahnya
+        let target = el;
+        while (target.parentElement && target.parentElement !== contentElement &&
+               (target.parentElement.textContent ?? '').trim().length < 300) {
+          target = target.parentElement;
+        }
+        // Juga hapus semua sibling setelahnya (grid thumbnail ikut)
+        let next = target.nextSibling;
+        while (next) {
+          const r = next; next = r.nextSibling;
+          r.parentNode?.removeChild(r);
+        }
+        target.remove();
+      }
+    });
+
     // Post-pass: Somoskudasai — potong dari bawah jika ada blok thumbnail artikel terkait
-    // Somoskudasai menyusun artikel terkait di akhir konten sebagai grid gambar kecil
-    // Deteksi: ≥3 <img> berurutan dalam satu container tanpa banyak teks
-    if (pageUrl.hostname.includes('somoskudasai')) {
+    // Deteksi: ≥2 <img> dalam satu container dengan teks <150 karakter
+    {
       const children = Array.from(contentElement.children);
-      for (let i = children.length - 1; i >= Math.floor(children.length * 0.5); i--) {
+      for (let i = children.length - 1; i >= Math.floor(children.length * 0.4); i--) {
         const el = children[i];
         const imgs = el.querySelectorAll('img');
         const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-        // Block dengan banyak gambar tapi sedikit teks = artikel terkait grid
-        if (imgs.length >= 2 && text.length < 100) {
-          el.remove();
-        }
+        if (imgs.length >= 2 && text.length < 150) el.remove();
       }
     }
 
     // Post-pass: potong semua konten setelah heading "Artikel Terkait" / "Related" / "Baca Juga"
     // Di WordPress/blog, artikel terkait hampir selalu di akhir konten setelah heading ini
-    const RELATED_HEADING = /^(artikel\s*terkait|related\s*(post|artikel|article)?|baca\s*juga|lihat\s*juga|you\s*may\s*(also\s*)?(like|read)|more\s*(from|article)|関連記事|おすすめ記事|人気記事|こちらもどうぞ)$/i;
+    const RELATED_HEADING = /^(artikel\s*terkait|related\s*(post|artikel|article)?|baca\s*juga|lihat\s*juga|you\s*may\s*(also\s*)?(like|read)|more\s*(from|article)|関連記事|おすすめ記事|人気記事|こちらもどうぞ|te\s*podr[ií]a\s*interesar|también\s*te\s*(puede|podr[ií]a)|quizás\s*te|ads?)$/i;
     const headings = Array.from(contentElement.querySelectorAll('h1,h2,h3,h4,h5,h6'));
     for (const heading of headings) {
       const text = (heading.textContent ?? '').trim();
