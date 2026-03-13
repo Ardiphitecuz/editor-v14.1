@@ -1,17 +1,14 @@
 import { useNavigate, useLocation } from "react-router";
 import {
-  Home, Rss, MessageSquare, Bell,
-  Search, Settings, User, ChevronDown,
+  Home, BookMarked, Bookmark, Rss, PlusCircle, ChevronDown,
 } from "lucide-react";
 
+// Menu sama persis dengan BottomNav mobile
 const NAV_ITEMS = [
-  { label: "Home",     path: "/",               icon: Home },
-  { label: "Sources",  path: "/subscriptions",  icon: Rss },
-  // { label: "Chat",     path: "/editor",         icon: MessageSquare },
-  { label: "Activity", path: "/activity",       icon: Bell },
-  { label: "Explore",  path: "/jelajahi",       icon: Search },
-  { label: "Settings", path: "/pengaturan",     icon: Settings },
-  { label: "Profile",  path: "/profile",        icon: User },
+  { label: "Home",    path: "/",              icon: Home },
+  { label: "Draft",   path: "/jelajahi",      icon: BookMarked },
+  { label: "Saved",   path: "/simpan",        icon: Bookmark },
+  { label: "Sources", path: "/subscriptions", icon: Rss },
 ];
 
 export function SideNav() {
@@ -32,17 +29,13 @@ export function SideNav() {
         width: "100%",
       }}
     >
-      {/* Logo */}
+      {/* Logo Otaku Cafe */}
       <div className="px-5 mb-6">
-        <div className="flex items-center gap-2.5">
-          <span style={{ fontSize: 26 }}>☕</span>
-          <div>
-            <p style={{ fontSize: 15, fontWeight: 900, color: "#1a1a1a", lineHeight: 1.1, letterSpacing: "-0.3px" }}>
-              Otaku Cafe
-            </p>
-            <p style={{ fontSize: 10, color: "#b0a89e", fontWeight: 500 }}>Aggregator</p>
-          </div>
-        </div>
+        <img
+          src="/mascot/logo.png"
+          alt="Otaku Cafe"
+          style={{ height: 38, width: "auto", objectFit: "contain" }}
+        />
       </div>
 
       {/* Nav list */}
@@ -59,20 +52,11 @@ export function SideNav() {
                 color: active ? "#1a1a1a" : "#6b6560",
               }}
             >
-              {label === "Profile" ? (
-                <div
-                  className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg,#ff742f,#c0392b)" }}
-                >
-                  <User size={14} color="white" />
-                </div>
-              ) : (
-                <Icon
-                  size={22}
-                  strokeWidth={active ? 2.2 : 1.7}
-                  color={active ? "#1a1a1a" : "#8a8078"}
-                />
-              )}
+              <Icon
+                size={22}
+                strokeWidth={active ? 2.2 : 1.7}
+                color={active ? "#ff742f" : "#8a8078"}
+              />
               <span style={{
                 fontSize: 15,
                 fontWeight: active ? 700 : 400,
@@ -86,7 +70,7 @@ export function SideNav() {
         })}
       </nav>
 
-      {/* Create Post button */}
+      {/* Create button */}
       <div className="px-4 pt-4 mt-2">
         <button
           onClick={() => navigate("/editor")}
