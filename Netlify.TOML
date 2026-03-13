@@ -42,10 +42,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-# Header untuk SharedArrayBuffer (dibutuhkan ffmpeg/WASM)
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin"
-    Cross-Origin-Embedder-Policy = "require-corp"
