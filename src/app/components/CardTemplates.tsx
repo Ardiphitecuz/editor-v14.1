@@ -148,16 +148,16 @@ export function NotifBadge({ label }: { label: string }) {
 // ── Card Components ──────────────────────────────────────────────────────────
 
 export function PostCard(props: any) {
-  const { 
-    label, titleHtml, source, articleSource, 
-    bgMode = "single", bgSrc, 
-    bgT = { x: 0, y: 0, scale: 1 }, 
-    bg2Src, 
-    bg2T = { x: 0, y: 0, scale: 1 }, 
-    splitAngle = 0, stickers = [], extraTexts = [], 
-    onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, 
-    onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, 
-    selectedStickerId, selectedTextId, onTitleChange 
+  const {
+    label, titleHtml, source, articleSource,
+    bgMode = "single", bgSrc,
+    bgT = { x: 0, y: 0, scale: 1 },
+    bg2Src,
+    bg2T = { x: 0, y: 0, scale: 1 },
+    splitAngle = 0, stickers = [], extraTexts = [],
+    onBgTouch, onBgMouseDown, bgDragActive, snapIndicator,
+    onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown,
+    selectedStickerId, selectedTextId, onTitleChange
   } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
   const inlineTitleRef = useRef<HTMLDivElement>(null);
@@ -231,18 +231,18 @@ export function PostCard(props: any) {
 }
 
 export function VideoCard(props: any) {
-  const { 
-    label, titleHtml, source, articleSource, 
-    bgMode = "single", bgSrc, 
-    bgT = { x: 0, y: 0, scale: 1 }, 
-    bg2Src, 
-    bg2T = { x: 0, y: 0, scale: 1 }, 
-    splitAngle = 0, videoUrl, 
+  const {
+    label, titleHtml, source, articleSource,
+    bgMode = "single", bgSrc,
+    bgT = { x: 0, y: 0, scale: 1 },
+    bg2Src,
+    bg2T = { x: 0, y: 0, scale: 1 },
+    splitAngle = 0, videoUrl,
     videoAspectRatio = "9:16",
-    stickers = [], extraTexts = [], 
-    onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, 
-    onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, 
-    selectedStickerId, selectedTextId, videoRef, overlayRef 
+    stickers = [], extraTexts = [],
+    onBgTouch, onBgMouseDown, bgDragActive, snapIndicator,
+    onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown,
+    selectedStickerId, selectedTextId, videoRef, overlayRef
   } = props;
   const is34 = videoAspectRatio === "3:4";
   const cardW = is34 ? POST_W : VIDEO_W;
@@ -281,7 +281,7 @@ export function VideoCard(props: any) {
         <Overlay cardW={cardW} cardH={cardH} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
         {/* Gradient Positioning */}
         <div style={{ position: "absolute", left: 0, top: is34 ? 1600 : cardH * 0.55, width: "100%", height: is34 ? cardH - 1600 : cardH * 0.45, zIndex: 3, background: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,${is34 ? 0.75 : 0.82}) 100%)` }} />
-        
+
         {/* Title Group Positioning */}
         <div style={{ position: "absolute", left: "50%", bottom: is34 ? 469 : 949, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85 }}>
           <NotifBadge label={label} />
@@ -293,16 +293,16 @@ export function VideoCard(props: any) {
 
         {/* Identity Bar Positioning */}
         <div style={{ position: "absolute", left: is34 ? 89 : 146, top: is34 ? 1812.55 : 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
-        
+
         {/* Source Bars Positioning */}
         <div style={{ position: "absolute", left: is34 ? 89 : 136, top: is34 ? 2034 : 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
+            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M19 0H5C3.67441 0.00158786 2.40356 0.528882 1.46622 1.46622C0.528882 2.40356 0.00158786 3.67441 0 5L0 19C0.00158786 20.3256 0.528882 21.5964 1.46622 22.5338C2.40356 23.4711 3.67441 23.9984 5 24H19C20.3256 23.9984 21.5964 23.4711 22.5338 22.5338C23.4711 21.5964 23.9984 20.3256 24 19V5C23.9984 3.67441 23.4711 2.40356 22.5338 1.46622C21.5964 0.528882 20.3256 0.00158786 19 0V0ZM20 11H22V13H20V11ZM20 9V7H22V9H20ZM18 11H6V2H18V11ZM4 13H2V11H4V13ZM4 9H2V7H4V9ZM2 15H4V17H2V15ZM6 13H18V22H6V13ZM20 15H22V17H20V15ZM22 5H20V2.184C20.5829 2.39008 21.0879 2.77123 21.4459 3.2753C21.8039 3.77937 21.9974 4.38174 22 5ZM4 2.184V5H2C2.00256 4.38174 2.19608 3.77937 2.55409 3.2753C2.91209 2.77123 3.41709 2.39008 4 2.184ZM2 19H4V21.816C3.41709 21.6099 2.91209 21.2288 2.55409 20.7247C2.19608 20.2206 2.00256 19.6183 2 19ZM20 21.816V19H22C21.9974 19.6183 21.8039 20.2206 21.4459 20.7247C21.0879 21.2288 20.5829 21.6099 20 21.816Z" fill="white" /></svg></div>
             <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: is34 ? 20 : 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: is34 ? "none" : "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
           </div>
           {articleSource && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-              <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
+              <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M19 0H5C3.67441 0.00158786 2.40356 0.528882 1.46622 1.46622C0.528882 2.40356 0.00158786 3.67441 0 5L0 19C0.00158786 20.3256 0.528882 21.5964 1.46622 22.5338C2.40356 23.4711 3.67441 23.9984 5 24H19C20.3256 23.9984 21.5964 23.4711 22.5338 22.5338C23.4711 21.5964 23.9984 20.3256 24 19V5C23.9984 3.67441 23.4711 2.40356 22.5338 1.46622C21.5964 0.528882 20.3256 0.00158786 19 0V0ZM20 11H22V13H20V11ZM20 9V7H22V9H20ZM18 11H6V2H18V11ZM4 13H2V11H4V13ZM4 9H2V7H4V9ZM2 15H4V17H2V15ZM6 13H18V22H6V13ZM20 15H22V17H20V15ZM22 5H20V2.184C20.5829 2.39008 21.0879 2.77123 21.4459 3.2753C21.8039 3.77937 21.9974 4.38174 22 5ZM4 2.184V5H2C2.00256 4.38174 2.19608 3.77937 2.55409 3.2753C2.91209 2.77123 3.41709 2.39008 4 2.184ZM2 19H4V21.816C3.41709 21.6099 2.91209 21.2288 2.55409 20.7247C2.19608 20.2206 2.00256 19.6183 2 19ZM20 21.816V19H22C21.9974 19.6183 21.8039 20.2206 21.4459 20.7247C21.0879 21.2288 20.5829 21.6099 20 21.816Z" fill="white" /></svg></div>
               <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: is34 ? 20 : 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: is34 ? "none" : "underline", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
             </div>
           )}

@@ -2,8 +2,10 @@ import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { toPng } from "html-to-image";
 
 export interface ExportOptions {
-  width: number;
-  height: number;
+  cardWidth: number;
+  cardHeight: number;
+  outWidth: number;
+  outHeight: number;
   fps?: number;
   bitrate?: number;
   onProgress?: (progress: number) => void;
@@ -16,16 +18,18 @@ export async function exportVideo(
   options: ExportOptions
 ): Promise<Blob> {
   const { 
-    width: rawWidth, 
-    height: rawHeight, 
+    cardWidth,
+    cardHeight,
+    outWidth,
+    outHeight,
     fps = 30, 
-    bitrate = 6_000_000, 
+    bitrate = 8_000_000, // Increased for better quality
     onProgress
   } = options;
 
-  // Enforce even dimensions for H.264
-  const width = rawWidth & ~1;
-  const height = rawHeight & ~1;
+  // Enforce even dimensions for H.264 (OUT resolution)
+  const width = outWidth & ~1;
+  const height = outHeight & ~1;
   const duration = video.duration;
 
   // Ensure fonts are loaded before capture
@@ -36,25 +40,22 @@ export async function exportVideo(
   canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true })!;
 
-  // Capture overlay as Image
-  // We use a more robust strategy: force the dimensions and transform to none 
-  // to avoid capture displacement if the parent is scaled (e.g. in a preview modal).
+  // 1. Capture overlay as Image at ORIGINAL full resolution (high quality)
   const overlayDataUrl = await toPng(overlay, { 
-    width, 
-    height, 
+    width: cardWidth, 
+    height: cardHeight, 
     pixelRatio: 1,
     style: { 
       transform: 'none', 
       transformOrigin: 'top left', 
-      width: `${width}px`, 
-      height: `${height}px`,
-      position: 'fixed', // Isolate from parent layout
+      width: `${cardWidth}px`, 
+      height: `${cardHeight}px`,
+      position: 'fixed',
       top: '0',
       left: '0',
       visibility: 'visible',
       backfaceVisibility: 'hidden'
     },
-    // Ensure we capture even elements that are technically overflowed
     skipAutoScale: true,
   });
   const overlayImg = new Image();
@@ -73,90 +74,112 @@ export async function exportVideo(
     output: (chunk, metadata) => muxer.addVideoChunk(chunk, metadata),
     error: (e) => console.error("VideoEncoder error", e)
   });
+  
   videoEncoder.configure({ 
-    codec: 'avc1.4D0033', // Main Profile, Level 5.1 (Supports high resolutions)
+    codec: 'avc1.4d0032', 
     width, height, 
     bitrate, 
+    bitrateMode: 'constant',
     framerate: fps, 
     avc: { format: 'annexb' } 
   });
+
+  // Audio Data Extraction using Web Audio API
+  let audioBuffer: AudioBuffer | null = null;
+  try {
+    const response = await fetch(video.src);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
+  } catch (e) {
+    console.warn("Could not extract audio buffer:", e);
+  }
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, metadata) => muxer.addAudioChunk(chunk, metadata),
     error: (e) => console.error("AudioEncoder error", e)
   });
-  audioEncoder.configure({ 
-    codec: 'mp4a.40.2', 
-    numberOfChannels: 2, 
-    sampleRate: 44100, 
-    bitrate: 128_000 
-  });
-
-  // Audio Track Processing
-  let audioReader: ReadableStreamDefaultReader | null = null;
-  try {
-    // @ts-ignore
-    const audioStream = video.captureStream?.() || (video as any).mozCaptureStream?.();
-    if (audioStream && audioStream.getAudioTracks().length > 0) {
-      const audioTrack = audioStream.getAudioTracks()[0];
-      // @ts-ignore
-      const processor = new MediaStreamTrackProcessor({ track: audioTrack });
-      audioReader = processor.readable.getReader();
-    }
-  } catch (e) {
-    console.warn("Audio capture not supported or failed", e);
+  
+  if (audioBuffer) {
+    audioEncoder.configure({ 
+      codec: 'mp4a.40.2', 
+      numberOfChannels: audioBuffer.numberOfChannels, 
+      sampleRate: audioBuffer.sampleRate, 
+      bitrate: 128_000 
+    });
   }
 
   // Render Loop
-  video.currentTime = 0;
-  await new Promise(r => {
-    const onSeeked = () => { video.removeEventListener('seeked', onSeeked); r(null); };
-    video.addEventListener('seeked', onSeeked);
-  });
-  
   let frameCount = 0;
   const totalFrames = Math.ceil(duration * fps);
   const frameTime = 1 / fps;
+  let lastAudioTimestampUs = 0;
 
   while (frameCount < totalFrames) {
-    const timestamp = frameCount * frameTime;
-    video.currentTime = timestamp;
+    const timestampInSeconds = frameCount * frameTime;
+    video.currentTime = timestampInSeconds;
+    
     await new Promise(r => {
-       const onSeeked = () => { video.removeEventListener('seeked', onSeeked); r(null); };
+       const onSeeked = () => { 
+         video.removeEventListener('seeked', onSeeked); 
+         r(null); 
+       };
        video.addEventListener('seeked', onSeeked);
     });
 
+    // Draw both video and high-res overlay into the output canvas
     ctx.drawImage(video, 0, 0, width, height);
     ctx.drawImage(overlayImg, 0, 0, width, height);
     
-    const frame = new VideoFrame(canvas, { timestamp: timestamp * 1_000_000 });
+    // Use rounded microseconds to prevent float drift
+    const timestampUs = Math.round(timestampInSeconds * 1_000_000);
+    const frame = new VideoFrame(canvas, { timestamp: timestampUs });
+    
     try {
       videoEncoder.encode(frame, { keyFrame: frameCount % 60 === 0 });
     } finally {
       frame.close();
     }
 
-    if (audioReader) {
-      while (true) {
-        const { done, value } = await audioReader.read();
-        if (done) break;
-        if (value.timestamp / 1_000_000 > timestamp + frameTime) { 
-          // Re-queue or discard? For simplicity, we discard if it's too far ahead
-          // but usually audio buffers are small enough that we can just encode them.
-          value.close(); 
-          break; 
+    // Audio encoding for this frame interval
+    if (audioBuffer && audioEncoder.state === 'configured') {
+      const startSample = Math.floor(timestampInSeconds * audioBuffer.sampleRate);
+      const endSample = Math.floor((frameCount + 1) * frameTime * audioBuffer.sampleRate);
+      const numSamples = endSample - startSample;
+
+      if (numSamples > 0 && startSample < audioBuffer.length) {
+        const actualNumSamples = Math.min(numSamples, audioBuffer.length - startSample);
+        const data = new Float32Array(actualNumSamples * audioBuffer.numberOfChannels);
+        
+        for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+          const channelData = audioBuffer.getChannelData(ch);
+          for (let i = 0; i < actualNumSamples; i++) {
+            // Planar to Interleaved (though AudioData supports both, interleaved f32 is common)
+            data[i * audioBuffer.numberOfChannels + ch] = channelData[startSample + i];
+          }
         }
-        audioEncoder.encode(value);
-        value.close();
+
+        const audioData = new AudioData({
+            format: 'f32',
+            sampleRate: audioBuffer.sampleRate,
+            numberOfFrames: actualNumSamples,
+            numberOfChannels: audioBuffer.numberOfChannels,
+            timestamp: timestampUs,
+            data: data
+        });
+
+        audioEncoder.encode(audioData);
+        audioData.close();
       }
     }
 
     frameCount++;
-    onProgress?.(Math.round((frameCount / totalFrames) * 95));
+    onProgress?.(Math.round((frameCount / totalFrames) * 98));
   }
 
   await videoEncoder.flush();
-  await audioEncoder.flush();
+  if (audioEncoder.state === 'configured') await audioEncoder.flush();
   muxer.finalize();
 
   return new Blob([muxer.target.buffer], { type: "video/mp4" });

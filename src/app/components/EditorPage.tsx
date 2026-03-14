@@ -19,7 +19,7 @@ import {
   Plus, Trash2, Type, Image as ImageIcon, Layers, FileImage, Link, ArrowLeft, X, Sparkles, Cloud
 } from "lucide-react";
 import { upscaleImage } from "../services/imageUpscaler";
-import { 
+import {
   PostCard, VideoCard, Background, Overlay, NotifBadge,
   POST_W, POST_H, VIDEO_W, VIDEO_H,
   FONT_REGULAR, FONT_BOLD, FONT_ITALIC, FONT_BOLD_ITALIC,
@@ -47,7 +47,7 @@ function BgUrlInput({ placeholder, onApply, onSourceApply }: { placeholder: stri
     img.onload = () => {
       setLoading(false); onApply(url); setVal("");
       if (onSourceApply) {
-        try { const domain = new URL(url).hostname.replace(/^www\./, ""); onSourceApply(domain); } catch {}
+        try { const domain = new URL(url).hostname.replace(/^www\./, ""); onSourceApply(domain); } catch { }
       }
     };
     img.onerror = () => { setLoading(false); setErr("Gagal memuat gambar."); };
@@ -133,20 +133,20 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
       }
     };
 
-    el.addEventListener('pointerdown',   onDown,     { passive: false });
-    el.addEventListener('pointermove',   onMove,     { passive: false });
-    el.addEventListener('pointerup',     onUp);
+    el.addEventListener('pointerdown', onDown, { passive: false });
+    el.addEventListener('pointermove', onMove, { passive: false });
+    el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onUp);
-    el.addEventListener('touchmove',     blockTouch, { passive: false, capture: true });
-    el.addEventListener('touchstart',    blockTouch, { passive: false, capture: true });
+    el.addEventListener('touchmove', blockTouch, { passive: false, capture: true });
+    el.addEventListener('touchstart', blockTouch, { passive: false, capture: true });
 
     return () => {
-      el.removeEventListener('pointerdown',   onDown);
-      el.removeEventListener('pointermove',   onMove);
-      el.removeEventListener('pointerup',     onUp);
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
-      el.removeEventListener('touchmove',     blockTouch, { capture: true } as any);
-      el.removeEventListener('touchstart',    blockTouch, { capture: true } as any);
+      el.removeEventListener('touchmove', blockTouch, { capture: true } as any);
+      el.removeEventListener('touchstart', blockTouch, { capture: true } as any);
     };
   }, []); // deps kosong — listeners hanya dipasang sekali, onChange via ref
 
@@ -177,11 +177,11 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
 }
 
 // ── Crop Modal ───────────────────────────────────────────────────────────────
-function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "original"|"square"|"circle"; onDone: (cropped: string) => void; onClose: () => void }) {
+function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "original" | "square" | "circle"; onDone: (cropped: string) => void; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0, size: 100 }); // % of rendered image
-  const [dragging, setDragging] = useState<"move"|"resize"|null>(null);
+  const [dragging, setDragging] = useState<"move" | "resize" | null>(null);
   const dragStart = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -202,8 +202,8 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
     cvs.width = D; cvs.height = D;
     ctx.clearRect(0, 0, D, D);
     ctx.save();
-    if (shape === "circle") { ctx.beginPath(); ctx.arc(D/2, D/2, D/2, 0, Math.PI*2); ctx.clip(); }
-    else if (shape === "square") { ctx.beginPath(); const r = 16; ctx.moveTo(r,0); ctx.lineTo(D-r,0); ctx.arcTo(D,0,D,r,r); ctx.lineTo(D,D-r); ctx.arcTo(D,D,D-r,D,r); ctx.lineTo(r,D); ctx.arcTo(0,D,0,D-r,r); ctx.lineTo(0,r); ctx.arcTo(0,0,r,0,r); ctx.clip(); }
+    if (shape === "circle") { ctx.beginPath(); ctx.arc(D / 2, D / 2, D / 2, 0, Math.PI * 2); ctx.clip(); }
+    else if (shape === "square") { ctx.beginPath(); const r = 16; ctx.moveTo(r, 0); ctx.lineTo(D - r, 0); ctx.arcTo(D, 0, D, r, r); ctx.lineTo(D, D - r); ctx.arcTo(D, D, D - r, D, r); ctx.lineTo(r, D); ctx.arcTo(0, D, 0, D - r, r); ctx.lineTo(0, r); ctx.arcTo(0, 0, r, 0, r); ctx.clip(); }
     ctx.drawImage(img, crop.x, crop.y, crop.size, crop.size, 0, 0, D, D);
     ctx.restore();
   }, [img, crop, shape]);
@@ -211,7 +211,7 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
   const imgDisplay = img ? Math.min(300, img.width) : 300;
   const imgScale = img ? imgDisplay / img.width : 1;
 
-  const startInteract = (e: React.MouseEvent | React.TouchEvent, mode: "move"|"resize") => {
+  const startInteract = (e: React.MouseEvent | React.TouchEvent, mode: "move" | "resize") => {
     e.preventDefault(); e.stopPropagation();
     const pt = "touches" in e ? e.touches[0] : e;
     setDragging(mode);
@@ -252,17 +252,17 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
       <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm flex flex-col gap-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold text-neutral-900">Crop Stiker</span>
-          <button onClick={onClose} className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"><X size={14}/></button>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"><X size={14} /></button>
         </div>
         {/* Image with crop overlay */}
         {img && (
           <div ref={containerRef} className="relative overflow-hidden rounded-xl bg-neutral-100 mx-auto" style={{ width: imgDisplay, height: imgDisplay * (img.height / img.width) }}>
             <img src={src} style={{ width: imgDisplay, height: "auto", display: "block", userSelect: "none", pointerEvents: "none" }} draggable={false} />
             {/* crop rect */}
-            <div style={{ position: "absolute", left: crop.x * imgScale, top: crop.y * imgScale, width: crop.size * imgScale, height: crop.size * imgScale, border: "2px solid #ff742f", borderRadius: shape==="circle"?"50%": shape==="square"?"8px":0, boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)", cursor: dragging==="move"?"grabbing":"grab", touchAction:"none" }}
+            <div style={{ position: "absolute", left: crop.x * imgScale, top: crop.y * imgScale, width: crop.size * imgScale, height: crop.size * imgScale, border: "2px solid #ff742f", borderRadius: shape === "circle" ? "50%" : shape === "square" ? "8px" : 0, boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)", cursor: dragging === "move" ? "grabbing" : "grab", touchAction: "none" }}
               onMouseDown={(e) => startInteract(e, "move")} onTouchStart={(e) => startInteract(e, "move")}>
               {/* resize handle */}
-              <div style={{ position:"absolute", right:-8, bottom:-8, width:18, height:18, background:"#ff742f", borderRadius:"50%", border:"2px solid white", cursor:"se-resize", touchAction:"none" }}
+              <div style={{ position: "absolute", right: -8, bottom: -8, width: 18, height: 18, background: "#ff742f", borderRadius: "50%", border: "2px solid white", cursor: "se-resize", touchAction: "none" }}
                 onMouseDown={(e) => startInteract(e, "resize")} onTouchStart={(e) => startInteract(e, "resize")} />
             </div>
           </div>
@@ -304,13 +304,13 @@ export function EditorPage() {
     videoUrl?: string | null;
     stickers?: Sticker[];
     extraTexts?: ExtraText[];
-    
+
     aiContent?: string[];
     fromDraft?: boolean;
     draftId?: string;
     articleTitle?: string;
     imageUrl?: string;
-    
+
     // Auto-export flags
     autoExport?: boolean;
     exportMode?: "download" | "share";
@@ -318,37 +318,37 @@ export function EditorPage() {
   const INIT_TITLE = locationState?.titleHtml ?? DEFAULT_TITLE_HTML;
 
   const [template, setTemplate] = useState<TemplateType>(locationState?.template ?? "post");
-  const [videoAspectRatio, setVideoAspectRatio] = useState<"3:4" | "9:16">(locationState?.videoAspectRatio ?? "9:16");
+  const [videoAspectRatio, setVideoAspectRatio] = useState<"3:4" | "9:16">("9:16");
 
   const CARD_W = template === "post" ? POST_W : (videoAspectRatio === "3:4" ? POST_W : VIDEO_W);
   const CARD_H = template === "post" ? POST_H : (videoAspectRatio === "3:4" ? POST_H : VIDEO_H);
 
   const [activeTab, setActiveTab] = useState<SidebarTab | null>(null);
 
-  const [label, setLabel]           = useState("Discuss");
-  const [titleHtml, setTitleHtml]   = useState(INIT_TITLE);
-  const [source, setSource]         = useState(locationState?.source ?? "");
+  const [label, setLabel] = useState("Discuss");
+  const [titleHtml, setTitleHtml] = useState(INIT_TITLE);
+  const [source, setSource] = useState(locationState?.source ?? "");
   const [articleSource, setArticleSource] = useState(locationState?.articleSource ?? "");
 
-  const [bgMode, setBgMode]         = useState<BgMode>(locationState?.bgMode ?? "single");
-  const [bgSrc, setBgSrc]           = useState<string>(locationState?.bgSrc ?? locationState?.bgUrl ?? locationState?.imageUrl ?? DEFAULT_BG);
-  const [bgT, setBgT]               = useState<BgTransform>(locationState?.bgT ?? { ...DEFAULT_BG_TRANSFORM });
-  const [bg2Src, setBg2Src]         = useState<string>(locationState?.bg2Src ?? DEFAULT_BG);
-  const [bg2T, setBg2T]             = useState<BgTransform>(locationState?.bg2T ?? { ...DEFAULT_BG_TRANSFORM });
+  const [bgMode, setBgMode] = useState<BgMode>(locationState?.bgMode ?? "single");
+  const [bgSrc, setBgSrc] = useState<string>(locationState?.bgSrc ?? locationState?.bgUrl ?? locationState?.imageUrl ?? DEFAULT_BG);
+  const [bgT, setBgT] = useState<BgTransform>(locationState?.bgT ?? { ...DEFAULT_BG_TRANSFORM });
+  const [bg2Src, setBg2Src] = useState<string>(locationState?.bg2Src ?? DEFAULT_BG);
+  const [bg2T, setBg2T] = useState<BgTransform>(locationState?.bg2T ?? { ...DEFAULT_BG_TRANSFORM });
   const [splitAngle, setSplitAngle] = useState(locationState?.splitAngle ?? 8);
-  const [videoUrl, setVideoUrl]     = useState<string | null>(locationState?.videoUrl ?? null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(locationState?.videoUrl ?? null);
 
-  const [stickers, setStickers]                   = useState<Sticker[]>(locationState?.stickers ?? []);
+  const [stickers, setStickers] = useState<Sticker[]>(locationState?.stickers ?? []);
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
-  const [extraTexts, setExtraTexts]               = useState<ExtraText[]>(locationState?.extraTexts ?? []);
-  const [selectedTextId, setSelectedTextId]       = useState<string | null>(null);
+  const [extraTexts, setExtraTexts] = useState<ExtraText[]>(locationState?.extraTexts ?? []);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const [bgDragActive, setBgDragActive] = useState<1 | 2 | null>(null);
   const [cropStickerId, setCropStickerId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: "success"|"error"|"loading"|"info" } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "loading" | "info" } | null>(null);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = (msg: string, type: "success"|"error"|"loading"|"info" = "info", duration = 3000) => {
+  const showToast = (msg: string, type: "success" | "error" | "loading" | "info" = "info", duration = 3000) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, type });
     if (duration > 0) toastTimer.current = setTimeout(() => setToast(null), duration);
@@ -356,9 +356,9 @@ export function EditorPage() {
   const hideToast = () => { if (toastTimer.current) clearTimeout(toastTimer.current); setToast(null); };
 
   // ── Upscale state ──────────────────────────────────────────────────────────
-  const [upscaling, setUpscaling]           = useState(false);
+  const [upscaling, setUpscaling] = useState(false);
   const [upscaleProgress, setUpscaleProgress] = useState(0);
-  const [upscaleStatus, setUpscaleStatus]   = useState("");
+  const [upscaleStatus, setUpscaleStatus] = useState("");
 
   // Responsive: detect desktop (≥1024px)
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
@@ -414,7 +414,7 @@ export function EditorPage() {
   const currentBg2TRef = useRef(DEFAULT_BG_TRANSFORM);
   const bgModeRef = useRef<BgMode>("single");
   const cardDimRef = useRef({ w: POST_W, h: POST_H });
-  
+
   // Media Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -440,12 +440,7 @@ export function EditorPage() {
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
   useEffect(() => { bgModeRef.current = bgMode; }, [bgMode]);
   useEffect(() => { cardDimRef.current = { w: CARD_W, h: CARD_H }; }, [CARD_W, CARD_H]);
-  // Auto-redirect if no article and not from draft - removal of autoExport logic
-  useEffect(() => {
-    if (!locationState?.articleTitle && !locationState?.fromDraft) {
-      navigate("/");
-    }
-  }, [locationState?.articleTitle, locationState?.fromDraft, navigate]);
+  // Removed auto-redirect to allow direct access to editor for blank creation
   // Auto-sync zoom target when selection changes
   useEffect(() => { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } }, [selectedStickerId]);
   useEffect(() => { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } }, [selectedTextId]);
@@ -460,43 +455,6 @@ export function EditorPage() {
     }
   }, []);
 
-  const handleSaveDraft = async () => {
-    const now = Date.now();
-    const draft = {
-      id: locationState?.draftId || uid(),
-      template: {
-        template,
-        aspectRatio: videoAspectRatio,
-        label,
-        titleHtml,
-        source,
-        articleSource,
-        bgSrc,
-        bgT,
-        bgMode,
-        bg2Src,
-        bg2T,
-        splitAngle,
-        videoUrl,
-        stickers,
-        extraTexts,
-      },
-      aiTitle: titleHtml,
-      aiContent: locationState?.aiContent || [],
-      source: source || locationState?.source || "",
-      articleSource: articleSource || locationState?.articleSource || "",
-      imageUrl: bgSrc,
-      videoUrl: videoUrl,
-      timestamp: now,
-      articleTitle: locationState?.articleTitle || "",
-      createdAt: now,
-      updatedAt: now,
-    };
-    // @ts-ignore - draftStore.save expects full Draft, we might need to handle ID if it exists
-    await draftStore.save(draft as any);
-    showToast("Draft berhasil disimpan!", "success");
-    return draft;
-  };
 
   const handleExportVideo = async () => {
     // Logic moved to DraftPage and videoExporter service
@@ -524,10 +482,10 @@ export function EditorPage() {
     try {
       const result = await upscaleImage(src, {
         onProgress: (pct) => setUpscaleProgress(pct),
-        onStatus:   (msg) => setUpscaleStatus(msg),
+        onStatus: (msg) => setUpscaleStatus(msg),
       });
       if (which === 1) { setBgSrc(result); setBgT({ ...DEFAULT_BG_TRANSFORM }); }
-      else             { setBg2Src(result); setBg2T({ ...DEFAULT_BG_TRANSFORM }); }
+      else { setBg2Src(result); setBg2T({ ...DEFAULT_BG_TRANSFORM }); }
       showToast("Gambar berhasil di-upscale 4x!", "success");
     } catch (err: any) {
       showToast("Upscale gagal: " + (err?.message ?? "error"), "error");
@@ -673,8 +631,8 @@ export function EditorPage() {
     };
   }, []);
 
-  const handleBgTouch = useCallback((which: 1|2, e: React.TouchEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
-  const handleBgMouse = useCallback((which: 1|2, e: React.MouseEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.clientX, e.clientY); }, [startDrag]);
+  const handleBgTouch = useCallback((which: 1 | 2, e: React.TouchEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
+  const handleBgMouse = useCallback((which: 1 | 2, e: React.MouseEvent) => { e.preventDefault(); startDrag({ type: "bg", which }, e.clientX, e.clientY); }, [startDrag]);
   const handleStickerTouch = useCallback((id: string, mode: string, e: React.TouchEvent) => {
     e.preventDefault(); e.stopPropagation();
     setSelectedStickerId(id);
@@ -691,10 +649,10 @@ export function EditorPage() {
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ").trim();
 
-  const handleSaveDraftComplete = async (returnOnly = false) => {
+  const handleSaveDraft = async (returnOnly = false) => {
     if (!source.trim()) { showToast("Isi sumber gambar terlebih dahulu", "error"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("Isi judul terlebih dahulu", "error"); return; }
-    
+
     try {
       if (!returnOnly) showToast("Menyimpan draft...", "loading", 0);
 
@@ -730,8 +688,8 @@ export function EditorPage() {
 
       let finalBgSrc = bgSrc;
       if ((!finalBgSrc || finalBgSrc === DEFAULT_BG) && videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))) {
-          const ytIdMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
-          if (ytIdMatch && ytIdMatch[1]) { finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`; }
+        const ytIdMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
+        if (ytIdMatch && ytIdMatch[1]) { finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`; }
       }
 
       const draftTemplate = {
@@ -740,7 +698,7 @@ export function EditorPage() {
         bgSrc, bgMode, bgT, bg2Src, bg2T, splitAngle,
         videoUrl, videoAspectRatio, stickers, extraTexts
       };
-      
+
       const existingDraftId = locationState?.draftId;
       const now = Date.now();
       const draftData = {
@@ -760,7 +718,7 @@ export function EditorPage() {
       } else {
         await draftStore.create(draftData);
       }
-      
+
       if (!returnOnly) {
         showToast("✅ Tersimpan!", "success");
         navigate("/jelajahi");
@@ -776,9 +734,9 @@ export function EditorPage() {
       }
     }
   };
-  
+
   const handleReset = () => { setShowConfirmReset(true); };
-  const doReset = () => { setLabel("Discuss"); setTitleHtml(DEFAULT_TITLE_HTML); setBgSrc(DEFAULT_BG); setBgT({...DEFAULT_BG_TRANSFORM}); setStickers([]); setExtraTexts([]); if(editorRef.current) editorRef.current.innerHTML = DEFAULT_TITLE_HTML; setShowConfirmReset(false); };
+  const doReset = () => { setLabel("Discuss"); setTitleHtml(DEFAULT_TITLE_HTML); setBgSrc(DEFAULT_BG); setBgT({ ...DEFAULT_BG_TRANSFORM }); setStickers([]); setExtraTexts([]); if (editorRef.current) editorRef.current.innerHTML = DEFAULT_TITLE_HTML; setShowConfirmReset(false); };
 
   const applySourceUrl = () => {
     const url = sourceUrlInput.trim();
@@ -792,7 +750,7 @@ export function EditorPage() {
         const u = new URL(url);
         const domain = u.hostname.replace(/^www\./, "");
         setSource(domain);
-      } catch {}
+      } catch { }
       setSourceUrlLoading(false); setSourceUrlInput(""); setShowSourcePopup(false);
     };
     img.onerror = () => { setSourceUrlLoading(false); setSourceUrlErr("Gagal memuat gambar dari URL ini."); };
@@ -817,7 +775,7 @@ export function EditorPage() {
     const url = videoUrlInput.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) { setVideoUrlErr("URL harus valid"); return; }
-    
+
     setVideoUrlLoading(true);
     setVideoUrlErr(null);
     try {
@@ -832,7 +790,7 @@ export function EditorPage() {
       }
       if (data.url) {
         setVideoUrl(data.url);
-        
+
         let newSource = "TikTok Video";
         const tikTokMatch = url.match(/tiktok\.com\/@([^/]+)/i);
         if (tikTokMatch) {
@@ -841,7 +799,7 @@ export function EditorPage() {
           newSource = "Instagram Reels";
         }
         setSource(newSource);
-        
+
         setVideoUrlInput("");
         setShowVideoUrlPopup(false);
       }
@@ -867,10 +825,10 @@ export function EditorPage() {
   };
 
   const TABS: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
-    { id: "content",    label: "Konten",  icon: <FileImage size={18} /> },
+    { id: "content", label: "Konten", icon: <FileImage size={18} /> },
     { id: "background", label: template === "video" ? "Video" : "BG", icon: <ImageIcon size={18} /> },
-    { id: "stickers",   label: "Stiker",  icon: <Layers size={18} /> },
-    { id: "texts",      label: "Teks +",  icon: <Type size={18} /> },
+    { id: "stickers", label: "Stiker", icon: <Layers size={18} /> },
+    { id: "texts", label: "Teks +", icon: <Type size={18} /> },
   ];
 
   return (
@@ -885,35 +843,35 @@ export function EditorPage() {
       <header className="fixed top-0 inset-x-0 h-14 bg-white/80 backdrop-blur-md z-30 flex items-center justify-between px-4 border-b border-neutral-100/50">
         <button onClick={() => navigate("/")} className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition text-neutral-600"><ArrowLeft size={18} /></button>
         <div className="flex bg-neutral-100 rounded-full p-1">
-           <button onClick={() => setTemplate("post")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "post" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Post</button>
-           <button onClick={() => setTemplate("video")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "video" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Video</button>
+          <button onClick={() => setTemplate("post")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "post" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Post</button>
+          <button onClick={() => setTemplate("video")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "video" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Video</button>
         </div>
         <button onClick={handleReset} title="Reset Editor" className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-red-50 hover:text-red-400 transition text-neutral-400 ml-auto mr-1"><RotateCcw size={15} /></button>
-        
-        <button 
-          onClick={() => handleSaveDraft()} 
-            disabled={exporting}
-            className="flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold bg-[#ff742f] active:scale-95 disabled:opacity-50"
-          >
-            {exporting ? (
-              <>
-                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>{exportProgress}%</span>
-              </>
-            ) : (
-              <>
-                <Cloud size={14} />
-                <span>Simpan</span>
-              </>
-            )}
-          </button>
+
+        <button
+          onClick={() => handleSaveDraft()}
+          disabled={exporting}
+          className="flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold bg-[#ff742f] active:scale-95 disabled:opacity-50"
+        >
+          {exporting ? (
+            <>
+              <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>{exportProgress}%</span>
+            </>
+          ) : (
+            <>
+              <Cloud size={14} />
+              <span>Simpan</span>
+            </>
+          )}
+        </button>
       </header>
 
       {/* ── EXPORTING OVERLAY ── */}
       {exporting && (
-        <CatOverlay 
-          label={`Mengekspor Video... ${exportProgress}%`} 
-          progress={exportProgress > 0 ? exportProgress : undefined} 
+        <CatOverlay
+          label={`Mengekspor Video... ${exportProgress}%`}
+          progress={exportProgress > 0 ? exportProgress : undefined}
         />
       )}
 
@@ -927,7 +885,7 @@ export function EditorPage() {
                 {activeTab && <span className="text-[#ff742f]">{TABS.find(t => t.id === activeTab)?.icon}</span>}
                 {activeTab && TABS.find(t => t.id === activeTab)?.label}
               </div>
-              <button className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 hover:bg-neutral-200 transition" onClick={(e) => { e.stopPropagation(); setActiveTab(null); }}><X size={13}/></button>
+              <button className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 hover:bg-neutral-200 transition" onClick={(e) => { e.stopPropagation(); setActiveTab(null); }}><X size={13} /></button>
             </div>
 
             <div className={`flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 ${isMobile ? "pb-6" : "pb-3"}`} style={{ overscrollBehavior: "contain" }}>
@@ -946,30 +904,18 @@ export function EditorPage() {
                     </div>
                   </div>
 
-                  {/* Ratio Video — only if video */}
-                  {template === "video" && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-neutral-400 font-medium shrink-0 w-14">Rasio</span>
-                      <div className="flex bg-neutral-100 p-0.5 rounded-lg flex-1">
-                        {(["9:16", "3:4"] as const).map(r => (
-                          <button key={r} onClick={() => setVideoAspectRatio(r)}
-                            className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition ${videoAspectRatio===r ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
-                            {r}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
+
 
                   {/* Judul */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs text-neutral-400 font-medium">Judul</span>
                       <div className="flex gap-1">
-                        {(["bold","italic"] as const).map(c => (
-                          <button key={c} onMouseDown={(e)=>{e.preventDefault(); applyFormat(c)}}
-                            className={`w-6 h-6 rounded flex items-center justify-center transition ${c==="bold"?isBoldActive:isItalicActive ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-400 hover:text-neutral-700"}`}>
-                            {c==="bold"?<Bold size={11}/>:<Italic size={11}/>}
+                        {(["bold", "italic"] as const).map(c => (
+                          <button key={c} onMouseDown={(e) => { e.preventDefault(); applyFormat(c) }}
+                            className={`w-6 h-6 rounded flex items-center justify-center transition ${c === "bold" ? isBoldActive : isItalicActive ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-400 hover:text-neutral-700"}`}>
+                            {c === "bold" ? <Bold size={11} /> : <Italic size={11} />}
                           </button>
                         ))}
                       </div>
@@ -977,7 +923,7 @@ export function EditorPage() {
                     <div ref={editorRef} contentEditable suppressContentEditableWarning
                       onInput={handleEditorInput} onKeyUp={updateFormatState} onMouseUp={updateFormatState}
                       className="w-full min-h-[52px] bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff742f] focus:border-transparent"
-                      style={{lineHeight:1.5}} />
+                      style={{ lineHeight: 1.5 }} />
                   </div>
 
                   {/* Sumber */}
@@ -1000,7 +946,7 @@ export function EditorPage() {
                   {locationState?.aiContent && locationState.aiContent.length > 0 && (
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs text-neutral-400 font-medium flex items-center gap-1.5">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" /></svg>
                         Isi Artikel AI
                       </span>
                       <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 max-h-48 overflow-y-auto flex flex-col gap-2">
@@ -1015,7 +961,7 @@ export function EditorPage() {
                         }}
                         className="w-full py-2 rounded-lg border border-dashed border-neutral-300 text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f] transition flex items-center justify-center gap-1.5"
                       >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                         Salin Isi Artikel
                       </button>
                     </div>
@@ -1034,10 +980,10 @@ export function EditorPage() {
                 <>
                   {!videoUrl && (
                     <div className="flex bg-neutral-100 p-0.5 rounded-lg">
-                      {["single","collage"].map(m => (
+                      {["single", "collage"].map(m => (
                         <button key={m} onClick={() => setBgMode(m as any)}
-                          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition ${bgMode===m ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
-                          {m==="single" ? "1 Gambar" : "2 Gambar"}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition ${bgMode === m ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
+                          {m === "single" ? "1 Gambar" : "2 Gambar"}
                         </button>
                       ))}
                     </div>
@@ -1049,7 +995,7 @@ export function EditorPage() {
                         <button onClick={() => fileInputRef.current?.click()} className="shrink-0 px-3 py-2 border border-dashed border-neutral-300 rounded-lg text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
                           📁 Upload
                         </button>
-                        <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBgSrc(u); setBgT({...DEFAULT_BG_TRANSFORM}); }} onSourceApply={(d) => { setSource(d); }} />
+                        <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBgSrc(u); setBgT({ ...DEFAULT_BG_TRANSFORM }); }} onSourceApply={(d) => { setSource(d); }} />
                       </div>
                     )}
                     {/* Pinch hint — gantikan slider Zoom */}
@@ -1069,7 +1015,7 @@ export function EditorPage() {
                       >
                         {upscaling ? (
                           <>
-                            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
                             <span>{upscaleStatus || "Upscaling..."} {upscaleProgress > 0 ? `${upscaleProgress}%` : ""}</span>
                           </>
                         ) : (
@@ -1097,7 +1043,7 @@ export function EditorPage() {
                         <button onClick={() => file2InputRef.current?.click()} className="shrink-0 px-3 py-2 border border-dashed border-neutral-300 rounded-lg text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
                           📁 Upload
                         </button>
-                        <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBg2Src(u); setBg2T({...DEFAULT_BG_TRANSFORM}); }} />
+                        <BgUrlInput placeholder="Link URL..." onApply={(u) => { setBg2Src(u); setBg2T({ ...DEFAULT_BG_TRANSFORM }); }} />
                       </div>
                       {/* Pinch hint BG2 */}
                       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-200">
@@ -1125,53 +1071,53 @@ export function EditorPage() {
               {activeTab === "stickers" && (
                 <>
                   <button onClick={() => stickerInputRef.current?.click()} className="w-full py-3 bg-[#ff742f]/10 text-[#ff742f] rounded-xl text-sm font-bold flex items-center justify-center gap-2 border-2 border-dashed border-[#ff742f]/30">
-                    <Plus size={16}/> Upload Stiker
+                    <Plus size={16} /> Upload Stiker
                   </button>
                   {stickers.length > 0 && (
                     <div className="grid grid-cols-5 gap-2">
                       {stickers.map(s => (
                         <button key={s.id} onClick={() => setSelectedStickerId(s.id)}
-                          className={`aspect-square rounded-xl relative overflow-hidden bg-neutral-100 transition ${selectedStickerId===s.id ? "ring-2 ring-[#ff742f] ring-offset-1" : ""}`}>
-                          <img src={s.src} className="w-full h-full object-cover"/>
-                          <button onClick={(e)=>{e.stopPropagation();deleteSticker(s.id)}} className="absolute top-0 right-0 p-0.5 bg-black/60 text-white rounded-bl"><X size={9}/></button>
+                          className={`aspect-square rounded-xl relative overflow-hidden bg-neutral-100 transition ${selectedStickerId === s.id ? "ring-2 ring-[#ff742f] ring-offset-1" : ""}`}>
+                          <img src={s.src} className="w-full h-full object-cover" />
+                          <button onClick={(e) => { e.stopPropagation(); deleteSticker(s.id) }} className="absolute top-0 right-0 p-0.5 bg-black/60 text-white rounded-bl"><X size={9} /></button>
                         </button>
                       ))}
                     </div>
                   )}
-                  {stickers.find(s=>s.id===selectedStickerId) && (() => {
-                    const sel = stickers.find(s=>s.id===selectedStickerId)!;
+                  {stickers.find(s => s.id === selectedStickerId) && (() => {
+                    const sel = stickers.find(s => s.id === selectedStickerId)!;
                     return (
                       <div className="bg-neutral-50 rounded-2xl p-3 space-y-3">
                         {/* Shape */}
                         <div>
                           <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider block mb-2">Bentuk Frame</span>
                           <div className="flex gap-2">
-                            <button onClick={() => updateSticker(selectedStickerId!, {shape:"original"})}
-                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape==="original" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape==="original"?"white":"#aaa"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                            <button onClick={() => updateSticker(selectedStickerId!, { shape: "original" })}
+                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape === "original" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape === "original" ? "white" : "#aaa"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                             </button>
-                            <button onClick={() => updateSticker(selectedStickerId!, {shape:"square"})}
-                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape==="square" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape==="square"?"white":"#aaa"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+                            <button onClick={() => updateSticker(selectedStickerId!, { shape: "square" })}
+                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape === "square" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape === "square" ? "white" : "#aaa"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /></svg>
                             </button>
-                            <button onClick={() => updateSticker(selectedStickerId!, {shape:"circle"})}
-                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape==="circle" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape==="circle"?"white":"#aaa"} strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>
+                            <button onClick={() => updateSticker(selectedStickerId!, { shape: "circle" })}
+                              className={`flex-1 py-2 flex items-center justify-center rounded-xl border-2 transition ${sel.shape === "circle" ? "bg-[#ff742f] border-[#ff742f]" : "bg-white border-neutral-200"}`}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sel.shape === "circle" ? "white" : "#aaa"} strokeWidth="2"><circle cx="12" cy="12" r="9" /></svg>
                             </button>
                           </div>
                         </div>
                         {/* Crop */}
                         <button onClick={() => setCropStickerId(selectedStickerId)}
                           className="w-full py-2 bg-white border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 flex items-center justify-center gap-1.5 hover:border-[#ff742f] hover:text-[#ff742f] transition">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></svg>
                           Crop Gambar
                         </button>
                         {/* Stroke */}
                         <div>
                           <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider block mb-2">Stroke / Border</span>
                           <div className="flex items-center gap-2">
-                            <input type="color" value={sel.outlineColor} onChange={(e)=>updateSticker(selectedStickerId!, {outlineColor:e.target.value})} className="w-9 h-9 rounded-xl border-none cursor-pointer shrink-0 p-0.5 bg-white border border-neutral-200" />
-                            <input type="range" min={0} max={40} value={sel.outlineWidth} onChange={(e)=>updateSticker(selectedStickerId!, {outlineWidth:Number(e.target.value)})} className="flex-1 accent-[#ff742f]" />
+                            <input type="color" value={sel.outlineColor} onChange={(e) => updateSticker(selectedStickerId!, { outlineColor: e.target.value })} className="w-9 h-9 rounded-xl border-none cursor-pointer shrink-0 p-0.5 bg-white border border-neutral-200" />
+                            <input type="range" min={0} max={40} value={sel.outlineWidth} onChange={(e) => updateSticker(selectedStickerId!, { outlineWidth: Number(e.target.value) })} className="flex-1 accent-[#ff742f]" />
                             <span className="text-[11px] text-neutral-400 tabular-nums w-8 text-right font-medium">{sel.outlineWidth}px</span>
                           </div>
                         </div>
@@ -1186,29 +1132,29 @@ export function EditorPage() {
               {activeTab === "texts" && (
                 <>
                   <button onClick={addExtraText} className="w-full py-3 bg-[#ff742f]/10 text-[#ff742f] rounded-xl text-sm font-bold flex items-center justify-center gap-2 border-2 border-dashed border-[#ff742f]/30">
-                    <Plus size={16}/> Tambah Teks
+                    <Plus size={16} /> Tambah Teks
                   </button>
                   <div className="space-y-2">
                     {extraTexts.map(t => (
-                      <div key={t.id} onClick={()=>setSelectedTextId(t.id)}
-                        className={`p-3 rounded-xl border-2 flex items-center gap-3 bg-white transition ${selectedTextId===t.id ? "border-[#ff742f]" : "border-neutral-100"}`}>
+                      <div key={t.id} onClick={() => setSelectedTextId(t.id)}
+                        className={`p-3 rounded-xl border-2 flex items-center gap-3 bg-white transition ${selectedTextId === t.id ? "border-[#ff742f]" : "border-neutral-100"}`}>
                         <span className="text-[10px] font-bold text-neutral-300 uppercase shrink-0">T</span>
-                        <input value={t.text} onChange={(e)=>updateText(t.id, {text:e.target.value})} className="flex-1 text-sm bg-transparent outline-none font-medium"/>
-                        <button onClick={()=>deleteText(t.id)} className="text-neutral-300 hover:text-red-400 transition"><Trash2 size={14}/></button>
+                        <input value={t.text} onChange={(e) => updateText(t.id, { text: e.target.value })} className="flex-1 text-sm bg-transparent outline-none font-medium" />
+                        <button onClick={() => deleteText(t.id)} className="text-neutral-300 hover:text-red-400 transition"><Trash2 size={14} /></button>
                       </div>
                     ))}
                   </div>
-                  {extraTexts.find(t=>t.id===selectedTextId) && (
+                  {extraTexts.find(t => t.id === selectedTextId) && (
                     <div className="bg-neutral-50 rounded-2xl p-3 space-y-3">
                       <div className="flex gap-2">
-                        <input type="color" value={extraTexts.find(t=>t.id===selectedTextId)!.color} onChange={(e)=>updateText(selectedTextId!, {color:e.target.value})} className="w-9 h-9 rounded-xl border border-neutral-200 p-0.5"/>
-                        <button onClick={()=>updateText(selectedTextId!, {fontWeight: extraTexts.find(t=>t.id===selectedTextId)!.fontWeight==="bold"?"normal":"bold"})}
-                          className={`px-3 rounded-xl border text-xs font-bold transition ${extraTexts.find(t=>t.id===selectedTextId)!.fontWeight==="bold" ? "bg-neutral-800 text-white border-neutral-800" : "bg-white text-neutral-500 border-neutral-200"}`}>
+                        <input type="color" value={extraTexts.find(t => t.id === selectedTextId)!.color} onChange={(e) => updateText(selectedTextId!, { color: e.target.value })} className="w-9 h-9 rounded-xl border border-neutral-200 p-0.5" />
+                        <button onClick={() => updateText(selectedTextId!, { fontWeight: extraTexts.find(t => t.id === selectedTextId)!.fontWeight === "bold" ? "normal" : "bold" })}
+                          className={`px-3 rounded-xl border text-xs font-bold transition ${extraTexts.find(t => t.id === selectedTextId)!.fontWeight === "bold" ? "bg-neutral-800 text-white border-neutral-800" : "bg-white text-neutral-500 border-neutral-200"}`}>
                           Bold
                         </button>
                       </div>
-                      <Slider label="Ukuran" value={extraTexts.find(t=>t.id===selectedTextId)!.fontSize} min={20} max={300} onChange={(v)=>updateText(selectedTextId!, {fontSize:v})} />
-                      <Slider label="Rotasi" value={extraTexts.find(t=>t.id===selectedTextId)!.rotation} min={-180} max={180} onChange={(v)=>updateText(selectedTextId!, {rotation:v})} suffix="°" />
+                      <Slider label="Ukuran" value={extraTexts.find(t => t.id === selectedTextId)!.fontSize} min={20} max={300} onChange={(v) => updateText(selectedTextId!, { fontSize: v })} />
+                      <Slider label="Rotasi" value={extraTexts.find(t => t.id === selectedTextId)!.rotation} min={-180} max={180} onChange={(v) => updateText(selectedTextId!, { rotation: v })} suffix="°" />
                     </div>
                   )}
                 </>
@@ -1256,7 +1202,7 @@ export function EditorPage() {
                       <div key={s.id + "-handle"} style={{ position: "absolute", left: hx, top: hy, width: 32, height: 32, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 20, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.35)", transform: `rotate(${s.rotation}deg)` }}
                         onTouchStart={(e) => { e.stopPropagation(); handleStickerTouch(s.id, "transform", e); }}
                         onMouseDown={(e) => { e.stopPropagation(); handleStickerMouse(s.id, "transform", e); }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9" /><polyline points="16 3 21 3 21 8" /></svg>
                       </div>
                     );
                   })}
@@ -1404,7 +1350,7 @@ export function EditorPage() {
                     <button onClick={() => setShowSumberPopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
                   </div>
                   <div className="flex gap-2 items-center rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z"/></svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z" /></svg>
                     <input
                       type="text"
                       value={source}
@@ -1573,7 +1519,7 @@ export function EditorPage() {
                     <div key={s.id + "-rh"} style={{ position: "absolute", left: hx, top: hy, width: 32, height: 32, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 20, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
                       onTouchStart={(e) => { e.stopPropagation(); handleStickerTouch(s.id, "transform", e); }}
                       onMouseDown={(e) => { e.stopPropagation(); handleStickerMouse(s.id, "transform", e); }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9" /><polyline points="16 3 21 3 21 8" /></svg>
                     </div>
                   );
                 })}
@@ -1588,7 +1534,7 @@ export function EditorPage() {
                     <div key={t.id + "-rh"} style={{ position: "absolute", left: cx + approxW / 2 - 16, top: cy + approxH / 2 - 16, width: 32, height: 32, background: "#ff742f", borderRadius: "50%", border: "3px solid white", zIndex: 20, cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
                       onTouchStart={(e) => { e.stopPropagation(); handleTextTouch(t.id, "transform", e); }}
                       onMouseDown={(e) => { e.stopPropagation(); handleTextMouse(t.id, "transform", e); }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/></svg>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9" /><polyline points="16 3 21 3 21 8" /></svg>
                     </div>
                   );
                 })}
@@ -1608,7 +1554,7 @@ export function EditorPage() {
                   const configs: Record<SidebarTab, BubbleItem[]> = {
                     content: [
                       {
-                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
                         action: () => setShowLabelPicker(true),
                         active: showLabelPicker
                       },
@@ -1623,7 +1569,7 @@ export function EditorPage() {
                         active: isItalicActive
                       },
                       {
-                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>,
                         action: () => setShowSumberPopup(true),
                         active: showSumberPopup
                       },
@@ -1644,23 +1590,23 @@ export function EditorPage() {
                         active: showBgSubBubbles
                       },
                       ...(bgMode === "collage" ? [{
-                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="13" y="3" width="9" height="18" rx="2"/><path d="M13 8l-4 4 4 4"/></svg>,
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="13" y="3" width="9" height="18" rx="2" /><path d="M13 8l-4 4 4 4" /></svg>,
                         action: () => setShowBgSub2Bubbles((p: boolean) => !p),
                         active: showBgSub2Bubbles
                       }] : []),
                       {
-                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="9" height="18" rx="2"/><rect x="13" y="3" width="9" height="18" rx="2"/></svg>,
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="9" height="18" rx="2" /><rect x="13" y="3" width="9" height="18" rx="2" /></svg>,
                         action: () => { setBgMode(p => p === "collage" ? "single" : "collage"); setShowBgSubBubbles(false); },
                         active: bgMode === "collage"
                       },
                       ...(bgMode === "collage" ? [{
-                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M8 6l4-4 4 4"/><path d="M8 18l4 4 4-4"/></svg>,
+                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="22" /><path d="M8 6l4-4 4 4" /><path d="M8 18l4 4 4-4" /></svg>,
                         action: () => setShowSplitAngleSlider(p => !p),
                         active: showSplitAngleSlider
                       }] : []),
                       {
                         icon: upscaling
-                          ? <svg className="animate-spin" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          ? <svg className="animate-spin" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
                           : <Sparkles size={17} />,
                         action: () => { if (!upscaling) handleUpscaleBg(1); },
                         active: upscaling
@@ -1684,7 +1630,7 @@ export function EditorPage() {
                       },
                       ...(selectedTextId ? [
                         {
-                          icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+                          icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>,
                           action: () => setShowTextEditPopup(true)
                         },
                         {
@@ -1721,7 +1667,7 @@ export function EditorPage() {
                               <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
                                 style={{ animationDelay: "0.05s", ...glassStyle() }}
                                 onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); setShowBgSubBubbles(false); }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                               </button>
                               <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
                                 style={{ animationDelay: "0.1s", ...glassStyle() }}
@@ -1736,7 +1682,7 @@ export function EditorPage() {
                               <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
                                 style={{ animationDelay: "0.05s", ...glassStyle() }}
                                 onClick={(e) => { e.stopPropagation(); file2InputRef.current?.click(); setShowBgSub2Bubbles(false); }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                               </button>
                               <button className="bubble-pop w-10 h-10 rounded-full flex items-center justify-center transition active:scale-90"
                                 style={{ animationDelay: "0.1s", ...glassStyle() }}
@@ -1878,10 +1824,10 @@ export function EditorPage() {
       {/* ── TOAST ── */}
       {toast && (() => {
         const cfg = {
-          success: { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, color: "#22c55e" },
-          error:   { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, color: "#ef4444" },
-          loading: { icon: <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>, color: "#ff742f" },
-          info:    { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>, color: "#a3a3a3" },
+          success: { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>, color: "#22c55e" },
+          error: { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>, color: "#ef4444" },
+          loading: { icon: <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>, color: "#ff742f" },
+          info: { icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>, color: "#a3a3a3" },
         }[toast.type];
         return (
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] animate-[fadeInDown_0.2s_ease] pointer-events-none"

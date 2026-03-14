@@ -9,7 +9,7 @@ import { draftStore, type Draft } from "../store/draftStore";
 import { MascotEmptyState } from "./MascotEmptyState";
 import {
   PostCard, VideoCard,
-  POST_W, POST_H, VIDEO_W, VIDEO_H
+  POST_W, POST_H, VIDEO_W, VIDEO_H,
 } from "./CardTemplates";
 import { exportVideo } from "../services/videoExporter";
 
@@ -41,10 +41,13 @@ function DraftCard({ draft, onClick, onDelete }: {
   const hasTemplate = !!draft.template?.imageDataUrl;
 
   return (
-    <button
+    <div
       onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl overflow-hidden shadow-sm active:scale-[0.98] transition-transform"
+      className="w-full text-left bg-white rounded-2xl overflow-hidden shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
       style={{ border: "1px solid #f0ede9" }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === "Enter" && onClick()}
     >
       {/* Thumbnail area */}
       <div className="relative w-full" style={{ aspectRatio, background: "#f5f5f5" }}>
@@ -111,7 +114,7 @@ function DraftCard({ draft, onClick, onDelete }: {
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -127,6 +130,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Caption state
   const [captionMode, setCaptionMode] = useState<"view" | "edit">("view");
@@ -138,6 +142,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
   const [cloudId, setCloudId] = useState<string | null>(null);
 
   const [rewriting, setRewriting] = useState(false);
+  const [shareFile, setShareFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Lock scroll
@@ -199,13 +204,15 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
     const isVideo = draft.template?.template === "video" && videoUrl;
 
     if (isVideo && videoUrl && !videoUrl.includes('youtube')) {
-      if (!videoRef.current || !overlayRef.current) return;
+      if (!videoRef.current) return;
       setExporting(true);
       setExportProgress(0);
       try {
         const blob = await exportVideo(videoRef.current, overlayRef.current, {
-          width: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_W : POST_W,
-          height: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_H : POST_H,
+          cardWidth: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? VIDEO_W : POST_W,
+          cardHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? VIDEO_H : POST_H,
+          outWidth: 1080,
+          outHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? 1920 : 1440,
           onProgress: (p) => setExportProgress(p)
         });
         const url = URL.createObjectURL(blob);
@@ -247,27 +254,23 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
     if (draft.template?.template === "video") {
       const videoUrl = draft.videoUrl || draft.template?.videoUrl;
       if (videoUrl && !videoUrl.includes('youtube')) {
-        if (!videoRef.current || !overlayRef.current) return;
+        if (!videoRef.current) return;
         setExporting(true);
         setExportProgress(0);
         try {
           const blob = await exportVideo(videoRef.current, overlayRef.current, {
-            width: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_W : POST_W,
-            height: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_H : POST_H,
+            cardWidth: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? VIDEO_W : POST_W,
+            cardHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? VIDEO_H : POST_H,
+            outWidth: 1080,
+            outHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? 1920 : 1440,
             onProgress: (p) => setExportProgress(p)
           });
           const file = new File([blob], `otaku_video_${Date.now()}.mp4`, { type: "video/mp4" });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: "Video Otaku" });
-          } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url; a.download = `otaku_video_${Date.now()}.mp4`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }
+          setShareFile(file);
+          // Navigator.share won't work here due to lost user gesture (async).
+          // user must click the "Share Ready" button that appears.
         } catch (e: any) {
-          alert("Gagal bagikan video: " + e.message);
+          alert("Gagal ekspor video: " + e.message);
         } finally {
           setExporting(false);
           setExportProgress(0);
@@ -398,6 +401,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
                 {...draft.template}
                 videoRef={videoRef}
                 overlayRef={overlayRef}
+                cardRef={cardRef}
                 interactive={false}
               />
             ) : (
@@ -422,7 +426,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
             </h3>
             <div className="relative">
               {captionMode === "view" ? (
-                <p 
+                <p
                   onClick={() => setCaptionMode('edit')}
                   className="text-zinc-400 text-sm line-clamp-3 leading-relaxed whitespace-pre-wrap cursor-pointer hover:text-zinc-300 transition-colors"
                   title="Klik untuk edit caption"
@@ -451,7 +455,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
             >
               {exporting ? (
                 <div className="flex flex-col items-center">
-                   <span className="text-xs">Exporting {exportProgress}%</span>
+                  <span className="text-xs">Exporting {exportProgress}%</span>
                 </div>
               ) : (
                 <>
@@ -461,32 +465,51 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
               )}
             </button>
 
-            {/* Share Button */}
-            <button 
-              onClick={handleShare}
-              className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5" 
-              title="Bagikan"
-            >
-              <Share2 size={20} strokeWidth={2.5} />
-            </button>
+            {/* Share Button / Share Ready */}
+            {shareFile ? (
+              <button 
+                onClick={async () => {
+                   try {
+                     await navigator.share({ files: [shareFile], title: "Video Otaku" });
+                     setShareFile(null);
+                   } catch(e) { console.error(e); }
+                }}
+                className="flex items-center justify-center px-4 py-3.5 bg-[#4ade80] hover:bg-[#22c55e] text-white rounded-xl transition-all border border-white/5 font-bold gap-2 animate-bounce flex-1"
+                title="Bagikan Sekarang"
+              >
+                <Share2 size={20} strokeWidth={2.5} />
+                <span className="text-[12px]">Share Sekarang!</span>
+              </button>
+            ) : (
+              <button 
+                onClick={handleShare}
+                disabled={exporting}
+                className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5 disabled:opacity-50" 
+                title="Bagikan"
+              >
+                <Share2 size={20} strokeWidth={2.5} />
+              </button>
+            )}
 
             {/* Edit Template Button (Replacing Copy) */}
-            <button 
-              onClick={() => handleEditTemplate()}
-              className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5" 
-              title="Edit di Editor"
-            >
-              <Pencil size={20} strokeWidth={2.5} />
-            </button>
+            {!shareFile && (
+              <button 
+                onClick={() => handleEditTemplate()}
+                className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5" 
+                title="Edit di Editor"
+              >
+                <Pencil size={20} strokeWidth={2.5} />
+              </button>
+            )}
           </div>
 
           <div className="flex justify-center items-center px-1">
-             <button 
-                onClick={() => setCaptionMode(captionMode === 'view' ? 'edit' : 'view')}
-                className="text-white/20 text-[9px] font-bold hover:text-white/40 transition-colors uppercase tracking-widest"
-             >
-                {captionMode === 'view' ? '✎ Klik teks untuk edit caption' : '✓ Selesai'}
-             </button>
+            <button
+              onClick={() => setCaptionMode(captionMode === 'view' ? 'edit' : 'view')}
+              className="text-white/20 text-[9px] font-bold hover:text-white/40 transition-colors uppercase tracking-widest"
+            >
+              {captionMode === 'view' ? '✎ Klik teks untuk edit caption' : '✓ Selesai'}
+            </button>
           </div>
         </div>
       </div>
