@@ -18,6 +18,13 @@ app.use(cors({ origin: '*' }));
 // JSON body parser (untuk POST /api/feeds)
 app.use(express.json({ limit: '1mb' }));
 
+// FFmpeg requirements
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  next();
+});
+
 // ── Serve React build (dist/) di production ───────────────────────────────────
 const distPath = join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
@@ -681,6 +688,34 @@ app.options('/api/feeds', (req, res) => {
   res.status(200).end();
 });
 
+// ── Video Downloader API — /api/video-dl ─────────────────────────────────────
+// Sinkron dengan folder api/video-dl.js untuk testing frontend (npm run dev)
+app.post('/api/video-dl', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL is required' });
+
+  try {
+    const isTikTok = url.includes('tiktok.com');
+    if (isTikTok) {
+      const tikwmRes = await fetch('https://www.tikwm.com/api/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ url: url, hd: 1 })
+      });
+      const data = await tikwmRes.json();
+      if (data.code === 0 && data.data && data.data.play) {
+        return res.status(200).json({ url: data.data.play });
+      } else {
+        return res.status(400).json({ error: data.msg || 'Gagal mengambil video dari TikTok.' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Saat ini pengambilan otomatis hanya mendukung link TikTok. Untuk platform lain, gunakan downloader pihak ketiga lalu upload videonya secara manual.' });
+    }
+  } catch (error) {
+    console.error("Video DL Error:", error);
+    return res.status(500).json({ error: 'Terjadi kesalahan sistem internal saat memproses video.' });
+  }
+});
 
 
 // SPA fallback — semua route non-/api/* → index.html

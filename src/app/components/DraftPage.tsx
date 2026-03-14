@@ -31,6 +31,8 @@ function DraftCard({ draft, onClick, onDelete }: {
   onClick: () => void;
   onDelete: (e: React.MouseEvent) => void;
 }) {
+  const isVideo = draft.template?.template === "video";
+  const aspectRatio = isVideo ? "1855/3298" : "1563/2320";
   const hasTemplate = !!draft.template?.imageDataUrl;
 
   return (
@@ -40,7 +42,7 @@ function DraftCard({ draft, onClick, onDelete }: {
       style={{ border: "1px solid #f0ede9" }}
     >
       {/* Thumbnail area */}
-      <div className="relative w-full" style={{ aspectRatio: "1563/2320", background: "#f5f5f5" }}>
+      <div className="relative w-full" style={{ aspectRatio, background: "#f5f5f5" }}>
         {hasTemplate ? (
           <img
             src={draft.template!.imageDataUrl!}
@@ -72,6 +74,20 @@ function DraftCard({ draft, onClick, onDelete }: {
         >
           <Trash2 size={12} color="white" />
         </button>
+
+        {/* Video Icon Overlay */}
+        {draft.videoUrl && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ background: "rgba(0,0,0,0.2)" }}
+          >
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white/25 backdrop-blur-md border border-white/30 shadow-xl">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="white" style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))", marginLeft: 2 }}>
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Info */}
@@ -153,6 +169,10 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
   }
 
   async function handleDownload() {
+    if (draft.template?.template === "video") {
+      handleEditTemplate({ autoExport: true, exportMode: "download" });
+      return;
+    }
     if (!draft.template?.imageDataUrl) return;
     setDownloading(true);
     try {
@@ -167,6 +187,10 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
   }
 
   async function handleShare() {
+    if (draft.template?.template === "video") {
+      handleEditTemplate({ autoExport: true, exportMode: "share" });
+      return;
+    }
     // 1. Salin caption otomatis ke clipboard
     await navigator.clipboard.writeText(captionText).catch(() => {});
     
@@ -198,10 +222,12 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
     alert("Caption berhasil disalin! Silakan gunakan tombol Download untuk menyimpan gambar.");
   }
 
-  function handleEditTemplate() {
+  function handleEditTemplate(additionalState = {}) {
     onClose();
     navigate("/editor", {
       state: {
+        ...draft.template, // Includes template, videoUrl, stickers, extraTexts, etc.
+        ...additionalState,
         titleHtml: draft.aiTitle,
         aiContent: draft.aiContent,
         source: draft.source,
@@ -210,6 +236,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
         fromDraft: true,
         articleTitle: draft.articleTitle,
         imageUrl: draft.imageUrl,
+        videoUrl: draft.videoUrl,
       }
     });
   }
@@ -282,25 +309,40 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto min-h-0 container-snap" style={{ WebkitOverflowScrolling: "touch" }}>
 
-          {/* ── Image preview (Fullscreen bleed, no gaps left/right) ── */}
+          {/* ── Media preview ── */}
           <div className="relative w-full shrink-0 flex items-center justify-center bg-[#0a0a0a]" style={{ minHeight: "45vh" }}>
-            {hasImage ? (
+            {draft.videoUrl ? (
+                <div className="w-full flex items-center justify-center" style={{ aspectRatio: "9/16" }}>
+                    {draft.videoUrl.includes('youtube.com') || draft.videoUrl.includes('youtu.be') ? (
+                        (() => {
+                            const ytIdMatch = draft.videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
+                            const ytId = ytIdMatch ? ytIdMatch[1] : null;
+                            return ytId ? (
+                                <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}`} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+                            ) : <p className="text-white text-xs">Gagal memuat video</p>;
+                        })()
+                    ) : (
+                        <video src={draft.videoUrl} controls autoPlay loop muted playsInline className="w-full h-full object-contain" />
+                    )}
+                </div>
+            ) : hasImage ? (
               <img src={draft.template!.imageDataUrl!} alt="preview"
-                className="w-full h-auto max-h-[75vh]" style={{ objectFit: "cover", display: "block" }} />
+                className="w-full h-full object-contain"
+                style={{ maxHeight: "65vh" }} />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                <ImageIcon size={36} strokeWidth={1} color="rgba(255,255,255,0.2)" />
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>Template belum dibuat</span>
-                <button onClick={handleEditTemplate}
+              <div className="flex flex-col items-center gap-3 text-neutral-500 py-20">
+                <ImageIcon size={48} strokeWidth={1} />
+                <span className="text-xs font-semibold">Tampilan draf belum tersedia</span>
+                <button onClick={() => handleEditTemplate()}
                   className="px-4 py-2 rounded-xl text-white font-bold active:scale-95 transition-transform"
                   style={{ background: "#ff742f", fontSize: 13 }}>
                   Buat Template
                 </button>
               </div>
             )}
-            {/* Edit template overlay jika sudah ada gambar */}
-            {hasImage && (
-              <button onClick={handleEditTemplate}
+            {/* Edit template overlay jika sudah ada gambar tetapi bukan video (yang sudah auto-play) */}
+            {hasImage && !draft.videoUrl && (
+              <button onClick={() => handleEditTemplate()}
                 className="absolute bottom-2 right-2 flex items-center gap-1 px-2.5 py-1.5 rounded-full active:scale-95 transition-transform"
                 style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}>
                 <PlusCircle size={11} color="rgba(255,255,255,0.8)" />

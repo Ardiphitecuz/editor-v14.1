@@ -4,15 +4,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface DraftTemplate {
-  /** Data canvas yang sudah di-export (dataURL PNG) — null jika belum dibuat */
+  /** Data canvas yang sudah di-export (dataURL JPEG/PNG) — null jika belum dibuat */
   imageDataUrl: string | null;
   template: "post" | "video";
   label: string;
   titleHtml: string;
   source: string;
   articleSource?: string;
-  bgSrc?: string;
-  bgMode?: string;
+  bgSrc: string;
+  bgMode: "single" | "collage";
+  bgT: { x: number; y: number; scale: number };
+  bg2Src: string;
+  bg2T: { x: number; y: number; scale: number };
+  splitAngle: number;
+  videoUrl: string | null;
+  stickers: any[];
+  extraTexts: any[];
 }
 
 export interface Draft {
@@ -22,6 +29,7 @@ export interface Draft {
   aiContent: string[];
   source: string;
   imageUrl: string;
+  videoUrl?: string; // New field for direct video playback
   template: DraftTemplate | null;
   createdAt: number;
   updatedAt: number;

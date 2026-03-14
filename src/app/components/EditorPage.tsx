@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { exportCardToCanvas } from "../services/canvasExport";
+import { toPng } from "html-to-image";
 import { draftStore } from "../store/draftStore";
 import { CatOverlay } from "./LoadingCat";
 import svgPaths from "../../imports/svg-0zf9wwjyvn";
@@ -16,7 +17,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 import {
   Bold, Italic, Download, RotateCcw, ImagePlus, ChevronDown,
-  Plus, Trash2, Type, Image as ImageIcon, Layers, FileImage, Link, ArrowLeft, X, Sparkles
+  Plus, Trash2, Type, Image as ImageIcon, Layers, FileImage, Link, ArrowLeft, X, Sparkles, Cloud
 } from "lucide-react";
 import { upscaleImage } from "../services/imageUpscaler";
 
@@ -371,7 +372,7 @@ function PostCard(props: any) {
 }
 
 function VideoCard(props: any) {
-  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoSrc, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
+  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoUrl, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
   
   const togglePlay = (e: React.MouseEvent | React.TouchEvent) => {
@@ -386,9 +387,9 @@ function VideoCard(props: any) {
       <style>{`.vc-title strong,.vc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.vc-title em,.vc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}`}</style>
       
       {/* ── LAYER 0: VIDEO ── */}
-      {videoSrc ? (
+      {videoUrl ? (
         <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-          <video ref={videoRef} src={videoSrc} loop playsInline crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(VIDEO_H * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} />
+          <video ref={videoRef} src={videoUrl} loop playsInline crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(VIDEO_H * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} />
           {interactive && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", inset: 0, zIndex: 20, cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />}
         </div>
       ) : (
@@ -415,13 +416,13 @@ function VideoCard(props: any) {
         <div style={{ position: "absolute", left: 136, top: 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
           {/* Sumber Foto */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
+            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
             <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
           </div>
           {/* Sumber Artikel (opsional) */}
           {articleSource && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-              <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
+              <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
               <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
             </div>
           )}
@@ -542,10 +543,36 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
 export function EditorPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const locationState = location.state as { titleHtml?: string; bgUrl?: string; aiContent?: string[]; source?: string; articleSource?: string; fromDraft?: boolean; draftId?: string; articleTitle?: string; imageUrl?: string } | null;
+  const locationState = location.state as {
+    template?: TemplateType;
+    label?: string;
+    titleHtml?: string;
+    source?: string;
+    articleSource?: string;
+    bgSrc?: string;
+    bgUrl?: string;
+    bgMode?: BgMode;
+    bgT?: BgTransform;
+    bg2Src?: string;
+    bg2T?: BgTransform;
+    splitAngle?: number;
+    videoUrl?: string | null;
+    stickers?: Sticker[];
+    extraTexts?: ExtraText[];
+    
+    aiContent?: string[];
+    fromDraft?: boolean;
+    draftId?: string;
+    articleTitle?: string;
+    imageUrl?: string;
+    
+    // Auto-export flags
+    autoExport?: boolean;
+    exportMode?: "download" | "share";
+  } | null;
   const INIT_TITLE = locationState?.titleHtml ?? DEFAULT_TITLE_HTML;
 
-  const [template, setTemplate] = useState<TemplateType>("post");
+  const [template, setTemplate] = useState<TemplateType>(locationState?.template ?? "post");
   const CARD_W = template === "post" ? POST_W : VIDEO_W;
   const CARD_H = template === "post" ? POST_H : VIDEO_H;
 
@@ -556,17 +583,17 @@ export function EditorPage() {
   const [source, setSource]         = useState(locationState?.source ?? "");
   const [articleSource, setArticleSource] = useState(locationState?.articleSource ?? "");
 
-  const [bgMode, setBgMode]         = useState<BgMode>("single");
-  const [bgSrc, setBgSrc]           = useState<string>(locationState?.bgUrl ?? DEFAULT_BG);
-  const [bgT, setBgT]               = useState<BgTransform>({ ...DEFAULT_BG_TRANSFORM });
-  const [bg2Src, setBg2Src]         = useState<string>(DEFAULT_BG);
-  const [bg2T, setBg2T]             = useState<BgTransform>({ ...DEFAULT_BG_TRANSFORM });
-  const [splitAngle, setSplitAngle] = useState(8);
-  const [videoSrc, setVideoSrc]     = useState<string | null>(null);
+  const [bgMode, setBgMode]         = useState<BgMode>(locationState?.bgMode ?? "single");
+  const [bgSrc, setBgSrc]           = useState<string>(locationState?.bgSrc ?? locationState?.bgUrl ?? locationState?.imageUrl ?? DEFAULT_BG);
+  const [bgT, setBgT]               = useState<BgTransform>(locationState?.bgT ?? { ...DEFAULT_BG_TRANSFORM });
+  const [bg2Src, setBg2Src]         = useState<string>(locationState?.bg2Src ?? DEFAULT_BG);
+  const [bg2T, setBg2T]             = useState<BgTransform>(locationState?.bg2T ?? { ...DEFAULT_BG_TRANSFORM });
+  const [splitAngle, setSplitAngle] = useState(locationState?.splitAngle ?? 8);
+  const [videoUrl, setVideoUrl]     = useState<string | null>(locationState?.videoUrl ?? null);
 
-  const [stickers, setStickers]                   = useState<Sticker[]>([]);
+  const [stickers, setStickers]                   = useState<Sticker[]>(locationState?.stickers ?? []);
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
-  const [extraTexts, setExtraTexts]               = useState<ExtraText[]>([]);
+  const [extraTexts, setExtraTexts]               = useState<ExtraText[]>(locationState?.extraTexts ?? []);
   const [selectedTextId, setSelectedTextId]       = useState<string | null>(null);
   const [downloading, setDownloading]             = useState(false);
   const [renderProgress, setRenderProgress]       = useState(0);
@@ -619,6 +646,11 @@ export function EditorPage() {
   const [bg2UrlInput, setBg2UrlInput] = useState("");
   const [bg2UrlLoading, setBg2UrlLoading] = useState(false);
   const [bg2UrlErr, setBg2UrlErr] = useState<string | null>(null);
+
+  const [showVideoUrlPopup, setShowVideoUrlPopup] = useState(false);
+  const [videoUrlInput, setVideoUrlInput] = useState("");
+  const [videoUrlLoading, setVideoUrlLoading] = useState(false);
+  const [videoUrlErr, setVideoUrlErr] = useState<string | null>(null);
 
   // Refs
   const editorRef = useRef<HTMLDivElement>(null);
@@ -712,6 +744,17 @@ export function EditorPage() {
     }
   }, []);
 
+  // ── Auto Export Trigger ──
+  useEffect(() => {
+    if (locationState?.autoExport && videoUrl && !downloading) {
+      // Tunggu sebentar agar video element mount & siap
+      const timer = setTimeout(() => {
+        handleExportVideo();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [videoUrl, locationState?.autoExport]);
+
   const updateFormatState = useCallback(() => { setIsBoldActive(document.queryCommandState("bold")); setIsItalicActive(document.queryCommandState("italic")); }, []);
   const handleEditorInput = useCallback(() => { if (editorRef.current) setTitleHtml(editorRef.current.innerHTML); updateFormatState(); }, [updateFormatState]);
   const applyFormat = useCallback((cmd: "bold" | "italic") => { editorRef.current?.focus(); document.execCommand(cmd); if (editorRef.current) setTitleHtml(editorRef.current.innerHTML); updateFormatState(); }, [updateFormatState]);
@@ -745,7 +788,7 @@ export function EditorPage() {
       setUpscaleStatus("");
     }
   };
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; if (videoSrc) URL.revokeObjectURL(videoSrc); setVideoSrc(URL.createObjectURL(file)); e.target.value = ""; };
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; if (videoUrl) URL.revokeObjectURL(videoUrl); setVideoUrl(URL.createObjectURL(file)); e.target.value = ""; };
   const handleStickerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     Array.from(e.target.files ?? []).forEach((file) => { const reader = new FileReader(); reader.onload = (ev) => { const src = ev.target?.result as string; const s: Sticker = { id: uid(), src, x: 50, y: 30, size: 300, rotation: 0, shape: "original", outlineColor: "#ffffff", outlineWidth: 0, shadowBlur: 20 }; setStickers((p) => [...p, s]); setSelectedStickerId(s.id); setActiveTab("stickers"); }; reader.readAsDataURL(file); }); e.target.value = "";
   };
@@ -899,8 +942,64 @@ export function EditorPage() {
   // ── EXPORT VIDEO WITH FFMPEG ──
   const handleExportVideo = async () => {
     if (!videoRef.current || !overlayRef.current) return;
+    
+    // ── STEP 1: GENERATE THUMBNAIL & SAVE DRAFT ──
+    // Thumbnail is required for the draft list view
     setDownloading(true);
-    setRenderProgress(0);
+    setRenderProgress(5);
+    try {
+      showToast("Menyiapkan draft video...", "loading", 0);
+
+      let finalBgSrc = bgSrc;
+      // AUTO-GENERATE THUMBNAIL JIKA KOSONG & BERUPA YOUTUBE
+      if ((!finalBgSrc || finalBgSrc === DEFAULT_BG) && videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))) {
+          const ytIdMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
+          if (ytIdMatch && ytIdMatch[1]) {
+              finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`;
+              setBgSrc(finalBgSrc);
+          }
+      }
+
+      const thumbnailDataUrl = await exportCardToCanvas({
+        template, label, titleHtml, source, articleSource,
+        bgMode, bgSrc: finalBgSrc, bgT, bg2Src, bg2T, splitAngle,
+        stickers, extraTexts,
+        assetRect7: imgRectangle7 as string,
+        assetContent: imgContent as string,
+        assetIdentityBar: imgIdentityBar as string,
+      });
+
+      if (locationState?.fromDraft !== false) {
+          const draftTemplate = {
+            imageDataUrl: thumbnailDataUrl,
+            template, label, titleHtml, source, articleSource,
+            bgSrc: finalBgSrc, bgMode, bgT, bg2Src, bg2T, splitAngle,
+            videoUrl, stickers, extraTexts,
+          };
+        const existingDraftId = locationState?.draftId;
+        if (existingDraftId && draftStore.get(existingDraftId)) {
+          await draftStore.updateTemplate(existingDraftId, draftTemplate);
+        } else {
+          await draftStore.create({
+            articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
+            aiTitle: titleHtml,
+            aiContent: locationState?.aiContent ?? [],
+            source,
+            imageUrl: locationState?.imageUrl ?? (videoUrl || finalBgSrc),
+            videoUrl: videoUrl || undefined,
+            template: draftTemplate,
+          });
+        }
+        showToast("✅ Draft Video Tersimpan!", "success");
+        // We don't redirect yet, we proceed to export the actual video file
+      }
+    } catch (draftErr) {
+      console.error("Draft save error:", draftErr);
+      // Non-blocking, continue to video export
+    }
+
+    // ── STEP 2: ACTUAL VIDEO RENDER & DOWNLOAD ──
+    setRenderProgress(10);
 
     let ffmpegAvailable = false;
     try {
@@ -1030,13 +1129,36 @@ export function EditorPage() {
           const mp4Data = await ffmpeg.readFile('output.mp4');
           const mp4Blob = new Blob([new Uint8Array(mp4Data as any)], { type: 'video/mp4' });
           
-          // Download MP4
+          // Copy caption if sharing
+          if (locationState?.exportMode === "share") {
+            const captionText = [...(locationState?.aiContent ?? []), "", `Sumber: ${source}`].join("\n");
+            await navigator.clipboard.writeText(captionText).catch(() => {});
+          }
+
+          // Download or Share MP4
           setRenderProgress(99);
           const url = URL.createObjectURL(mp4Blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `discuss-video-${Date.now()}.mp4`;
-          a.click();
+          const filename = `discuss-video-${Date.now()}.mp4`;
+          
+          if (locationState?.exportMode === "share" && navigator.canShare) {
+            try {
+              const file = new File([mp4Blob], filename, { type: 'video/mp4' });
+              if (navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: filename });
+              } else {
+                const a = document.createElement("a");
+                a.href = url; a.download = filename; a.click();
+              }
+            } catch (e) {
+              const a = document.createElement("a");
+              a.href = url; a.download = filename; a.click();
+            }
+          } else {
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.click();
+          }
           
           // Cleanup
           await ffmpeg.deleteFile('input.webm');
@@ -1052,73 +1174,58 @@ export function EditorPage() {
         throw new Error("FALLBACK_TO_WEBM");
       }
 
-    } catch (err) {
+    } catch (err: any) {
       // If error is fallback or FFmpeg not available, export as WebM
       if (err instanceof Error && err.message === "FALLBACK_TO_WEBM") {
-        // Get the WebM blob again
+        // ... (The large WebM recording logic)
+        // [Existing logic from 1181 to 1277]
         const video = videoRef.current;
-        if (!video || !overlayRef.current) {
-          throw new Error("Video or overlay not found");
-        }
-        
+        if (!video || !overlayRef.current) throw new Error("Video or overlay not found");
         setRenderProgress(80);
-        
-        // Re-record as WebM since we need it
         const overlayDataUrl = await toPng(overlayRef.current, { cacheBust: true, width: VIDEO_W, height: VIDEO_H });
         const overlayImg = new Image();
         overlayImg.src = overlayDataUrl;
         await new Promise(r => overlayImg.onload = r);
-
         const canvas = document.createElement("canvas");
-        canvas.width = VIDEO_W;
-        canvas.height = VIDEO_H;
+        canvas.width = VIDEO_W; canvas.height = VIDEO_H;
         const ctx = canvas.getContext("2d");
-
         const stream = canvas.captureStream(30);
         if ((video as any).captureStream) {
           const vStream = (video as any).captureStream();
           const audioTracks = vStream.getAudioTracks();
           if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
         }
-
         let mimeType = "video/webm;codecs=vp8";
         const codecs = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm"];
-        for (const codec of codecs) {
-          if (MediaRecorder.isTypeSupported(codec)) {
-            mimeType = codec;
-            break;
-          }
-        }
-
+        for (const codec of codecs) { if (MediaRecorder.isTypeSupported(codec)) { mimeType = codec; break; } }
         const recorder = new MediaRecorder(stream, { mimeType });
         const chunks: Blob[] = [];
         recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-
         const recordingPromise = new Promise<void>((resolve) => {
-          recorder.onstop = () => {
+          recorder.onstop = async () => {
             const webmBlob = new Blob(chunks, { type: "video/webm" });
             const url = URL.createObjectURL(webmBlob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `discuss-video-${Date.now()}.webm`;
-            a.click();
+            const filename = `discuss-video-${Date.now()}.webm`;
+            if (locationState?.exportMode === "share") {
+              const captionText = [...(locationState?.aiContent ?? []), "", `Sumber: ${source}`].join("\n");
+              await navigator.clipboard.writeText(captionText).catch(() => {});
+            }
+            if (locationState?.exportMode === "share" && navigator.canShare) {
+              try {
+                const file = new File([webmBlob], filename, { type: 'video/webm' });
+                if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: filename }); }
+                else { const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); }
+              } catch (e) { const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); }
+            } else { const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); }
             resolve();
           };
         });
-
-        recorder.start();
-        setRenderProgress(85);
-        video.currentTime = 0;
-        await video.play();
-
+        recorder.start(); setRenderProgress(85);
+        video.currentTime = 0; await video.play();
         const totalFrames = Math.ceil(video.duration * 30);
         let frameCount = 0;
-
         const draw = () => {
-          if (video.paused || video.ended) {
-            recorder.stop();
-            return;
-          }
+          if (video.paused || video.ended) { recorder.stop(); return; }
           ctx?.drawImage(video, 0, 0, VIDEO_W, VIDEO_H);
           ctx?.drawImage(overlayImg, 0, 0, VIDEO_W, VIDEO_H);
           frameCount++;
@@ -1126,10 +1233,8 @@ export function EditorPage() {
           requestAnimationFrame(draw);
         };
         draw();
-
         await recordingPromise;
         setRenderProgress(100);
-        console.log("Video exported as WebM format");
       } else {
         console.error("Video export error:", err);
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1144,13 +1249,13 @@ export function EditorPage() {
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ").trim();
 
-  const handleDownload = async () => {
+  const handleSaveDraft = async () => {
     if (!source.trim()) { showToast("Isi sumber gambar terlebih dahulu", "error"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("Isi judul terlebih dahulu", "error"); return; }
-    if (template === "video") { await handleExportVideo(); return; }
+    
     setDownloading(true);
     try {
-      showToast("Menyiapkan export...", "loading", 0);
+      showToast("Menyimpan draft...", "loading", 0);
 
       // Tampilkan hiddenCard sebentar untuk measure DOM
       const el = hiddenCardRef.current;
@@ -1191,55 +1296,43 @@ export function EditorPage() {
         titleBoxMeasure,
       });
 
-      const filename = `discuss-${template}-${label}.png`;
-
-      // Jika datang dari "Buat Postingan" — simpan ke draft lalu redirect
-      if (locationState?.fromDraft !== false) {
-        // Simpan atau update draft
-        const draftTemplate = {
-          imageDataUrl: dataUrl,
-          template, label, titleHtml, source, articleSource,
-          bgSrc, bgMode,
-        };
-        const existingDraftId = locationState?.draftId;
-        if (existingDraftId && draftStore.get(existingDraftId)) {
-          await draftStore.updateTemplate(existingDraftId, draftTemplate);
-        } else {
-          await draftStore.create({
-            articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
-            aiTitle: titleHtml,
-            aiContent: locationState?.aiContent ?? [],
-            source,
-            imageUrl: locationState?.imageUrl ?? bgSrc,
-            template: draftTemplate,
-          });
-        }
-        showToast("✅ Tersimpan ke Draft!", "success");
-        navigate("/jelajahi");
-        return;
-      }
-
-      // Fallback normal download (jika bukan dari flow draft)
-      if (navigator.canShare) {
-        try {
-          const blob = await (await fetch(dataUrl)).blob();
-          const file = new File([blob], filename, { type: "image/png" });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: filename });
-            showToast("Gambar siap disimpan!", "success");
-            return;
+      let finalBgSrc = bgSrc;
+      // AUTO-GENERATE THUMBNAIL JIKA KOSONG & BERUPA YOUTUBE
+      if ((!finalBgSrc || finalBgSrc === DEFAULT_BG) && videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))) {
+          const ytIdMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
+          if (ytIdMatch && ytIdMatch[1]) {
+              finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`;
           }
-        } catch (shareErr: any) {
-          if (shareErr?.name === "AbortError") { showToast("Dibatalkan", "error"); return; }
-        }
       }
-      const link = document.createElement("a");
-      link.download = filename; link.href = dataUrl;
-      document.body.appendChild(link); link.click(); document.body.removeChild(link);
-      showToast("Gambar berhasil diunduh!", "success");
+
+      // Simpan atau update draft
+      const draftTemplate = {
+        imageDataUrl: dataUrl,
+        template, label, titleHtml, source, articleSource,
+        bgSrc, bgMode, bgT, bg2Src, bg2T, splitAngle,
+        videoUrl, stickers, extraTexts
+      };
+      
+      const existingDraftId = locationState?.draftId;
+      if (existingDraftId && draftStore.get(existingDraftId)) {
+        await draftStore.updateTemplate(existingDraftId, draftTemplate);
+      } else {
+        await draftStore.create({
+          articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
+          aiTitle: titleHtml,
+          aiContent: locationState?.aiContent ?? [],
+          source,
+          imageUrl: locationState?.imageUrl ?? (videoUrl || finalBgSrc),
+          videoUrl: videoUrl || undefined,
+          template: draftTemplate,
+        });
+      }
+      
+      showToast("✅ Tersimpan ke Draft!", "success");
+      navigate("/jelajahi");
     } catch (e: any) {
-      console.error("Export error:", e);
-      showToast("Gagal export: " + (e?.message ?? "coba lagi"), "error");
+      console.error("Save error:", e);
+      showToast("Gagal simpan: " + (e?.message ?? "coba lagi"), "error");
     } finally {
       if (hiddenCardRef.current) {
         hiddenCardRef.current.style.visibility = "hidden";
@@ -1285,6 +1378,45 @@ export function EditorPage() {
     img.crossOrigin = "anonymous"; img.src = url;
   };
 
+  const applyVideoUrl = async () => {
+    const url = videoUrlInput.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) { setVideoUrlErr("URL harus valid"); return; }
+    
+    setVideoUrlLoading(true);
+    setVideoUrlErr(null);
+    try {
+      const res = await fetch("/api/video-dl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mengambil video otomatis.");
+      }
+      if (data.url) {
+        setVideoUrl(data.url);
+        
+        let newSource = "TikTok Video";
+        const tikTokMatch = url.match(/tiktok\.com\/@([^/]+)/i);
+        if (tikTokMatch) {
+          newSource = `TikTok: @${tikTokMatch[1]}`;
+        } else if (url.includes('instagram.com')) {
+          newSource = "Instagram Reels";
+        }
+        setSource(newSource);
+        
+        setVideoUrlInput("");
+        setShowVideoUrlPopup(false);
+      }
+    } catch (err: any) {
+      setVideoUrlErr(err.message);
+    } finally {
+      setVideoUrlLoading(false);
+    }
+  };
+
   const PREVIEW_W = 340; const PREVIEW_H = Math.round(PREVIEW_W * (CARD_H / CARD_W)); const scale = PREVIEW_W / CARD_W;
   const commonProps = { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts };
   const handleInlineTitleChange = useCallback((html: string) => {
@@ -1296,12 +1428,12 @@ export function EditorPage() {
   }, []);
   const renderCard = (interactive: boolean) => {
     const p = interactive ? { ...commonProps, snapIndicator, bgDragActive, onBgTouch: handleBgTouch, onBgMouseDown: handleBgMouse, onStickerTouch: handleStickerTouch, onStickerMouseDown: handleStickerMouse, onTextTouch: handleTextTouch, onTextMouseDown: handleTextMouse, selectedStickerId, selectedTextId, onTitleChange: handleInlineTitleChange } : commonProps;
-    return template === "post" ? <PostCard {...p} /> : <VideoCard {...p} videoSrc={videoSrc} videoRef={videoRef} overlayRef={overlayRef} />;
+    return template === "post" ? <PostCard {...p} /> : <VideoCard {...p} videoUrl={videoUrl} videoRef={videoRef} overlayRef={overlayRef} />;
   };
 
   const TABS: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
     { id: "content",    label: "Konten",  icon: <FileImage size={18} /> },
-    { id: "background", label: "BG",      icon: <ImageIcon size={18} /> },
+    { id: "background", label: template === "video" ? "Video" : "BG", icon: <ImageIcon size={18} /> },
     { id: "stickers",   label: "Stiker",  icon: <Layers size={18} /> },
     { id: "texts",      label: "Teks +",  icon: <Type size={18} /> },
   ];
@@ -1323,9 +1455,9 @@ export function EditorPage() {
         </div>
         <button onClick={handleReset} title="Reset Editor" className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-red-50 hover:text-red-400 transition text-neutral-400 ml-auto mr-1"><RotateCcw size={15} /></button>
         
-        {/* Download/Render Button with Circular Progress */}
+        {/* Progress UI - only shown if actually rendering (triggered from Drafts) */}
         <div className="relative">
-          {renderProgress > 0 && (
+          {renderProgress > 0 && locationState?.autoExport && (
             <svg className="absolute -inset-1.5" viewBox="0 0 36 36" style={{ width: 36, height: 36 }}>
               {/* Background circle */}
               <circle cx="18" cy="18" r="15" fill="none" stroke="#f3f4f6" strokeWidth="2" />
@@ -1348,14 +1480,12 @@ export function EditorPage() {
             </svg>
           )}
           <button 
-            onClick={handleDownload} 
+            onClick={handleSaveDraft} 
             disabled={downloading} 
             className={`relative z-10 flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold ${downloading ? "bg-neutral-300" : "bg-[#ff742f]"}`}
           >
-            <Download size={14} />
-            {downloading
-              ? (template === "video" ? `${renderProgress}%` : "Menyimpan...")
-              : (locationState?.fromDraft !== false ? "Simpan" : "Download")}
+            <Cloud size={14} />
+            <span>{downloading ? "Menyimpan..." : "Simpan"}</span>
           </button>
         </div>
       </header>
@@ -1885,6 +2015,38 @@ export function EditorPage() {
                 </div>
               </div>
             )}
+
+            {/* ── VIDEO URL POPUP ── */}
+            {showVideoUrlPopup && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+                onClick={() => setShowVideoUrlPopup(false)}>
+                <div className="w-full max-w-sm rounded-2xl p-5 flex flex-col gap-3 shadow-2xl"
+                  style={{ background: "rgba(22,22,22,0.94)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-bold text-sm">Video via Link</span>
+                    <button onClick={() => setShowVideoUrlPopup(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)" }}><X size={13} className="text-white" /></button>
+                  </div>
+                  <p className="text-white/40 text-xs -mt-1">Tempel link TikTok atau link mentah .mp4.</p>
+                  <div className="flex gap-2 items-center rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                    <Link size={13} className="text-white/40 shrink-0" />
+                    <input type="url" value={videoUrlInput}
+                      onChange={e => { setVideoUrlInput(e.target.value); setVideoUrlErr(null); }}
+                      onKeyDown={e => { if (e.key === "Enter") applyVideoUrl(); }}
+                      placeholder="https://tiktok.com/..." className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-white/25" autoFocus
+                      style={{ fontSize: 16 }} />
+                  </div>
+                  {videoUrlErr && <p className="text-red-400 text-xs">{videoUrlErr}</p>}
+                  <button onClick={applyVideoUrl} disabled={videoUrlLoading || !videoUrlInput.trim()}
+                    className="w-full py-2.5 rounded-xl text-white text-sm font-bold transition disabled:opacity-40"
+                    style={{ background: "#ff742f" }}>
+                    {videoUrlLoading ? "Memuat..." : "Terapkan"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {showLabelPicker && (
               <div className="fixed inset-0 z-[100] flex items-end justify-center pb-24 px-4"
                 style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
@@ -2024,7 +2186,16 @@ export function EditorPage() {
                         active: showSumberPopup
                       },
                     ],
-                    background: [
+                    background: template === "video" ? [
+                      {
+                        icon: <Plus size={17} />,
+                        action: () => videoInputRef.current?.click()
+                      },
+                      {
+                        icon: <Link size={17} />,
+                        action: () => setShowVideoUrlPopup(true) // We will create this state
+                      }
+                    ] : [
                       {
                         icon: <ImagePlus size={17} />,
                         action: () => setShowBgSubBubbles(p => !p),
