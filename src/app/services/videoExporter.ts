@@ -17,9 +17,9 @@ export async function exportVideo(
   overlay: HTMLDivElement,
   options: ExportOptions
 ): Promise<Blob> {
-  // Check for WebCodecs support (vital for mobile/Safari compatibility)
+  // Check for WebCodecs support. If not available, use MediaRecorder fallback.
   if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
-    throw new Error("Browser Anda belum mendukung fitur ekspor video (WebCodecs). Gunakan Chrome atau update browser Anda.");
+    return exportVideoMediaRecorder(video, overlay, options);
   }
 
   const { 
@@ -186,4 +186,133 @@ export async function exportVideo(
   muxer.finalize();
 
   return new Blob([muxer.target.buffer], { type: "video/mp4" });
+}
+
+async function exportVideoMediaRecorder(
+  video: HTMLVideoElement,
+  overlay: HTMLDivElement,
+  options: ExportOptions
+): Promise<Blob> {
+  const { 
+    cardWidth,
+    cardHeight,
+    outWidth,
+    outHeight,
+    fps = 30, 
+    onProgress
+  } = options;
+
+  const width = outWidth & ~1;
+  const height = outHeight & ~1;
+  const duration = video.duration;
+
+  await document.fonts.ready;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: false })!;
+
+  // 1. Capture overlay as Image
+  const overlayDataUrl = await toPng(overlay, { 
+    width: cardWidth, 
+    height: cardHeight, 
+    pixelRatio: 1,
+    style: { 
+      transform: 'none', 
+      transformOrigin: 'top left', 
+      width: `${cardWidth}px`, 
+      height: `${cardHeight}px`,
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      visibility: 'visible',
+    },
+    skipAutoScale: true,
+  });
+  const overlayImg = new Image();
+  overlayImg.src = overlayDataUrl;
+  await new Promise(r => overlayImg.onload = r);
+
+  // 2. Setup Stream and Audio
+  const stream = (canvas as any).captureStream ? (canvas as any).captureStream(fps) : (canvas as any).webkitCaptureStream ? (canvas as any).webkitCaptureStream(fps) : null;
+  if (!stream) {
+    throw new Error("Browser Anda tidak mendukung captureStream.");
+  }
+
+  try {
+    const videoStream = (video as any).captureStream ? (video as any).captureStream() : (video as any).webkitCaptureStream ? (video as any).webkitCaptureStream() : null;
+    if (videoStream) {
+      const audioTracks = videoStream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        stream.addTrack(audioTracks[0]);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not capture audio stream:", e);
+  }
+
+  // 3. Setup MediaRecorder
+  let mimeType = 'video/mp4';
+  if (!MediaRecorder.isTypeSupported(mimeType)) {
+    mimeType = 'video/webm';
+  }
+  
+  const recorder = new MediaRecorder(stream, { 
+    mimeType,
+    videoBitsPerSecond: options.bitrate || 8_000_000
+  });
+  const chunks: Blob[] = [];
+
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+
+  const exportPromise = new Promise<Blob>((resolve) => {
+    recorder.onstop = () => {
+      resolve(new Blob(chunks, { type: mimeType }));
+    };
+  });
+
+  // 4. Start Recording and Playback
+  const originalMuted = video.muted;
+  const originalCurrentTime = video.currentTime;
+  
+  video.muted = true; // Mute during export
+  video.currentTime = 0;
+  
+  return new Promise((resolve, reject) => {
+    const startExport = async () => {
+      try {
+        await video.play();
+        recorder.start();
+
+        const renderFrame = () => {
+          if (video.ended || video.paused) {
+            recorder.stop();
+            video.muted = originalMuted;
+            video.currentTime = originalCurrentTime;
+            onProgress?.(100);
+            exportPromise.then(resolve);
+            return;
+          }
+
+          ctx.drawImage(video, 0, 0, width, height);
+          ctx.drawImage(overlayImg, 0, 0, width, height);
+          
+          onProgress?.(Math.round((video.currentTime / duration) * 99));
+          requestAnimationFrame(renderFrame);
+        };
+
+        renderFrame();
+      } catch (err) {
+        recorder.stop();
+        video.muted = originalMuted;
+        video.currentTime = originalCurrentTime;
+        reject(err);
+      }
+    };
+
+    startExport();
+  });
 }
