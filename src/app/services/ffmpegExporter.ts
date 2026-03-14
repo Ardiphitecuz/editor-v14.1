@@ -13,12 +13,15 @@ export const initFFmpeg = async () => {
     if (ffmpeg) return ffmpeg;
     ffmpeg = new FFmpeg();
     
-    // Using official unpkg CDN for core and wasm
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    // Gunakan versi ESM untuk kompatibilitas Vite Production
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    
     await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        workerURL: await toBlobURL(`https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/worker.js`, 'text/javascript')
     });
+    
     return ffmpeg;
 };
 
@@ -93,11 +96,6 @@ export const exportVideoWithFFmpeg = async (
     // - -c:a copy: reuse existing audio for speed
     // - preset ultrafast: prioritize speed over compression ratio
     setProgress(25);
-    
-    // Check if we are in a Cross-Origin Isolated environment
-    if (!self.crossOriginIsolated) {
-        console.warn("[FFmpeg] Page is not Cross-Origin Isolated. Performance will be severely limited.");
-    }
 
     try {
         const is34 = ratio === "3:4";

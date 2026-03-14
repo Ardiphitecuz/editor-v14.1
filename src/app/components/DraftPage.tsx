@@ -11,7 +11,7 @@ import {
   PostCard, VideoCard,
   POST_W, POST_H, VIDEO_W, VIDEO_H
 } from "./CardTemplates";
-import { exportVideoWithFFmpeg } from "../services/ffmpegExporter";
+import { exportVideo } from "../services/videoExporter";
 
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -198,32 +198,34 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
     const videoUrl = draft.videoUrl || draft.template?.videoUrl;
     const isVideo = draft.template?.template === "video" && videoUrl;
 
-    if (isVideo && !videoUrl.includes('youtube')) {
+    if (isVideo && videoUrl && !videoUrl.includes('youtube')) {
+      if (!videoRef.current || !overlayRef.current) return;
       setExporting(true);
       setExportProgress(0);
-
       try {
-        if (!overlayRef.current) throw new Error("Overlay ref not found");
-
-        await exportVideoWithFFmpeg(
-          videoUrl,
-          overlayRef.current,
-          (p) => setExportProgress(p),
-          draft.template?.videoAspectRatio
-        );
-
+        const blob = await exportVideo(videoRef.current, overlayRef.current, {
+          width: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_W : POST_W,
+          height: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_H : POST_H,
+          onProgress: (p) => setExportProgress(p)
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `otaku_video_${Date.now()}.mp4`;
+        a.click();
+        URL.revokeObjectURL(url);
         setDownloadDone(true);
         setTimeout(() => setDownloadDone(false), 2500);
-      } catch (err: any) {
-        alert("Gagal export video: " + err.message);
+      } catch (e: any) {
+        alert("Gagal ekspor video: " + e.message);
       } finally {
         setExporting(false);
+        setExportProgress(0);
       }
       return;
     }
 
     if (draft.template?.template === "video" && draft.videoUrl?.includes('youtube')) {
-      // YouTube can't be exported directly yet due to CORS/FFmpeg constraints
       alert("Video YouTube tidak dapat di-download langsung. Silakan download video asli lalu upload ke editor.");
       return;
     }
@@ -243,7 +245,36 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
 
   async function handleShare() {
     if (draft.template?.template === "video") {
-      handleEditTemplate({ autoExport: true, exportMode: "share" });
+      const videoUrl = draft.videoUrl || draft.template?.videoUrl;
+      if (videoUrl && !videoUrl.includes('youtube')) {
+        if (!videoRef.current || !overlayRef.current) return;
+        setExporting(true);
+        setExportProgress(0);
+        try {
+          const blob = await exportVideo(videoRef.current, overlayRef.current, {
+            width: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_W : POST_W,
+            height: (draft.template?.videoAspectRatio === "9:16") ? VIDEO_H : POST_H,
+            onProgress: (p) => setExportProgress(p)
+          });
+          const file = new File([blob], `otaku_video_${Date.now()}.mp4`, { type: "video/mp4" });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: "Video Otaku" });
+          } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `otaku_video_${Date.now()}.mp4`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } catch (e: any) {
+          alert("Gagal bagikan video: " + e.message);
+        } finally {
+          setExporting(false);
+          setExportProgress(0);
+        }
+        return;
+      }
+      alert("Video YouTube tidak dapat di-share langsung.");
       return;
     }
     // 1. Salin caption otomatis ke clipboard

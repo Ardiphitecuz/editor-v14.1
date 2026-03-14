@@ -1,6 +1,10 @@
 import svgPaths from "./svg-0zf9wwjyvn";
 
 import { imgImage } from "./svg-icg6q";
+import imgImage1 from "figma:asset/8acdc84a856693a878bcf009f2c9faadb518a733.png";
+import imgContent from "figma:asset/dd1da5fc74964e99895149508d6205a4d1bf1cb6.png";
+import imgRectangle7 from "figma:asset/3faeab794066e6a5837760291e83a4cac94d2503.png";
+import imgIdentityBar from "figma:asset/de21bf7c4db25ef35876a6b7b4b21eaa1919be07.png";
 
 function Backround() {
   return (

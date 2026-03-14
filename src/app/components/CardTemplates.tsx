@@ -7,7 +7,7 @@ import imgIdentityBar from "figma:asset/de21bf7c4db25ef35876a6b7b4b21eaa1919be07
 
 export const POST_W = 1740;
 export const POST_H = 2320;
-export const VIDEO_W = 1855;
+export const VIDEO_W = 1856;
 export const VIDEO_H = 3298;
 
 export interface BgTransform { x: number; y: number; scale: number; }

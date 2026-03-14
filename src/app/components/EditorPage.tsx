@@ -397,6 +397,9 @@ export function EditorPage() {
   const [videoUrlLoading, setVideoUrlLoading] = useState(false);
   const [videoUrlErr, setVideoUrlErr] = useState<string | null>(null);
 
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
   // Refs
   const editorRef = useRef<HTMLDivElement>(null);
   const hiddenCardRef = useRef<HTMLDivElement>(null);
@@ -437,6 +440,12 @@ export function EditorPage() {
   useEffect(() => { currentBg2TRef.current = bg2T; }, [bg2T]);
   useEffect(() => { bgModeRef.current = bgMode; }, [bgMode]);
   useEffect(() => { cardDimRef.current = { w: CARD_W, h: CARD_H }; }, [CARD_W, CARD_H]);
+  // Auto-redirect if no article and not from draft - removal of autoExport logic
+  useEffect(() => {
+    if (!locationState?.articleTitle && !locationState?.fromDraft) {
+      navigate("/");
+    }
+  }, [locationState?.articleTitle, locationState?.fromDraft, navigate]);
   // Auto-sync zoom target when selection changes
   useEffect(() => { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } }, [selectedStickerId]);
   useEffect(() => { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } }, [selectedTextId]);
@@ -450,6 +459,49 @@ export function EditorPage() {
       setActiveTab("content");
     }
   }, []);
+
+  const handleSaveDraft = async () => {
+    const now = Date.now();
+    const draft = {
+      id: locationState?.draftId || uid(),
+      template: {
+        template,
+        aspectRatio: videoAspectRatio,
+        label,
+        titleHtml,
+        source,
+        articleSource,
+        bgSrc,
+        bgT,
+        bgMode,
+        bg2Src,
+        bg2T,
+        splitAngle,
+        videoUrl,
+        stickers,
+        extraTexts,
+      },
+      aiTitle: titleHtml,
+      aiContent: locationState?.aiContent || [],
+      source: source || locationState?.source || "",
+      articleSource: articleSource || locationState?.articleSource || "",
+      imageUrl: bgSrc,
+      videoUrl: videoUrl,
+      timestamp: now,
+      articleTitle: locationState?.articleTitle || "",
+      createdAt: now,
+      updatedAt: now,
+    };
+    // @ts-ignore - draftStore.save expects full Draft, we might need to handle ID if it exists
+    await draftStore.save(draft as any);
+    showToast("Draft berhasil disimpan!", "success");
+    return draft;
+  };
+
+  const handleExportVideo = async () => {
+    // Logic moved to DraftPage and videoExporter service
+    showToast("Gunakan tombol download di halaman Draft untuk mengekspor video", "info");
+  };
 
 
   const updateFormatState = useCallback(() => { setIsBoldActive(document.queryCommandState("bold")); setIsItalicActive(document.queryCommandState("italic")); }, []);
@@ -639,38 +691,28 @@ export function EditorPage() {
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ").trim();
 
-  const handleSaveDraft = async () => {
+  const handleSaveDraftComplete = async (returnOnly = false) => {
     if (!source.trim()) { showToast("Isi sumber gambar terlebih dahulu", "error"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("Isi judul terlebih dahulu", "error"); return; }
     
     try {
-      showToast("Menyimpan draft...", "loading", 0);
+      if (!returnOnly) showToast("Menyimpan draft...", "loading", 0);
 
-      // Tampilkan hiddenCard sebentar untuk measure DOM
       const el = hiddenCardRef.current;
       let titleBoxMeasure: { x: number; y: number; w: number; h: number } | undefined;
       if (el) {
         el.style.visibility = "visible";
         el.style.zIndex = "9999";
         el.style.pointerEvents = "none";
-        await new Promise(r => setTimeout(r, 80)); // beri waktu render
-
-        // Cari title box (div orange dengan borderRadius 30)
+        await new Promise(r => setTimeout(r, 80));
         const cardRect = el.getBoundingClientRect();
         const titleBoxEl = el.querySelector<HTMLElement>('[style*="borderRadius: 30"]');
         if (titleBoxEl) {
           const r = titleBoxEl.getBoundingClientRect();
-          // Konversi ke koordinat card (CARD_W × CARD_H)
           const scaleX = CARD_W / cardRect.width;
           const scaleY = CARD_H / cardRect.height;
-          titleBoxMeasure = {
-            x: (r.left - cardRect.left) * scaleX,
-            y: (r.top  - cardRect.top)  * scaleY,
-            w: r.width  * scaleX,
-            h: r.height * scaleY,
-          };
+          titleBoxMeasure = { x: (r.left - cardRect.left) * scaleX, y: (r.top - cardRect.top) * scaleY, w: r.width * scaleX, h: r.height * scaleY };
         }
-
         el.style.visibility = "hidden";
         el.style.zIndex = "-9999";
       }
@@ -687,15 +729,11 @@ export function EditorPage() {
       });
 
       let finalBgSrc = bgSrc;
-      // AUTO-GENERATE THUMBNAIL JIKA KOSONG & BERUPA YOUTUBE
       if ((!finalBgSrc || finalBgSrc === DEFAULT_BG) && videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))) {
           const ytIdMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
-          if (ytIdMatch && ytIdMatch[1]) {
-              finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`;
-          }
+          if (ytIdMatch && ytIdMatch[1]) { finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`; }
       }
 
-      // Simpan atau update draft
       const draftTemplate = {
         imageDataUrl: dataUrl,
         template, label, titleHtml, source, articleSource,
@@ -704,25 +742,33 @@ export function EditorPage() {
       };
       
       const existingDraftId = locationState?.draftId;
+      const now = Date.now();
+      const draftData = {
+        articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
+        aiTitle: titleHtml,
+        aiContent: locationState?.aiContent ?? [],
+        source,
+        articleSource,
+        imageUrl: locationState?.imageUrl ?? (videoUrl || finalBgSrc),
+        videoUrl: videoUrl || undefined,
+        template: draftTemplate,
+        timestamp: now,
+      };
+
       if (existingDraftId && draftStore.get(existingDraftId)) {
         await draftStore.updateTemplate(existingDraftId, draftTemplate);
       } else {
-        await draftStore.create({
-          articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
-          aiTitle: titleHtml,
-          aiContent: locationState?.aiContent ?? [],
-          source,
-          imageUrl: locationState?.imageUrl ?? (videoUrl || finalBgSrc),
-          videoUrl: videoUrl || undefined,
-          template: draftTemplate,
-        });
+        await draftStore.create(draftData);
       }
       
-      showToast("✅ Tersimpan ke Draft!", "success");
-      navigate("/jelajahi");
+      if (!returnOnly) {
+        showToast("✅ Tersimpan!", "success");
+        navigate("/jelajahi");
+      }
+      return draftData;
     } catch (e: any) {
       console.error("Save error:", e);
-      showToast("Gagal simpan: " + (e?.message ?? "coba lagi"), "error");
+      if (!returnOnly) showToast("Gagal simpan: " + (e?.message ?? "coba lagi"), "error");
     } finally {
       if (hiddenCardRef.current) {
         hiddenCardRef.current.style.visibility = "hidden";
@@ -844,14 +890,32 @@ export function EditorPage() {
         </div>
         <button onClick={handleReset} title="Reset Editor" className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-red-50 hover:text-red-400 transition text-neutral-400 ml-auto mr-1"><RotateCcw size={15} /></button>
         
-          <button 
-            onClick={handleSaveDraft} 
-            className="flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold bg-[#ff742f] active:scale-95"
+        <button 
+          onClick={() => handleSaveDraft()} 
+            disabled={exporting}
+            className="flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold bg-[#ff742f] active:scale-95 disabled:opacity-50"
           >
-            <Cloud size={14} />
-            <span>Simpan</span>
+            {exporting ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>{exportProgress}%</span>
+              </>
+            ) : (
+              <>
+                <Cloud size={14} />
+                <span>Simpan</span>
+              </>
+            )}
           </button>
       </header>
+
+      {/* ── EXPORTING OVERLAY ── */}
+      {exporting && (
+        <CatOverlay 
+          label={`Mengekspor Video... ${exportProgress}%`} 
+          progress={exportProgress > 0 ? exportProgress : undefined} 
+        />
+      )}
 
       {/* ── PANEL CONTENT BUILDER ── rendered once to preserve refs/state */}
       {(() => {
