@@ -17,22 +17,25 @@ export async function exportVideo(
   overlay: HTMLDivElement,
   options: ExportOptions
 ): Promise<Blob> {
+  // Check for WebCodecs support (vital for mobile/Safari compatibility)
+  if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
+    throw new Error("Browser Anda belum mendukung fitur ekspor video (WebCodecs). Gunakan Chrome atau update browser Anda.");
+  }
+
   const { 
     cardWidth,
     cardHeight,
     outWidth,
     outHeight,
     fps = 30, 
-    bitrate = 8_000_000, // Increased for better quality
+    bitrate = 8_000_000, 
     onProgress
   } = options;
 
-  // Enforce even dimensions for H.264 (OUT resolution)
   const width = outWidth & ~1;
   const height = outHeight & ~1;
   const duration = video.duration;
 
-  // Ensure fonts are loaded before capture
   await document.fonts.ready;
 
   const canvas = document.createElement("canvas");
@@ -40,7 +43,7 @@ export async function exportVideo(
   canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true })!;
 
-  // 1. Capture overlay as Image at ORIGINAL full resolution (high quality)
+  // 1. Capture overlay as Image
   const overlayDataUrl = await toPng(overlay, { 
     width: cardWidth, 
     height: cardHeight, 
@@ -62,14 +65,31 @@ export async function exportVideo(
   overlayImg.src = overlayDataUrl;
   await new Promise(r => overlayImg.onload = r);
 
-  // WebCodecs Setup
+  // 2. Audio Data Extraction FIRST (to get correct Sample Rate/Channels for Muxer)
+  let audioBuffer: AudioBuffer | null = null;
+  try {
+    const response = await fetch(video.src);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
+  } catch (e) {
+    console.warn("Could not extract audio buffer:", e);
+  }
+
+  // 3. Setup Muxer with ALIGNED parameters
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: 'avc', width, height },
-    audio: { codec: 'aac', numberOfChannels: 2, sampleRate: 44100 },
+    audio: audioBuffer ? { 
+      codec: 'aac', 
+      numberOfChannels: audioBuffer.numberOfChannels, 
+      sampleRate: audioBuffer.sampleRate 
+    } : undefined,
     fastStart: 'in-memory'
   });
 
+  // 4. Setup Encoders
   const videoEncoder = new VideoEncoder({
     output: (chunk, metadata) => muxer.addVideoChunk(chunk, metadata),
     error: (e) => console.error("VideoEncoder error", e)
@@ -83,18 +103,6 @@ export async function exportVideo(
     framerate: fps, 
     avc: { format: 'annexb' } 
   });
-
-  // Audio Data Extraction using Web Audio API
-  let audioBuffer: AudioBuffer | null = null;
-  try {
-    const response = await fetch(video.src);
-    const arrayBuffer = await response.arrayBuffer();
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    await audioCtx.close();
-  } catch (e) {
-    console.warn("Could not extract audio buffer:", e);
-  }
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, metadata) => muxer.addAudioChunk(chunk, metadata),
@@ -110,11 +118,10 @@ export async function exportVideo(
     });
   }
 
-  // Render Loop
+  // 5. Render Loop
   let frameCount = 0;
   const totalFrames = Math.ceil(duration * fps);
   const frameTime = 1 / fps;
-  let lastAudioTimestampUs = 0;
 
   while (frameCount < totalFrames) {
     const timestampInSeconds = frameCount * frameTime;
@@ -128,11 +135,9 @@ export async function exportVideo(
        video.addEventListener('seeked', onSeeked);
     });
 
-    // Draw both video and high-res overlay into the output canvas
     ctx.drawImage(video, 0, 0, width, height);
     ctx.drawImage(overlayImg, 0, 0, width, height);
     
-    // Use rounded microseconds to prevent float drift
     const timestampUs = Math.round(timestampInSeconds * 1_000_000);
     const frame = new VideoFrame(canvas, { timestamp: timestampUs });
     
@@ -142,7 +147,6 @@ export async function exportVideo(
       frame.close();
     }
 
-    // Audio encoding for this frame interval
     if (audioBuffer && audioEncoder.state === 'configured') {
       const startSample = Math.floor(timestampInSeconds * audioBuffer.sampleRate);
       const endSample = Math.floor((frameCount + 1) * frameTime * audioBuffer.sampleRate);
@@ -155,7 +159,6 @@ export async function exportVideo(
         for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
           const channelData = audioBuffer.getChannelData(ch);
           for (let i = 0; i < actualNumSamples; i++) {
-            // Planar to Interleaved (though AudioData supports both, interleaved f32 is common)
             data[i * audioBuffer.numberOfChannels + ch] = channelData[startSample + i];
           }
         }
