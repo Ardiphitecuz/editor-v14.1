@@ -165,6 +165,13 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
     }
   }, [captionMode]);
 
+  // Auto-play video on mount
+  useEffect(() => {
+    if (isVideo && videoRef.current) {
+      videoRef.current.play().catch(e => console.warn("Auto-play blocked:", e));
+    }
+  }, [isVideo]);
+
   async function handleRewrite() {
     setRewriting(true);
     try {
@@ -370,22 +377,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
             )}
           </div>
 
-          {/* Play/Pause control overlay if it's a video */}
-          {draft.template?.template === "video" && (
-            <div 
-              className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!videoRef.current) return;
-                if (videoRef.current.paused) videoRef.current.play();
-                else videoRef.current.pause();
-              }}
-            >
-              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
-                <Play size={32} color="white" fill="white" className="ml-1" />
-              </div>
-            </div>
-          )}
+          {/* Play/Pause control overlay if it's a video - REMOVED per user request */}
 
           {/* Bottom Fade Gradient for text contrast */}
           <div className="absolute bottom-0 w-full h-24 bg-gradient-to-t from-[#18181b] to-transparent pointer-events-none"></div>

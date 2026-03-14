@@ -148,7 +148,17 @@ export function NotifBadge({ label }: { label: string }) {
 // ── Card Components ──────────────────────────────────────────────────────────
 
 export function PostCard(props: any) {
-  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, onTitleChange } = props;
+  const { 
+    label, titleHtml, source, articleSource, 
+    bgMode = "single", bgSrc, 
+    bgT = { x: 0, y: 0, scale: 1 }, 
+    bg2Src, 
+    bg2T = { x: 0, y: 0, scale: 1 }, 
+    splitAngle = 0, stickers = [], extraTexts = [], 
+    onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, 
+    onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, 
+    selectedStickerId, selectedTextId, onTitleChange 
+  } = props;
   const interactive = !!(onBgTouch || onBgMouseDown);
   const inlineTitleRef = useRef<HTMLDivElement>(null);
 
@@ -221,7 +231,19 @@ export function PostCard(props: any) {
 }
 
 export function VideoCard(props: any) {
-  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoUrl, videoAspectRatio, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
+  const { 
+    label, titleHtml, source, articleSource, 
+    bgMode = "single", bgSrc, 
+    bgT = { x: 0, y: 0, scale: 1 }, 
+    bg2Src, 
+    bg2T = { x: 0, y: 0, scale: 1 }, 
+    splitAngle = 0, videoUrl, 
+    videoAspectRatio = "9:16",
+    stickers = [], extraTexts = [], 
+    onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, 
+    onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, 
+    selectedStickerId, selectedTextId, videoRef, overlayRef 
+  } = props;
   const is34 = videoAspectRatio === "3:4";
   const cardW = is34 ? POST_W : VIDEO_W;
   const cardH = is34 ? POST_H : VIDEO_H;
