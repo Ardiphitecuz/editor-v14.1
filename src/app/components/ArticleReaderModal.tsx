@@ -341,7 +341,7 @@ const loadFullContent = async (targetArticle: Article) => {
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[100] flex justify-center items-end md:items-center p-0 md:p-6 transition-all animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-4xl h-[95vh] md:h-auto md:max-h-[90vh] rounded-t-3xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col relative animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300">
+      <div className="bg-white w-full max-w-4xl h-[90dvh] md:h-auto md:max-h-[90vh] rounded-t-3xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col relative animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300">
         
         {/* ── Sticky Config Top Bar ──────────────────────────── */}
         <div className="absolute top-4 left-4 right-4 z-50 flex items-center justify-between" style={{ pointerEvents: "none" }}>

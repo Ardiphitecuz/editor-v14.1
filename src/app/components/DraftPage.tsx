@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import {
   FileText, Image as ImageIcon, Trash2, PlusCircle,
   Download, Copy, Check, Cloud, CloudDownload,
-  Clock, X, Instagram,
+  Clock, X, Share2,
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
 import { MascotEmptyState } from "./MascotEmptyState";
@@ -156,21 +156,8 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
     if (!draft.template?.imageDataUrl) return;
     setDownloading(true);
     try {
-      await navigator.clipboard.writeText(captionText).catch(() => {});
       const dataUrl = draft.template.imageDataUrl;
       const filename = `draft-${draft.id.slice(6, 14)}.png`;
-      if (navigator.canShare) {
-        try {
-          const blob = await (await fetch(dataUrl)).blob();
-          const file = new File([blob], filename, { type: "image/png" });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: filename });
-            setDownloadDone(true);
-            setTimeout(() => setDownloadDone(false), 2500);
-            return;
-          }
-        } catch (e: any) { if (e?.name === "AbortError") return; }
-      }
       const link = document.createElement("a");
       link.href = dataUrl; link.download = filename;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -179,14 +166,36 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
     } finally { setDownloading(false); }
   }
 
-  function handlePostToInstagram() {
-    navigator.clipboard.writeText(captionText).catch(() => {});
-    // Buka Instagram dengan deep link ke new post, fallback ke web
-    const igDeepLink = "instagram://camera";
-    const igWeb = "https://www.instagram.com";
-    // Coba deep link dulu (mobile app), fallback ke web setelah 500ms
-    window.location.href = igDeepLink;
-    setTimeout(() => { window.open(igWeb, "_blank"); }, 600);
+  async function handleShare() {
+    // 1. Salin caption otomatis ke clipboard
+    await navigator.clipboard.writeText(captionText).catch(() => {});
+    
+    if (!draft.template?.imageDataUrl) {
+      alert("Caption disalin! (Tidak ada gambar untuk di-share)");
+      return;
+    }
+    
+    // 2. Siapkan file gambar
+    const dataUrl = draft.template.imageDataUrl;
+    const filename = `draft-${draft.id.slice(6, 14)}.png`;
+    
+    // 3. Cek dukungan Web Share API dengan fungsi pembagian file
+    if (navigator.canShare) {
+      try {
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], filename, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      } catch (e: any) { 
+        if (e?.name === "AbortError") return; 
+        console.error("Share error:", e);
+      }
+    }
+    
+    // 4. Fallback jika gagal/tidak didukung
+    alert("Caption berhasil disalin! Silakan gunakan tombol Download untuk menyimpan gambar.");
   }
 
   function handleEditTemplate() {
@@ -412,13 +421,13 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
             }
           </button>
 
-          {/* Post ke Instagram */}
+          {/* Share */}
           <button
-            onClick={handlePostToInstagram}
+            onClick={handleShare}
             className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all active:scale-95"
-            style={{ background: "linear-gradient(135deg,#833ab4 0%,#fd1d1d 50%,#fcb045 100%)" }}>
-            <Instagram size={16} color="white" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Posting</span>
+            style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)" }}>
+            <Share2 size={16} color="white" />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Share</span>
           </button>
         </div>
       </div>
