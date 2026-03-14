@@ -19,7 +19,8 @@
     /* Path alias — sama dengan vite.config.ts */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "figma:asset/*": ["./src/assets/*"]
     },
 
     /* Strict — sesuaikan dengan kebutuhan project */

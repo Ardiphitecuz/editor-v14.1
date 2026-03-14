@@ -14,6 +14,7 @@ export interface ExtraText {
   id: string; text: string;
   x: number; y: number; fontSize: number; fontWeight: string;
   color: string; rotation: number; shadowBlur: number;
+  fontStyle?: string;
 }
 export interface CardExportParams {
   template: "post" | "video";
@@ -24,6 +25,8 @@ export interface CardExportParams {
   splitAngle: number;
   stickers: Sticker[]; extraTexts: ExtraText[];
   assetRect7: string; assetContent: string; assetIdentityBar: string;
+  videoUrl?: string;
+  videoAspectRatio?: "3:4" | "9:16";
   titleBoxMeasure?: { x: number; y: number; w: number; h: number };
 }
 
@@ -51,11 +54,30 @@ async function loadImg(src: string): Promise<HTMLImageElement> {
   });
 }
 
+async function loadVideoFrame(url: string): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+    video.currentTime = 0.5; // grab frame at 0.5s
+    video.onloadeddata = () => {
+      // Small delay to ensure frame is painted
+      setTimeout(() => resolve(video), 80);
+    };
+    video.onerror = () => reject(new Error("Gagal load video stream"));
+    // Fallback timeout
+    setTimeout(() => reject(new Error("Video load timeout")), 8000);
+  });
+}
+
 async function waitFonts() {
   try {
     await Promise.all([
       document.fonts.load("bold 90px 'Gilroy-Bold'"),
-      document.fonts.load("bold 90px 'Gilroy-Heavy'"),
+      document.fonts.load("700 90px 'Gilroy'"),
+      document.fonts.load("italic 33px 'Gilroy-Italic'"),
       document.fonts.load("italic bold 33px 'Gilroy-BoldItalic'"),
     ]);
     await document.fonts.ready;
@@ -169,7 +191,7 @@ async function drawNotifBadge(ctx: CanvasRenderingContext2D, label: string, imgR
   ctx.restore();
   // 4. White pill
   const pillX = originX + SQ, pillY = originY + 10, pillH = 62;
-  ctx.save(); ctx.font = "italic bold 33px 'Gilroy-BoldItalic','Nunito',sans-serif";
+  ctx.save(); ctx.font = "italic 33px 'Gilroy-Italic','Nunito',sans-serif";
   const tw = ctx.measureText(label).width; const pillW = tw + 24;
   ctx.fillStyle = "white"; ctx.fillRect(pillX, pillY, pillW, pillH);
   // Tail
@@ -245,27 +267,34 @@ async function drawSticker(ctx: CanvasRenderingContext2D, s: Sticker, cardW: num
 function drawExtraText(ctx: CanvasRenderingContext2D, t: ExtraText, cardW: number, cardH: number) {
   ctx.save(); ctx.translate((t.x / 100) * cardW, (t.y / 100) * cardH); ctx.rotate((t.rotation * Math.PI) / 180);
   if (t.shadowBlur > 0) { ctx.shadowBlur = t.shadowBlur; ctx.shadowColor = "rgba(0,0,0,0.85)"; }
-  ctx.font = `${t.fontWeight} ${t.fontSize}px 'Gilroy-Bold',Nunito,sans-serif`;
+  const isBold = t.fontWeight === 'bold' || parseInt(t.fontWeight) >= 700;
+  const fontFamily = isBold ? "'Gilroy-Bold',Nunito,sans-serif" : "'Gilroy',Nunito,sans-serif";
+  ctx.font = `${t.fontStyle || ''} ${t.fontWeight || 'normal'} ${t.fontSize}px ${fontFamily}`;
   ctx.fillStyle = t.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(t.text, 0, 0); ctx.restore();
 }
 
 export async function exportCardToCanvas(params: CardExportParams): Promise<string> {
   const { template, label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle,
-    stickers, extraTexts, assetRect7, assetContent, assetIdentityBar, titleBoxMeasure } = params;
+    stickers, extraTexts, assetRect7, assetContent, assetIdentityBar, videoUrl, videoAspectRatio, titleBoxMeasure } = params;
 
   await waitFonts(); // PENTING: tunggu Gilroy sebelum render
 
   const isPost = template === "post";
-  const cardW = isPost ? POST_W : VIDEO_W, cardH = isPost ? POST_H : VIDEO_H;
+  const is34 = isPost || videoAspectRatio === "3:4";
+  const cardW = is34 ? POST_W : VIDEO_W, cardH = is34 ? POST_H : VIDEO_H;
 
-  const [imgBg1, imgBg2, imgContent, imgIdentityBar, imgRect7] = await Promise.all([
+  const results = await Promise.all([
     loadImg(bgSrc),
     bgMode === "collage" ? loadImg(bg2Src) : Promise.resolve(new Image()),
     loadImg(assetContent),
     loadImg(assetIdentityBar),
     loadImg(assetRect7),
+    (template === "video" && videoUrl && !videoUrl.includes("youtube")) ? loadVideoFrame(videoUrl) : Promise.resolve(null)
   ]);
+
+  const videoFrame = results[5] as HTMLVideoElement | null;
+  const [imgBg1, imgBg2, imgContent, imgIdentityBar, imgRect7] = results;
 
   const canvas = document.createElement("canvas");
   canvas.width = cardW; canvas.height = cardH;
@@ -273,19 +302,31 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
 
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cardW, cardH);
 
-  if (bgMode === "collage" && imgBg2.naturalWidth) drawCollageBg(ctx, imgBg1, bgT, imgBg2, bg2T, splitAngle, cardW, cardH);
-  else drawBgImage(ctx, imgBg1, bgT, 0, 0, cardW, cardH);
+  if (template === "video" && videoFrame) {
+    // Draw video frame as BG
+    const t = bgT;
+    const v = videoFrame;
+    ctx.save();
+    const ih = cardH * t.scale;
+    const iw = (v.videoWidth / v.videoHeight) * ih;
+    ctx.drawImage(v, cardW / 2 - iw / 2 + t.x, cardH / 2 - ih / 2 + t.y, iw, ih);
+    ctx.restore();
+  } else if (bgMode === "collage" && imgBg2.naturalWidth) {
+    drawCollageBg(ctx, imgBg1, bgT, imgBg2, bg2T, splitAngle, cardW, cardH);
+  } else {
+    drawBgImage(ctx, imgBg1, bgT, 0, 0, cardW, cardH);
+  }
 
   for (const s of stickers) { try { await drawSticker(ctx, s, cardW, cardH); } catch { } }
 
-  drawGradient(ctx, isPost ? 1600 : cardH * 0.55, cardW, cardH, isPost ? 0.75 : 0.82);
+  drawGradient(ctx, is34 ? 1600 : cardH * 0.55, cardW, cardH, is34 ? 0.75 : 0.82);
 
   for (const t of extraTexts) drawExtraText(ctx, t, cardW, cardH);
 
   const containerW = 1563, containerX = Math.round((cardW - containerW) / 2);
 
-  if (isPost) {
-    const FONT = "'Gilroy-Bold','Nunito',sans-serif";
+  if (is34) {
+    const FONT = "'Gilroy','Nunito',sans-serif";
     let tbX: number, tbY: number, tbW: number, tbH: number;
     if (titleBoxMeasure) {
       tbX = titleBoxMeasure.x; tbY = titleBoxMeasure.y; tbW = titleBoxMeasure.w; tbH = titleBoxMeasure.h;
@@ -299,7 +340,7 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
     await drawIdentityBar(ctx, imgIdentityBar, 89, 1812.55, 1562.246, 133.453);
     drawSourceBars(ctx, source, articleSource, 89, 2034, false);
   } else {
-    const FONT = "'Gilroy-Heavy','Nunito',sans-serif";
+    const FONT = "'Gilroy-Bold','Nunito',sans-serif";
     let tbX: number, tbY: number, tbW: number, tbH: number;
     if (titleBoxMeasure) {
       tbX = titleBoxMeasure.x; tbY = titleBoxMeasure.y; tbW = titleBoxMeasure.w; tbH = titleBoxMeasure.h;

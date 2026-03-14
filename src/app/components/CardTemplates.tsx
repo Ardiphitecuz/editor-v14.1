@@ -34,6 +34,7 @@ export interface ExtraText {
   rotation: number;
   fontSize: number;
   fontWeight: string;
+  fontStyle?: string;
   color: string;
   shadowBlur: number;
 }
@@ -48,8 +49,9 @@ export const LABEL_OPTIONS = [
   "Discuss", "Fact", "Teori", "Update", "Info", "News", "Hot", "Viral", "Special", "Misteri"
 ];
 
+export const FONT_REGULAR = "'Gilroy', 'Nunito', sans-serif";
 export const FONT_BOLD = "'Gilroy-Bold', 'Nunito', sans-serif";
-export const FONT_HEAVY = "'Gilroy-Heavy', 'Nunito', sans-serif";
+export const FONT_ITALIC = "'Gilroy-Italic', 'Nunito', sans-serif";
 export const FONT_BOLD_ITALIC = "'Gilroy-BoldItalic', 'Nunito', sans-serif";
 
 // ── Components Helper ────────────────────────────────────────────────────────
@@ -124,7 +126,7 @@ export function NotifBadge({ label }: { label: string }) {
     <div style={{ display: "inline-grid", gridTemplateColumns: "max-content", gridTemplateRows: "max-content", position: "relative" }}>
       <div style={{ gridColumn: 1, gridRow: 1, display: "flex", alignItems: "center", marginLeft: 82, marginTop: 10 }}>
         <div style={{ backgroundColor: "white", display: "flex", height: 62, alignItems: "center", paddingLeft: 24, paddingTop: 20, paddingBottom: 20 }}>
-          <span style={{ fontFamily: FONT_BOLD_ITALIC, fontStyle: "italic", fontSize: 33, letterSpacing: "-0.18px", lineHeight: "22px", color: "#060200", whiteSpace: "nowrap" }}>{label}</span>
+          <span style={{ fontFamily: FONT_ITALIC, fontStyle: "italic", fontSize: 33, letterSpacing: "-0.18px", lineHeight: "22px", color: "#060200", whiteSpace: "nowrap" }}>{label}</span>
         </div>
         <div style={{ width: 36.486, height: 62, flexShrink: 0, marginLeft: -1 }}>
           <svg width="100%" height="100%" viewBox="0 0 32.0528 62" fill="none" preserveAspectRatio="none"><path d={svgPaths.p18776b80} fill="white" /></svg>
@@ -162,7 +164,12 @@ export function PostCard(props: any) {
 
   return (
     <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: POST_W, height: POST_H }}>
-      <style>{`.pc-title strong,.pc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.pc-title em,.pc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}.pc-title:focus{outline:none;box-shadow:0 0 0 6px rgba(255,255,255,0.25);border-radius:8px;}`}</style>
+      <style>{`
+        .pc-title strong, .pc-title b { font-family: ${FONT_BOLD}; font-style: normal; font-weight: 800; }
+        .pc-title em, .pc-title i { font-family: ${FONT_ITALIC}; font-style: italic; font-weight: 700; }
+        .pc-title b i, .pc-title i b, .pc-title strong em, .pc-title em strong { font-family: ${FONT_BOLD_ITALIC}; font-weight: 800; }
+        .pc-title:focus { outline: none; box-shadow: 0 0 0 6px rgba(255,255,255,0.25); border-radius: 8px; }
+      `}</style>
       <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={POST_W} cardH={POST_H} />
 
       {interactive && (
@@ -188,7 +195,7 @@ export function PostCard(props: any) {
             <div ref={inlineTitleRef} className="pc-title"
               contentEditable={interactive} suppressContentEditableWarning
               onInput={onTitleChange}
-              style={{ fontFamily: FONT_HEAVY, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden", textAlign: "left" }} />
+              style={{ fontFamily: FONT_REGULAR, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden", textAlign: "left" }} />
           </div>
         </div>
       </div>
@@ -214,7 +221,10 @@ export function PostCard(props: any) {
 }
 
 export function VideoCard(props: any) {
-  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoUrl, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
+  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoUrl, videoAspectRatio, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
+  const is34 = videoAspectRatio === "3:4";
+  const cardW = is34 ? POST_W : VIDEO_W;
+  const cardH = is34 ? POST_H : VIDEO_H;
   const interactive = !!(onBgTouch || onBgMouseDown);
 
   const togglePlay = (e: React.MouseEvent | React.TouchEvent) => {
@@ -225,43 +235,53 @@ export function VideoCard(props: any) {
   };
 
   return (
-    <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: VIDEO_W, height: VIDEO_H }} onClick={togglePlay}>
-      <style>{`.vc-title strong,.vc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.vc-title em,.vc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}`}</style>
+    <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: cardW, height: cardH }} onClick={togglePlay}>
+      <style>{`
+        .vc-title strong, .vc-title b { font-family: ${FONT_BOLD}; font-style: normal; font-weight: 800; }
+        .vc-title em, .vc-title i { font-family: ${FONT_ITALIC}; font-style: italic; font-weight: 700; }
+        .vc-title b i, .vc-title i b, .vc-title strong em, .vc-title em strong { font-family: ${FONT_BOLD_ITALIC}; font-weight: 800; }
+      `}</style>
 
       {videoUrl ? (
         <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-          <video ref={videoRef} src={videoUrl} loop playsInline crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(VIDEO_H * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} />
+          <video ref={videoRef} src={videoUrl} loop playsInline crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(cardH * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} />
           {interactive && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", inset: 0, zIndex: 20, cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />}
         </div>
       ) : (
         <>
           {interactive && (<><div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", zIndex: 20, left: 0, top: 0, width: bgMode === "collage" ? "50%" : "100%", height: "100%", cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />
             {bgMode === "collage" && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(2, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(2, e) : undefined} style={{ position: "absolute", zIndex: 20, right: 0, top: 0, width: "50%", height: "100%", cursor: bgDragActive === 2 ? "grabbing" : "grab", touchAction: "none" }} />}</>)}
-          <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={VIDEO_W} cardH={VIDEO_H} />
+          <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={cardW} cardH={cardH} />
         </>
       )}
 
       <div ref={overlayRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 30 }}>
-        <Overlay cardW={VIDEO_W} cardH={VIDEO_H} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
-        <div style={{ position: "absolute", left: 0, top: VIDEO_H * 0.55, width: "100%", height: VIDEO_H * 0.45, zIndex: 3, background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.82) 100%)" }} />
-        <div style={{ position: "absolute", left: "50%", bottom: 949, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85 }}>
+        <Overlay cardW={cardW} cardH={cardH} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
+        {/* Gradient Positioning */}
+        <div style={{ position: "absolute", left: 0, top: is34 ? 1600 : cardH * 0.55, width: "100%", height: is34 ? cardH - 1600 : cardH * 0.45, zIndex: 3, background: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,${is34 ? 0.75 : 0.82}) 100%)` }} />
+        
+        {/* Title Group Positioning */}
+        <div style={{ position: "absolute", left: "50%", bottom: is34 ? 469 : 949, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85 }}>
           <NotifBadge label={label} />
           <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}>
             <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} /><img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}><div className="vc-title" style={{ fontFamily: FONT_HEAVY, fontSize: 85, lineHeight: "108px", color: "white", width: 1339, overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: titleHtml }} /></div>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}><div className="vc-title" style={{ fontFamily: FONT_REGULAR, fontSize: is34 ? 90 : 85, lineHeight: is34 ? "112px" : "108px", color: "white", width: 1339, overflow: "hidden", textAlign: "left" }} dangerouslySetInnerHTML={{ __html: titleHtml }} /></div>
           </div>
         </div>
 
-        <div style={{ position: "absolute", left: 146, top: 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
-        <div style={{ position: "absolute", left: 136, top: 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
+        {/* Identity Bar Positioning */}
+        <div style={{ position: "absolute", left: is34 ? 89 : 146, top: is34 ? 1812.55 : 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
+        
+        {/* Source Bars Positioning */}
+        <div style={{ position: "absolute", left: is34 ? 89 : 136, top: is34 ? 2034 : 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
             <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
-            <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
+            <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: is34 ? 20 : 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: is34 ? "none" : "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
           </div>
           {articleSource && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
               <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
-              <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
+              <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: is34 ? 20 : 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: is34 ? "none" : "underline", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
             </div>
           )}
         </div>

@@ -22,7 +22,7 @@ import { upscaleImage } from "../services/imageUpscaler";
 import { 
   PostCard, VideoCard, Background, Overlay, NotifBadge,
   POST_W, POST_H, VIDEO_W, VIDEO_H,
-  FONT_BOLD, FONT_HEAVY, FONT_BOLD_ITALIC,
+  FONT_REGULAR, FONT_BOLD, FONT_ITALIC, FONT_BOLD_ITALIC,
   DEFAULT_BG, LINK_BG, DEFAULT_TITLE_HTML, DEFAULT_BG_TRANSFORM, LABEL_OPTIONS,
   type BgTransform, type BgMode, type Sticker, type ExtraText
 } from "./CardTemplates";
@@ -289,6 +289,7 @@ export function EditorPage() {
   const navigate = useNavigate();
   const locationState = location.state as {
     template?: TemplateType;
+    videoAspectRatio?: "3:4" | "9:16";
     label?: string;
     titleHtml?: string;
     source?: string;
@@ -317,8 +318,10 @@ export function EditorPage() {
   const INIT_TITLE = locationState?.titleHtml ?? DEFAULT_TITLE_HTML;
 
   const [template, setTemplate] = useState<TemplateType>(locationState?.template ?? "post");
-  const CARD_W = template === "post" ? POST_W : VIDEO_W;
-  const CARD_H = template === "post" ? POST_H : VIDEO_H;
+  const [videoAspectRatio, setVideoAspectRatio] = useState<"3:4" | "9:16">(locationState?.videoAspectRatio ?? "9:16");
+
+  const CARD_W = template === "post" ? POST_W : (videoAspectRatio === "3:4" ? POST_W : VIDEO_W);
+  const CARD_H = template === "post" ? POST_H : (videoAspectRatio === "3:4" ? POST_H : VIDEO_H);
 
   const [activeTab, setActiveTab] = useState<SidebarTab | null>(null);
 
@@ -679,6 +682,7 @@ export function EditorPage() {
         assetRect7: imgRectangle7 as string,
         assetContent: imgContent as string,
         assetIdentityBar: imgIdentityBar as string,
+        videoUrl,
         titleBoxMeasure,
       });
 
@@ -696,7 +700,7 @@ export function EditorPage() {
         imageDataUrl: dataUrl,
         template, label, titleHtml, source, articleSource,
         bgSrc, bgMode, bgT, bg2Src, bg2T, splitAngle,
-        videoUrl, stickers, extraTexts
+        videoUrl, videoAspectRatio, stickers, extraTexts
       };
       
       const existingDraftId = locationState?.draftId;
@@ -813,7 +817,7 @@ export function EditorPage() {
   }, []);
   const renderCard = (interactive: boolean) => {
     const p = interactive ? { ...commonProps, snapIndicator, bgDragActive, onBgTouch: handleBgTouch, onBgMouseDown: handleBgMouse, onStickerTouch: handleStickerTouch, onStickerMouseDown: handleStickerMouse, onTextTouch: handleTextTouch, onTextMouseDown: handleTextMouse, selectedStickerId, selectedTextId, onTitleChange: handleInlineTitleChange } : commonProps;
-    return template === "post" ? <PostCard {...p} /> : <VideoCard {...p} videoUrl={videoUrl} videoRef={videoRef} overlayRef={overlayRef} />;
+    return template === "post" ? <PostCard {...p} /> : <VideoCard {...p} videoUrl={videoUrl} videoRef={videoRef} overlayRef={overlayRef} videoAspectRatio={videoAspectRatio} />;
   };
 
   const TABS: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
@@ -877,6 +881,21 @@ export function EditorPage() {
                       <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
                     </div>
                   </div>
+
+                  {/* Ratio Video — only if video */}
+                  {template === "video" && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-neutral-400 font-medium shrink-0 w-14">Rasio</span>
+                      <div className="flex bg-neutral-100 p-0.5 rounded-lg flex-1">
+                        {(["9:16", "3:4"] as const).map(r => (
+                          <button key={r} onClick={() => setVideoAspectRatio(r)}
+                            className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition ${videoAspectRatio===r ? "bg-white shadow-sm text-neutral-900" : "text-neutral-400"}`}>
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Judul */}
                   <div>

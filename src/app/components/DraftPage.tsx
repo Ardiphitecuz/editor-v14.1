@@ -201,7 +201,8 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
         await exportVideoWithFFmpeg(
           videoUrl,
           overlayRef.current,
-          (p) => setExportProgress(p)
+          (p) => setExportProgress(p),
+          draft.template?.videoAspectRatio
         );
 
         setDownloadDone(true);
@@ -348,13 +349,13 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
         <div className="relative w-full aspect-[4/5] bg-black flex items-center justify-center overflow-hidden group">
           <div className="flex items-center justify-center transition-transform group-hover:scale-[1.02] duration-500"
             style={{
-              transform: `scale(${draft.template?.template === "video" ? 0.21 : 0.22})`,
+              transform: `scale(${isVideo && (draft.template?.videoAspectRatio ?? "9:16") === "9:16" ? 0.21 : 0.22})`,
               transformOrigin: "center center",
-              width: draft.template?.template === "video" ? VIDEO_W : POST_W,
-              height: draft.template?.template === "video" ? VIDEO_H : POST_H,
+              width: isVideo && (draft.template?.videoAspectRatio ?? "9:16") === "9:16" ? VIDEO_W : POST_W,
+              height: isVideo && (draft.template?.videoAspectRatio ?? "9:16") === "9:16" ? VIDEO_H : POST_H,
               flexShrink: 0
             }}>
-            {draft.template?.template === "video" ? (
+            {isVideo ? (
               <VideoCard
                 {...draft.template}
                 videoRef={videoRef}

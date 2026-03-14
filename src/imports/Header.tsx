@@ -4,7 +4,7 @@ import imgRectangle7 from "figma:asset/3faeab794066e6a5837760291e83a4cac94d2503.
 function Frame1() {
   return (
     <div className="bg-white col-1 content-stretch flex h-[62px] items-center justify-center ml-0 mt-0 pl-[24px] py-[20px] relative row-1">
-      <div className="flex flex-col font-['Gilroy-BoldItalic:☞',sans-serif] italic justify-center leading-[0] relative shrink-0 text-[#060200] text-[33px] text-center tracking-[-0.18px] whitespace-nowrap">
+      <div className="flex flex-col font-['Gilroy-Italic:☞',sans-serif] italic justify-center leading-[0] relative shrink-0 text-[#060200] text-[33px] text-center tracking-[-0.18px] whitespace-nowrap">
         <p className="leading-[22px]">adadaadad</p>
       </div>
     </div>

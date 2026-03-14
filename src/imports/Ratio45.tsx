@@ -16,7 +16,7 @@ function Backround() {
 function Frame1() {
   return (
     <div className="bg-white col-1 content-stretch flex h-[62px] items-center justify-center ml-0 mt-0 pl-[24px] py-[20px] relative row-1">
-      <div className="flex flex-col font-['Gilroy-BoldItalic:☞',sans-serif] italic justify-center leading-[0] relative shrink-0 text-[#060200] text-[33px] text-center tracking-[-0.18px] whitespace-nowrap">
+      <div className="flex flex-col font-['Gilroy-Italic:☞',sans-serif] italic justify-center leading-[0] relative shrink-0 text-[#060200] text-[33px] text-center tracking-[-0.18px] whitespace-nowrap">
         <p className="leading-[22px]">Discuss</p>
       </div>
     </div>
@@ -86,10 +86,10 @@ function Content() {
       </div>
       <div className="flex flex-row items-center justify-center size-full">
         <div className="content-stretch flex items-center justify-center pb-[69px] pt-[61px] px-[112px] relative w-full">
-          <div className="capitalize flex flex-col font-['Gilroy-Bold:☞',sans-serif] justify-end leading-[0] not-italic overflow-hidden relative shrink-0 text-[85px] text-ellipsis text-white w-[1339px]">
+          <div className="capitalize flex flex-col font-['Gilroy:☞',sans-serif] justify-end leading-[0] not-italic overflow-hidden relative shrink-0 text-[85px] text-ellipsis text-white w-[1339px]">
             <p>
               <span className="leading-[normal]">{`Heboh! `}</span>
-              <span className="font-['Gilroy-Heavy:☞',sans-serif] leading-[normal] not-italic">{`Fanart "Dandadan" Versi Kulit Hitam Picu Perang Rasial`}</span>
+              <span className="font-['Gilroy-Bold:☞',sans-serif] leading-[normal] not-italic">{`Fanart "Dandadan" Versi Kulit Hitam Picu Perang Rasial`}</span>
               <span className="leading-[normal]">{` di Kalangan netizen.`}</span>
             </p>
           </div>

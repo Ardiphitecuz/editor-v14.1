@@ -26,12 +26,11 @@ export const initFFmpeg = async () => {
  * Capture an HTML element as a PNG blob.
  * This ensures high-fidelity overlays (stickers, texts, etc.)
  */
-const captureOverlayPng = async (element: HTMLElement): Promise<Uint8Array> => {
+const captureOverlayPng = async (element: HTMLElement, ratio: "3:4" | "9:16" = "9:16"): Promise<Uint8Array> => {
     // Generate PNG from HTML element with high fidelity
-    // We specify the nominal dimensions (1855x3298 for video) to ensure it's not captured at preview size
-    const isVideo = element.offsetHeight > 2400; // Rough check for vertical video template height
-    const width = isVideo ? VIDEO_W : POST_W;
-    const height = isVideo ? VIDEO_H : POST_H;
+    const is34 = ratio === "3:4";
+    const width = is34 ? POST_W : VIDEO_W;
+    const height = is34 ? POST_H : VIDEO_H;
 
     const dataUrl = await toPng(element, { 
         width, 
@@ -60,7 +59,8 @@ const captureOverlayPng = async (element: HTMLElement): Promise<Uint8Array> => {
 export const exportVideoWithFFmpeg = async (
     videoUrl: string, 
     overlayElement: HTMLElement, 
-    setProgress: (p: number) => void
+    setProgress: (p: number) => void,
+    ratio: "3:4" | "9:16" = "9:16"
 ) => {
     try {
         const ff = await initFFmpeg();
@@ -84,7 +84,7 @@ export const exportVideoWithFFmpeg = async (
         // 2. Capture and write the overlay PNG
         setProgress(15);
         if (!overlayElement) throw new Error("Overlay element not found");
-        const overlayData = await captureOverlayPng(overlayElement);
+        const overlayData = await captureOverlayPng(overlayElement, ratio);
         await ff.writeFile('overlay.png', overlayData);
 
     // 3. Execute FFmpeg Command
@@ -100,10 +100,14 @@ export const exportVideoWithFFmpeg = async (
     }
 
     try {
+        const is34 = ratio === "3:4";
+        const targetW = is34 ? POST_W : VIDEO_W;
+        const targetH = is34 ? POST_H : VIDEO_H;
+
         await ff.exec([
             '-i', 'input.mp4',
             '-i', 'overlay.png',
-            '-filter_complex', `[0:v]scale=${VIDEO_W}:${VIDEO_H}:force_original_aspect_ratio=increase,crop=${VIDEO_W}:${VIDEO_H}[v]; [v][1:v]overlay=0:0`,
+            '-filter_complex', `[0:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}[v]; [v][1:v]overlay=0:0`,
             '-map', '[v]',
             '-map', '0:a?', 
             '-c:v', 'libx264',
@@ -115,10 +119,14 @@ export const exportVideoWithFFmpeg = async (
     } catch (execError: any) {
         console.error("[FFmpeg] Execution Error:", execError);
         // Fallback to simpler command if complex filter fails (e.g. no audio stream)
+        const is34 = ratio === "3:4";
+        const targetW = is34 ? POST_W : VIDEO_W;
+        const targetH = is34 ? POST_H : VIDEO_H;
+
         await ff.exec([
             '-i', 'input.mp4',
             '-i', 'overlay.png',
-            '-filter_complex', `[0:v]scale=${VIDEO_W}:${VIDEO_H}:force_original_aspect_ratio=increase,crop=${VIDEO_W}:${VIDEO_H}[v]; [v][1:v]overlay=0:0`,
+            '-filter_complex', `[0:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}[v]; [v][1:v]overlay=0:0`,
             '-c:v', 'libx264',
             '-crf', '22',
             '-preset', 'ultrafast',

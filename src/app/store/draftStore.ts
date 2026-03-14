@@ -18,6 +18,7 @@ export interface DraftTemplate {
   bg2T: { x: number; y: number; scale: number };
   splitAngle: number;
   videoUrl: string | null;
+  videoAspectRatio: "3:4" | "9:16";
   stickers: any[];
   extraTexts: any[];
 }
