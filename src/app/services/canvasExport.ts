@@ -58,9 +58,9 @@ async function loadVideoFrame(url: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
-    video.src = url;
     video.muted = true;
     video.playsInline = true;
+    video.preload = "auto";
     
     video.onloadedmetadata = () => {
       video.currentTime = 0.5; // grab frame at 0.5s
@@ -68,12 +68,17 @@ async function loadVideoFrame(url: string): Promise<HTMLVideoElement> {
 
     video.onseeked = () => {
       // Small delay to ensure frame is painted
-      setTimeout(() => resolve(video), 80);
+      setTimeout(() => resolve(video), 100);
     };
 
     video.onerror = () => reject(new Error("Gagal load video stream"));
-    // Fallback timeout
-    setTimeout(() => reject(new Error("Video load timeout")), 8000);
+    
+    // Set src after listeners for best compatibility
+    video.src = url;
+    video.load();
+
+    // Fallback timeout - increased for mobile robustness
+    setTimeout(() => reject(new Error("Video load timeout")), 30000);
   });
 }
 
