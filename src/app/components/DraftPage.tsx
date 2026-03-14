@@ -3,10 +3,15 @@ import { useNavigate } from "react-router";
 import {
   FileText, Image as ImageIcon, Trash2, PlusCircle,
   Download, Copy, Check, Cloud, CloudDownload,
-  Clock, X, Share2,
+  Clock, X, Share2, Play
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
 import { MascotEmptyState } from "./MascotEmptyState";
+import {
+  PostCard, VideoCard,
+  POST_W, POST_H, VIDEO_W, VIDEO_H
+} from "./CardTemplates";
+import { exportVideoWithFFmpeg } from "../services/ffmpegExporter";
 
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -32,7 +37,7 @@ function DraftCard({ draft, onClick, onDelete }: {
   onDelete: (e: React.MouseEvent) => void;
 }) {
   const isVideo = draft.template?.template === "video";
-  const aspectRatio = isVideo ? "1855/3298" : "1563/2320";
+  const aspectRatio = "3/4"; // Force 3:4 for list preview
   const hasTemplate = !!draft.template?.imageDataUrl;
 
   return (
@@ -77,7 +82,7 @@ function DraftCard({ draft, onClick, onDelete }: {
 
         {/* Video Icon Overlay */}
         {draft.videoUrl && (
-          <div 
+          <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
             style={{ background: "rgba(0,0,0,0.2)" }}
           >
@@ -111,13 +116,17 @@ function DraftCard({ draft, onClick, onDelete }: {
 }
 
 // ─── DraftPreviewModal ──────────────────────────────────────────────────────
-function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onClose: () => void }) {
+function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft: Draft; onClose: () => void; draftCount: number }) {
   const navigate = useNavigate();
 
   // Bisa update draft lokal setelah rewrite
   const [draft, setDraft] = useState(initialDraft);
-  const [downloading, setDownloading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const [downloadDone, setDownloadDone] = useState(false);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Caption state
   const [captionMode, setCaptionMode] = useState<"view" | "edit">("view");
@@ -130,6 +139,8 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
 
   const [rewriting, setRewriting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const isVideo = draft.template?.template === "video";
 
   // Sync jika draft berubah dari luar
   useEffect(() => {
@@ -169,12 +180,40 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
   }
 
   async function handleDownload() {
-    if (draft.template?.template === "video") {
-      handleEditTemplate({ autoExport: true, exportMode: "download" });
+    const videoUrl = draft.videoUrl || draft.template?.videoUrl;
+    const isVideo = draft.template?.template === "video" && videoUrl;
+
+    if (isVideo && !videoUrl.includes('youtube')) {
+      setExporting(true);
+      setExportProgress(0);
+
+      try {
+        if (!overlayRef.current) throw new Error("Overlay ref not found");
+
+        await exportVideoWithFFmpeg(
+          videoUrl,
+          overlayRef.current,
+          (p) => setExportProgress(p)
+        );
+
+        setDownloadDone(true);
+        setTimeout(() => setDownloadDone(false), 2500);
+      } catch (err: any) {
+        alert("Gagal export video: " + err.message);
+      } finally {
+        setExporting(false);
+      }
       return;
     }
+
+    if (draft.template?.template === "video" && draft.videoUrl?.includes('youtube')) {
+      // YouTube can't be exported directly yet due to CORS/FFmpeg constraints
+      alert("Video YouTube tidak dapat di-download langsung. Silakan download video asli lalu upload ke editor.");
+      return;
+    }
+
     if (!draft.template?.imageDataUrl) return;
-    setDownloading(true);
+    setExporting(true);
     try {
       const dataUrl = draft.template.imageDataUrl;
       const filename = `draft-${draft.id.slice(6, 14)}.png`;
@@ -183,7 +222,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
       setDownloadDone(true);
       setTimeout(() => setDownloadDone(false), 2500);
-    } finally { setDownloading(false); }
+    } finally { setExporting(false); }
   }
 
   async function handleShare() {
@@ -192,17 +231,17 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
       return;
     }
     // 1. Salin caption otomatis ke clipboard
-    await navigator.clipboard.writeText(captionText).catch(() => {});
-    
+    await navigator.clipboard.writeText(captionText).catch(() => { });
+
     if (!draft.template?.imageDataUrl) {
       alert("Caption disalin! (Tidak ada gambar untuk di-share)");
       return;
     }
-    
+
     // 2. Siapkan file gambar
     const dataUrl = draft.template.imageDataUrl;
     const filename = `draft-${draft.id.slice(6, 14)}.png`;
-    
+
     // 3. Cek dukungan Web Share API dengan fungsi pembagian file
     if (navigator.canShare) {
       try {
@@ -212,12 +251,12 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
           await navigator.share({ files: [file], title: filename });
           return;
         }
-      } catch (e: any) { 
-        if (e?.name === "AbortError") return; 
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
         console.error("Share error:", e);
       }
     }
-    
+
     // 4. Fallback jika gagal/tidak didukung
     alert("Caption berhasil disalin! Silakan gunakan tombol Download untuk menyimpan gambar.");
   }
@@ -265,7 +304,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
 
   function handleCopyCloudId() {
     if (!cloudId) return;
-    navigator.clipboard.writeText(cloudId).catch(() => {});
+    navigator.clipboard.writeText(cloudId).catch(() => { });
     alert("Kode berhasil disalin: " + cloudId);
   }
 
@@ -273,204 +312,146 @@ function DraftPreviewModal({ draft: initialDraft, onClose }: { draft: Draft; onC
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center p-3 pb-safe"
-      style={{ background: "rgba(0,0,0,0.9)", paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300"
       onClick={onClose}
     >
-      {/* Floating sheet / dialog */}
+      {/* Redesigned Card Container */}
       <div
-        className="w-full max-w-lg flex flex-col rounded-[2rem] overflow-hidden shadow-2xl relative animate-in slide-in-from-bottom-8 duration-300"
-        style={{ maxHeight: "calc(96dvh - env(safe-area-inset-top, 0px))", background: "#111" }}
+        className="relative w-full max-w-[400px] bg-[#18181b] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col transform transition-all scale-100"
         onClick={e => e.stopPropagation()}
       >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-4 pb-1 shrink-0 z-10 absolute left-0 right-0 top-0 pointer-events-none">
-          <div className="w-12 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.4)", backdropFilter: "blur(4px)" }} />
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-50 p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-white/90 hover:text-white transition-all border border-white/10 shadow-lg"
+        >
+          <X size={20} strokeWidth={2.5} />
+        </button>
+
+        {/* Status Badge */}
+        <div className="absolute top-5 left-5 z-50 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-1.5 shadow-lg">
+          <div className={`w-2 h-2 rounded-full ${isVideo ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}></div>
+          <span className="text-white text-[10px] font-bold tracking-widest uppercase">
+            {isVideo ? 'Video Draft' : 'Draft Post'}
+          </span>
         </div>
 
-        {/* Header - now absolute and transparent/blurred over the image for immersive feel */}
-        <div className="flex items-center justify-between px-5 pt-7 pb-4 shrink-0 absolute top-0 left-0 right-0 z-10"
-             style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%)" }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black shrink-0 shadow-lg border border-white/10"
-              style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", fontSize: 13 }}>OC</div>
-            <div>
-              <p className="text-white font-bold tracking-wide" style={{ fontSize: 14, textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>otakucafe.id</p>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>{relativeTime(draft.createdAt)}</p>
-            </div>
-          </div>
-          <button onClick={onClose}
-            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md shadow-lg border border-white/10 active:scale-95 transition-transform"
-            style={{ background: "rgba(0,0,0,0.5)" }}>
-            <X size={15} color="white" />
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto min-h-0 container-snap" style={{ WebkitOverflowScrolling: "touch" }}>
-
-          {/* ── Media preview ── */}
-          <div className="relative w-full shrink-0 flex items-center justify-center bg-[#0a0a0a]" style={{ minHeight: "45vh" }}>
-            {draft.videoUrl ? (
-                <div className="w-full flex items-center justify-center" style={{ aspectRatio: "9/16" }}>
-                    {draft.videoUrl.includes('youtube.com') || draft.videoUrl.includes('youtu.be') ? (
-                        (() => {
-                            const ytIdMatch = draft.videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
-                            const ytId = ytIdMatch ? ytIdMatch[1] : null;
-                            return ytId ? (
-                                <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}`} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
-                            ) : <p className="text-white text-xs">Gagal memuat video</p>;
-                        })()
-                    ) : (
-                        <video src={draft.videoUrl} controls autoPlay loop muted playsInline className="w-full h-full object-contain" />
-                    )}
-                </div>
-            ) : hasImage ? (
-              <img src={draft.template!.imageDataUrl!} alt="preview"
-                className="w-full h-full object-contain"
-                style={{ maxHeight: "65vh" }} />
+        {/* Media Preview Section */}
+        <div className="relative w-full aspect-[4/5] bg-black flex items-center justify-center overflow-hidden group">
+          <div className="flex items-center justify-center transition-transform group-hover:scale-[1.02] duration-500"
+            style={{
+              transform: `scale(${0.18})`,
+              transformOrigin: "center center",
+              width: draft.template?.template === "video" ? VIDEO_W : POST_W,
+              height: draft.template?.template === "video" ? VIDEO_H : POST_H,
+              flexShrink: 0
+            }}>
+            {draft.template?.template === "video" ? (
+              <VideoCard
+                {...draft.template}
+                videoRef={videoRef}
+                overlayRef={overlayRef}
+                interactive={false}
+              />
             ) : (
-              <div className="flex flex-col items-center gap-3 text-neutral-500 py-20">
-                <ImageIcon size={48} strokeWidth={1} />
-                <span className="text-xs font-semibold">Tampilan draf belum tersedia</span>
-                <button onClick={() => handleEditTemplate()}
-                  className="px-4 py-2 rounded-xl text-white font-bold active:scale-95 transition-transform"
-                  style={{ background: "#ff742f", fontSize: 13 }}>
-                  Buat Template
-                </button>
-              </div>
-            )}
-            {/* Edit template overlay jika sudah ada gambar tetapi bukan video (yang sudah auto-play) */}
-            {hasImage && !draft.videoUrl && (
-              <button onClick={() => handleEditTemplate()}
-                className="absolute bottom-2 right-2 flex items-center gap-1 px-2.5 py-1.5 rounded-full active:scale-95 transition-transform"
-                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}>
-                <PlusCircle size={11} color="rgba(255,255,255,0.8)" />
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", fontWeight: 700 }}>Edit template</span>
-              </button>
-            )}
-          </div>
-
-          {/* ── Caption section ── */}
-          <div className="px-4 pt-4 pb-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-            {/* Label + tombol Rewrite / Edit / Simpan */}
-            <div className="flex items-center justify-between mb-2.5">
-              <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em" }}>CAPTION</span>
-              <div className="flex items-center gap-1.5">
-                {captionMode === "view" ? (
-                  <>
-                    <button
-                      onClick={handleRewrite}
-                      disabled={rewriting}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full transition-all active:scale-95 disabled:opacity-50"
-                      style={{ background: "rgba(255,116,47,0.15)", border: "1px solid rgba(255,116,47,0.35)" }}>
-                      {rewriting
-                        ? <span style={{ fontSize: 10, color: "#ff742f", fontWeight: 700 }}>✦ Menulis ulang...</span>
-                        : <><span style={{ fontSize: 15 }}>✦</span><span style={{ fontSize: 10, color: "#ff742f", fontWeight: 700 }}>Rewrite</span></>
-                      }
-                    </button>
-                    <button
-                      onClick={() => setCaptionMode("edit")}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-full transition-all active:scale-95"
-                      style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)" }}>
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>✎ Edit</span>
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setCaptionMode("view")}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-full transition-all active:scale-95"
-                    style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)" }}>
-                    <Check size={11} color="#22c55e" />
-                    <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700 }}>Simpan</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Tombol Simpan ke Cloud */}
-            {captionMode === "view" && (
-              <div className="mt-4 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)", display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {!cloudId ? (
-                  <button 
-                    onClick={handleCloudSave}
-                    disabled={cloudSaving}
-                    className="flex items-center justify-center gap-2 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-50"
-                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }}
-                  >
-                    <Cloud size={14} color="white" />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "white" }}>
-                      {cloudSaving ? "Mengunggah..." : "Simpan Draf ke Cloud"}
-                    </span>
-                  </button>
-                ) : (
-                  <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}>
-                    <div>
-                      <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700, display: 'block', marginBottom: 2 }}>KODE DRAF CLOUD</span>
-                      <span style={{ fontSize: 16, color: "white", fontWeight: 900, letterSpacing: '2px' }}>{cloudId}</span>
-                    </div>
-                    <button onClick={handleCopyCloudId} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(34,197,94,0.2)" }}>
-                      <Copy size={13} color="#22c55e" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Teks caption */}
-            {captionMode === "view" ? (
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {captionText}
-              </div>
-            ) : (
-              <textarea
-                ref={textareaRef}
-                value={captionText}
-                onChange={e => setCaptionText(e.target.value)}
-                className="w-full rounded-2xl px-3 py-3 focus:outline-none resize-none"
-                style={{
-                  minHeight: 180,
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  color: "rgba(255,255,255,0.85)",
-                  fontSize: 13,
-                  lineHeight: 1.65,
-                }}
+              <PostCard
+                {...draft.template}
+                interactive={false}
               />
             )}
           </div>
 
-          {/* spacer agar tidak tertutup tombol fixed */}
-          <div style={{ height: 100 }} />
+          {/* Play/Pause control overlay if it's a video */}
+          {draft.template?.template === "video" && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all cursor-pointer">
+              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
+                <Play size={32} color="white" fill="white" className="ml-1" />
+              </div>
+            </div>
+          )}
+
+          {/* Bottom Fade Gradient for text contrast */}
+          <div className="absolute bottom-0 w-full h-32 bg-gradient-to-t from-[#18181b] to-transparent pointer-events-none"></div>
         </div>
 
-        {/* ── Action buttons — fixed di bawah ── */}
-        <div className="shrink-0 px-4 py-3 flex gap-2.5"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "#111", paddingBottom: "calc(12px + env(safe-area-inset-bottom,0px))" }}>
+        {/* Information Section */}
+        <div className="p-6 pt-0 flex flex-col gap-6 bg-[#18181b] relative z-10">
+          <div className="space-y-2.5">
+            <h3 className="text-white font-extrabold text-xl leading-tight line-clamp-2">
+              {stripHtml(draft.aiTitle) || draft.articleTitle}
+            </h3>
+            <div className="relative">
+              {captionMode === "view" ? (
+                <p className="text-zinc-400 text-sm line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                  {captionText}
+                </p>
+              ) : (
+                <textarea
+                  ref={textareaRef}
+                  value={captionText}
+                  onChange={e => setCaptionText(e.target.value)}
+                  className="w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-zinc-300 text-sm focus:outline-none focus:border-white/20 resize-none"
+                />
+              )}
+            </div>
+          </div>
 
-          {/* Download (+ salin otomatis) */}
-          <button
-            onClick={handleDownload}
-            disabled={!hasImage || downloading}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all active:scale-95 disabled:opacity-40"
-            style={{
-              background: downloadDone ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.08)",
-              border: `1.5px solid ${downloadDone ? "rgba(34,197,94,0.5)" : "rgba(255,255,255,0.15)"}`,
-            }}>
-            {downloadDone
-              ? <><Check size={16} color="#22c55e" /><span style={{ fontSize: 13, fontWeight: 700, color: "#22c55e" }}>Tersimpan!</span></>
-              : <><Download size={16} color="white" /><span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>{downloading ? "Menyimpan..." : "Download"}</span></>
-            }
-          </button>
+          {/* Action Row */}
+          <div className="flex items-center gap-3 pt-2">
+            {/* Primary Action Header: Download */}
+            <button
+              onClick={handleDownload}
+              disabled={exporting}
+              className="flex-1 flex items-center justify-center gap-2.5 bg-white text-black hover:bg-zinc-200 active:bg-zinc-300 font-extrabold py-3.5 px-4 rounded-xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] text-[15px] disabled:opacity-50"
+            >
+              {exporting ? (
+                <div className="flex flex-col items-center">
+                   <span className="text-xs">Exporting {exportProgress}%</span>
+                </div>
+              ) : (
+                <>
+                  <Download size={20} strokeWidth={2.5} />
+                  <span>{isVideo ? 'Unduh Video' : 'Unduh Gambar'}</span>
+                </>
+              )}
+            </button>
 
-          {/* Share */}
-          <button
-            onClick={handleShare}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl transition-all active:scale-95"
-            style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)" }}>
-            <Share2 size={16} color="white" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Share</span>
-          </button>
+            {/* Share Button */}
+            <button 
+              onClick={handleShare}
+              className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5" 
+              title="Bagikan"
+            >
+              <Share2 size={20} strokeWidth={2.5} />
+            </button>
+
+            {/* Copy Caption Button */}
+            <button 
+              onClick={async () => {
+                await navigator.clipboard.writeText(captionText);
+                alert("Caption berhasil disalin!");
+              }}
+              className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5" 
+              title="Salin Caption"
+            >
+              <Copy size={20} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          <div className="flex justify-between items-center px-1">
+             <button 
+                onClick={() => setCaptionMode(captionMode === 'view' ? 'edit' : 'view')}
+                className="text-white/30 text-[10px] font-bold hover:text-white/60 transition-colors uppercase tracking-widest"
+             >
+                {captionMode === 'view' ? '✎ Edit Caption' : '✓ Selesai'}
+             </button>
+             <button 
+                onClick={() => handleEditTemplate()}
+                className="text-white/30 text-[10px] font-bold hover:text-white/60 transition-colors uppercase tracking-widest"
+             >
+                Lanjutkan di Editor →
+             </button>
+          </div>
         </div>
       </div>
     </div>
@@ -492,7 +473,7 @@ export function DraftPage() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
     // Reload imageDataUrl dari IDB setiap mount — handle iOS GC atau navigasi kembali
-    draftStore.reloadImages().catch(() => {});
+    draftStore.reloadImages().catch(() => { });
   }, []);
 
   // Ukur tinggi header + navbar untuk empty state height
@@ -620,6 +601,7 @@ export function DraftPage() {
         <DraftPreviewModal
           draft={selectedDraft}
           onClose={() => setSelectedDraft(null)}
+          draftCount={drafts.length}
         />
       )}
 
@@ -675,14 +657,14 @@ export function DraftPage() {
               autoComplete="off"
             />
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => setShowCloudInput(false)}
                 disabled={cloudLoading}
                 className="flex-1 py-3 rounded-xl font-bold text-neutral-500 bg-[#f5f5f5]"
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={handleLoadFromCloud}
                 disabled={cloudLoading || !cloudInputId.trim()}
                 className="flex-1 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-[#ff742f] to-[#ff9a5c] disabled:opacity-50"

@@ -12,45 +12,22 @@ import imgContent from "figma:asset/dd1da5fc74964e99895149508d6205a4d1bf1cb6.png
 import imgIdentityBar from "figma:asset/de21bf7c4db25ef35876a6b7b4b21eaa1919be07.png";
 
 // Import FFmpeg for MP4 export
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+// FFmpeg removed - export now handled in DraftPage
 
 import {
   Bold, Italic, Download, RotateCcw, ImagePlus, ChevronDown,
   Plus, Trash2, Type, Image as ImageIcon, Layers, FileImage, Link, ArrowLeft, X, Sparkles, Cloud
 } from "lucide-react";
 import { upscaleImage } from "../services/imageUpscaler";
-
-// ── Dimensi template ──────────────────────────────────────────────────────────
-const POST_W = 1740;
-const POST_H = 2320;
-const VIDEO_W = 1855;
-const VIDEO_H = 3298;
+import { 
+  PostCard, VideoCard, Background, Overlay, NotifBadge,
+  POST_W, POST_H, VIDEO_W, VIDEO_H,
+  FONT_BOLD, FONT_HEAVY, FONT_BOLD_ITALIC,
+  DEFAULT_BG, LINK_BG, DEFAULT_TITLE_HTML, DEFAULT_BG_TRANSFORM, LABEL_OPTIONS,
+  type BgTransform, type BgMode, type Sticker, type ExtraText
+} from "./CardTemplates";
 
 type TemplateType = "post" | "video";
-
-const DEFAULT_BG         = imgImage1 as string;
-const DEFAULT_TITLE_HTML = 'Fanart <strong>"Dandadan"</strong> Versi Kulit Hitam Picu Perang Rasial';
-const LABEL_OPTIONS      = ["Discuss","Hot Topic","Breaking","Trending","Opinion","Review","Analisis","Berita","Exclusive","Reels"];
-const FONT_BOLD          = "'Gilroy-Bold', 'Nunito', sans-serif";
-const FONT_HEAVY         = "'Gilroy-Heavy', 'Nunito', sans-serif";
-const FONT_BOLD_ITALIC   = "'Gilroy-BoldItalic', 'Nunito', sans-serif";
-
-interface BgTransform { x: number; y: number; scale: number; }
-const DEFAULT_BG_TRANSFORM: BgTransform = { x: 0, y: 0, scale: 1.0 };
-
-interface Sticker {
-  id: string; src: string;
-  x: number; y: number; size: number; rotation: number;
-  shape: "original" | "circle" | "square";
-  outlineColor: string; outlineWidth: number; shadowBlur: number;
-}
-interface ExtraText {
-  id: string; text: string;
-  x: number; y: number; fontSize: number; color: string;
-  fontWeight: "normal" | "bold"; rotation: number; shadowBlur: number;
-}
-type BgMode     = "single" | "collage";
 type SidebarTab = "content" | "background" | "stickers" | "texts";
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
@@ -194,239 +171,6 @@ function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: nu
         {/* Center mark */}
         <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none"
           style={{ left: "50%", width: 2, height: 14, background: "rgba(0,0,0,0.15)", borderRadius: 1 }} />
-      </div>
-    </div>
-  );
-}
-
-function BgImage({ src, transform, cardH }: { src: string; transform: BgTransform; cardH: number }) {
-  return <img alt="" crossOrigin="anonymous" src={src} style={{ position: "absolute", height: Math.round(cardH * transform.scale), width: "auto", maxWidth: "none", left: "50%", top: "50%", transform: `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))`, pointerEvents: "none", userSelect: "none" }} />;
-}
-
-function Background({ mode, src1, t1, src2, t2, splitAngle, cardW, cardH }: { mode: BgMode; src1: string; t1: BgTransform; src2: string; t2: BgTransform; splitAngle: number; cardW: number; cardH: number; }) {
-  const id1 = useId().replace(/:/g, ""), id2 = useId().replace(/:/g, "");
-  if (mode === "single") return <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}><BgImage src={src1} transform={t1} cardH={cardH} /></div>;
-  const cx = cardW / 2, dy = Math.tan((splitAngle * Math.PI) / 180) * (cardH / 2);
-  return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-      <svg width="0" height="0" style={{ position: "absolute" }}><defs><clipPath id={`cl-${id1}`}><polygon points={`0,0 ${cx - dy},0 ${cx + dy},${cardH} 0,${cardH}`} /></clipPath><clipPath id={`cl-${id2}`}><polygon points={`${cx - dy},0 ${cardW},0 ${cardW},${cardH} ${cx + dy},${cardH}`} /></clipPath></defs></svg>
-      <div style={{ position: "absolute", inset: 0, clipPath: `url(#cl-${id1})` }}><BgImage src={src1} transform={t1} cardH={cardH} /></div>
-      <div style={{ position: "absolute", inset: 0, clipPath: `url(#cl-${id2})` }}><BgImage src={src2} transform={t2} cardH={cardH} /></div>
-    </div>
-  );
-}
-
-function Overlay({ cardW, cardH, stickers, extraTexts, selectedStickerId, selectedTextId, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, bgDragActive, snapIndicator }: any) {
-  const snap = snapIndicator ?? { x: false, y: false };
-  return (
-    <>
-      {stickers.map((s: any) => {
-        const isSel = selectedStickerId === s.id;
-        const isCircle = s.shape === "circle";
-        const isSquare = s.shape === "square";
-        const borderRadius = isCircle ? "50%" : isSquare ? "12px" : 0;
-        const strokeShadow = s.outlineWidth > 0 ? `inset 0 0 0 ${s.outlineWidth}px ${s.outlineColor}` : "";
-        const selBoxShadow = isSel
-          ? `0 0 0 3px #ff742f${strokeShadow ? `, ${strokeShadow}` : ""}`
-          : strokeShadow || undefined;
-        const selFilter = isSel
-          ? `drop-shadow(0 0 4px #ff742f)${s.shadowBlur > 0 ? ` drop-shadow(0 4px ${s.shadowBlur}px rgba(0,0,0,0.65))` : ""}`
-          : s.shadowBlur > 0 ? `drop-shadow(0 4px ${s.shadowBlur}px rgba(0,0,0,0.65))` : "none";
-        const canInteract = !!(onStickerTouch || onStickerMouseDown);
-
-        return (
-          <div key={s.id} style={{ position: "absolute", left: (s.x / 100) * cardW - s.size / 2, top: (s.y / 100) * cardH - s.size / 2, width: s.size, height: s.size, zIndex: 5, transform: `rotate(${s.rotation}deg)`, pointerEvents: canInteract ? "auto" : "none", touchAction: "none" }}
-            onTouchStart={onStickerTouch ? (e) => { e.stopPropagation(); onStickerTouch(s.id, "move", e); } : undefined}
-            onMouseDown={onStickerMouseDown ? (e) => { e.stopPropagation(); onStickerMouseDown(s.id, "move", e); } : undefined}>
-            <div style={{ width: "100%", height: "100%", borderRadius, overflow: (isCircle || isSquare) ? "hidden" : "visible", ...(isCircle || isSquare ? { boxShadow: selBoxShadow } : { filter: selFilter }) }}>
-              <img alt="" src={s.src} style={{ width: "100%", height: "100%", objectFit: (isCircle || isSquare) ? "cover" : "contain", display: "block" }} />
-            </div>
-          </div>
-        );
-      })}
-      {extraTexts.map((t: any) => {
-        const isSel = selectedTextId === t.id;
-        return (
-          <div key={t.id} style={{ position: "absolute", left: `${t.x}%`, top: `${t.y}%`, zIndex: 5, transform: `translate(-50%, -50%) rotate(${t.rotation}deg)`, fontSize: t.fontSize, fontWeight: t.fontWeight, color: t.color, whiteSpace: "pre-wrap", textAlign: "center", fontFamily: FONT_BOLD, lineHeight: 1.2, filter: t.shadowBlur > 0 ? `drop-shadow(0 2px ${t.shadowBlur}px rgba(0,0,0,0.85))` : "none", outline: isSel ? "4px solid #ff742f" : "none", outlineOffset: "8px", borderRadius: "4px", pointerEvents: (onTextTouch || onTextMouseDown) ? "auto" : "none", touchAction: "none", userSelect: "none" }}
-            onTouchStart={onTextTouch ? (e) => { e.stopPropagation(); onTextTouch(t.id, "move", e); } : undefined}
-            onMouseDown={onTextMouseDown ? (e) => { e.stopPropagation(); onTextMouseDown(t.id, "move", e); } : undefined}>
-            {t.text}
-          </div>
-        );
-      })}
-      {bgDragActive && (
-        <>
-          <div style={{ position: "absolute", left: "50%", top: 0, width: snap.x ? 3 : 1, height: "100%", background: snap.x ? "#ff742f" : "rgba(255,255,255,0.3)", pointerEvents: "none", zIndex: 30, transform: "translateX(-50%)" }} />
-          <div style={{ position: "absolute", top: "50%", left: 0, width: "100%", height: snap.y ? 3 : 1, background: snap.y ? "#ff742f" : "rgba(255,255,255,0.3)", pointerEvents: "none", zIndex: 30, transform: "translateY(-50%)" }} />
-        </>
-      )}
-    </>
-  );
-}
-
-function NotifBadge({ label }: { label: string }) {
-  return (
-    <div style={{ display: "inline-grid", gridTemplateColumns: "max-content", gridTemplateRows: "max-content", position: "relative" }}>
-      <div style={{ gridColumn: 1, gridRow: 1, display: "flex", alignItems: "center", marginLeft: 82, marginTop: 10 }}>
-        <div style={{ backgroundColor: "white", display: "flex", height: 62, alignItems: "center", paddingLeft: 24, paddingTop: 20, paddingBottom: 20 }}>
-          <span style={{ fontFamily: FONT_BOLD_ITALIC, fontStyle: "italic", fontSize: 33, letterSpacing: "-0.18px", lineHeight: "22px", color: "#060200", whiteSpace: "nowrap" }}>{label}</span>
-        </div>
-        <div style={{ width: 36.486, height: 62, flexShrink: 0, marginLeft: -1 }}>
-          <svg width="100%" height="100%" viewBox="0 0 32.0528 62" fill="none" preserveAspectRatio="none"><path d={svgPaths.p18776b80} fill="white" /></svg>
-        </div>
-      </div>
-      <div style={{ gridColumn: 1, gridRow: 1, position: "relative", width: 82, height: 82, borderRadius: 10 }}>
-        <div style={{ position: "absolute", inset: 0, borderRadius: 10, backgroundColor: "#ff742f" }} />
-        <img alt="" src={imgRectangle7} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", borderRadius: 10, mixBlendMode: "multiply", opacity: 0.45 }} />
-      </div>
-      <div style={{ gridColumn: 1, gridRow: 1, marginLeft: 12, marginTop: 12, width: 58, height: 58, position: "relative" }}>
-        <div style={{ position: "absolute", inset: "16.67%" }}>
-          <svg width="100%" height="100%" viewBox="0 0 41.667 41.6667" fill="none" preserveAspectRatio="none"><path d={svgPaths.p29f60d00} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" /></svg>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Card Components ──────────────────────────────────────────────────────────
-function PostCard(props: any) {
-  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, onTitleChange } = props;
-  const interactive = !!(onBgTouch || onBgMouseDown);
-  const inlineTitleRef = useRef<HTMLDivElement>(null);
-
-  // Set initial content on mount only
-  useEffect(() => {
-    if (inlineTitleRef.current) inlineTitleRef.current.innerHTML = titleHtml;
-  }, []);
-
-  // Sync from outside ONLY when not actively editing (e.g. panel editor changed it)
-  useEffect(() => {
-    const el = inlineTitleRef.current;
-    if (!el || document.activeElement === el) return;
-    if (el.innerHTML !== titleHtml) el.innerHTML = titleHtml;
-  }, [titleHtml]);
-
-  return (
-    <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: POST_W, height: POST_H }}>
-      <style>{`.pc-title strong,.pc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.pc-title em,.pc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}.pc-title:focus{outline:none;box-shadow:0 0 0 6px rgba(255,255,255,0.25);border-radius:8px;}`}</style>
-      <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={POST_W} cardH={POST_H} />
-
-      {/* BG drag zones — zIndex 2, only covering non-title area */}
-      {interactive && (
-        <>
-          <div onTouchStart={(e) => { e.stopPropagation(); onBgTouch?.(1, e); }} onMouseDown={(e) => onBgMouseDown?.(1, e)}
-            style={{ position: "absolute", zIndex: 2, left: 0, top: 0, width: bgMode === "collage" ? "50%" : "100%", height: "100%", cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />
-          {bgMode === "collage" && <div onTouchStart={(e) => { e.stopPropagation(); onBgTouch?.(2, e); }} onMouseDown={(e) => onBgMouseDown?.(2, e)}
-            style={{ position: "absolute", zIndex: 2, right: 0, top: 0, width: "50%", height: "100%", cursor: bgDragActive === 2 ? "grabbing" : "grab", touchAction: "none" }} />}
-        </>
-      )}
-
-      {/* Gradient overlay */}
-      <div style={{ position: "absolute", left: 0, top: 1600, width: "100%", height: POST_H - 1600, zIndex: 3, background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.75) 100%)", pointerEvents: "none" }} />
-
-      {/* Stickers & extra texts */}
-      <Overlay cardW={POST_W} cardH={POST_H} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
-
-      {/* Title + badge — zIndex 6 same as identity bar, in natural stacking order */}
-      <div style={{ position: "absolute", left: "50%", bottom: 469, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85, pointerEvents: interactive ? "auto" : "none" }}>
-        <div style={{ pointerEvents: "none" }}><NotifBadge label={label} /></div>
-        {/* Title box — stopPropagation so tapping here doesn't trigger BG drag */}
-        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}
-          onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-          <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} />
-          <img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}>
-            {/* Use ref-only, NO dangerouslySetInnerHTML to avoid re-render conflict with contentEditable */}
-            <div ref={inlineTitleRef} className="pc-title"
-              contentEditable={interactive}
-              suppressContentEditableWarning
-              onInput={onTitleChange ? (e) => onTitleChange((e.currentTarget as HTMLDivElement).innerHTML) : undefined}
-              style={{ fontFamily: FONT_BOLD, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden", cursor: interactive ? "text" : "default" }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Identity bar — zIndex 6 */}
-      <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 6, pointerEvents: "none" }}>
-        <img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} />
-      </div>
-
-      {/* Source bar(s) — zIndex 6 */}
-      <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 6, display: "flex", alignItems: "center", gap: 20, pointerEvents: "none" }}>
-        {/* Sumber Foto */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-          <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
-          <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{source}</span>
-        </div>
-        {/* Sumber Artikel (opsional) */}
-        {articleSource && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
-            <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function VideoCard(props: any) {
-  const { label, titleHtml, source, articleSource, bgMode, bgSrc, bgT, bg2Src, bg2T, splitAngle, videoUrl, stickers, extraTexts, onBgTouch, onBgMouseDown, bgDragActive, snapIndicator, onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown, selectedStickerId, selectedTextId, videoRef, overlayRef } = props;
-  const interactive = !!(onBgTouch || onBgMouseDown);
-  
-  const togglePlay = (e: React.MouseEvent | React.TouchEvent) => {
-    e.stopPropagation(); e.preventDefault();
-    if (!videoRef?.current) return;
-    if (videoRef.current.paused) { videoRef.current.play(); }
-    else { videoRef.current.pause(); }
-  };
-
-  return (
-    <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: VIDEO_W, height: VIDEO_H }} onClick={togglePlay}>
-      <style>{`.vc-title strong,.vc-title b{font-family:${FONT_HEAVY};font-style:normal;font-weight:900;}.vc-title em,.vc-title i{font-family:${FONT_BOLD_ITALIC};font-style:italic;}`}</style>
-      
-      {/* ── LAYER 0: VIDEO ── */}
-      {videoUrl ? (
-        <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-          <video ref={videoRef} src={videoUrl} loop playsInline crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(VIDEO_H * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} />
-          {interactive && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", inset: 0, zIndex: 20, cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />}
-        </div>
-      ) : (
-        <>
-          {interactive && (<><div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", zIndex: 20, left: 0, top: 0, width: bgMode === "collage" ? "50%" : "100%", height: "100%", cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />
-            {bgMode === "collage" && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(2, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(2, e) : undefined} style={{ position: "absolute", zIndex: 20, right: 0, top: 0, width: "50%", height: "100%", cursor: bgDragActive === 2 ? "grabbing" : "grab", touchAction: "none" }} />}</>)}
-          <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={VIDEO_W} cardH={VIDEO_H} />
-        </>
-      )}
-
-      {/* ── LAYER 1: OVERLAYS (WRAPPED FOR EXPORT) ── */}
-      <div ref={overlayRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 30 }}>
-        <Overlay cardW={VIDEO_W} cardH={VIDEO_H} stickers={stickers} extraTexts={extraTexts} selectedStickerId={selectedStickerId} selectedTextId={selectedTextId} onStickerTouch={onStickerTouch} onStickerMouseDown={onStickerMouseDown} onTextTouch={onTextTouch} onTextMouseDown={onTextMouseDown} bgDragActive={bgDragActive} snapIndicator={snapIndicator} />
-        <div style={{ position: "absolute", left: 0, top: VIDEO_H * 0.55, width: "100%", height: VIDEO_H * 0.45, zIndex: 3, background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.82) 100%)" }} />
-        <div style={{ position: "absolute", left: "50%", bottom: 949, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85 }}>
-          <NotifBadge label={label} />
-          <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}>
-            <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} /><img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}><div className="vc-title" style={{ fontFamily: FONT_HEAVY, fontSize: 85, lineHeight: "108px", color: "white", width: 1339, overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: titleHtml }} /></div>
-          </div>
-        </div>
-
-        <div style={{ position: "absolute", left: 146, top: 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
-        <div style={{ position: "absolute", left: 136, top: 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
-          {/* Sumber Foto */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-            <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
-            <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>
-          </div>
-          {/* Sumber Artikel (opsional) */}
-          {articleSource && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
-              <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z M4 11h16v2H4z M13 4l3 3h-6z M8 4l3 3H5z M12 20l-3-3h6z M17 20l-3-3h5z" fill="white" /></svg></div>
-              <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: "underline", color: "white", whiteSpace: "nowrap" }}>{articleSource}</span>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -595,8 +339,6 @@ export function EditorPage() {
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
   const [extraTexts, setExtraTexts]               = useState<ExtraText[]>(locationState?.extraTexts ?? []);
   const [selectedTextId, setSelectedTextId]       = useState<string | null>(null);
-  const [downloading, setDownloading]             = useState(false);
-  const [renderProgress, setRenderProgress]       = useState(0);
   const [snapIndicator, setSnapIndicator] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const [bgDragActive, setBgDragActive] = useState<1 | 2 | null>(null);
   const [cropStickerId, setCropStickerId] = useState<string | null>(null);
@@ -667,47 +409,9 @@ export function EditorPage() {
   const bgModeRef = useRef<BgMode>("single");
   const cardDimRef = useRef({ w: POST_W, h: POST_H });
   
-  // Specific refs for video export
+  // Media Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  
-  // FFmpeg State for MP4 export
-  const ffmpegRef = useRef<FFmpeg>(new FFmpeg());
-  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
-
-  // Load FFmpeg WASM with retry and multiple CDN fallbacks
-  const loadFfmpeg = async () => {
-    if (ffmpegLoaded) return;
-    
-    const CDN_URLS = [
-      'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
-      'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
-      'https://cdn.jsdelivr.net/npm/@ffmpeg/core/dist/umd',
-      'https://esm.sh/@ffmpeg/core@0.12.6/dist/umd',
-    ];
-    
-    for (let attempt = 0; attempt < CDN_URLS.length; attempt++) {
-      try {
-        const baseURL = CDN_URLS[attempt];
-        const ffmpeg = ffmpegRef.current;
-        
-        console.log(`Loading FFmpeg from: ${baseURL}`);
-        await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        });
-        console.log('FFmpeg loaded successfully');
-        setFfmpegLoaded(true);
-        return;
-      } catch (error) {
-        console.error(`Failed to load FFmpeg from ${CDN_URLS[attempt]}:`, error);
-        if (attempt === CDN_URLS.length - 1) {
-          throw new Error('Failed to load FFmpeg from all CDN sources');
-        }
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
-  };
 
   // Fix mobile: prevent auto-zoom on input focus, disable page scroll
   useEffect(() => {
@@ -744,16 +448,6 @@ export function EditorPage() {
     }
   }, []);
 
-  // ── Auto Export Trigger ──
-  useEffect(() => {
-    if (locationState?.autoExport && videoUrl && !downloading) {
-      // Tunggu sebentar agar video element mount & siap
-      const timer = setTimeout(() => {
-        handleExportVideo();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [videoUrl, locationState?.autoExport]);
 
   const updateFormatState = useCallback(() => { setIsBoldActive(document.queryCommandState("bold")); setIsItalicActive(document.queryCommandState("italic")); }, []);
   const handleEditorInput = useCallback(() => { if (editorRef.current) setTitleHtml(editorRef.current.innerHTML); updateFormatState(); }, [updateFormatState]);
@@ -939,313 +633,6 @@ export function EditorPage() {
   const handleTextTouch = useCallback((id: string, mode: string, e: React.TouchEvent) => { e.preventDefault(); e.stopPropagation(); setSelectedTextId(id); startDrag({ type: "text", id, mode }, e.touches[0].clientX, e.touches[0].clientY); }, [startDrag]);
   const handleTextMouse = useCallback((id: string, mode: string, e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setSelectedTextId(id); startDrag({ type: "text", id, mode }, e.clientX, e.clientY); }, [startDrag]);
 
-  // ── EXPORT VIDEO WITH FFMPEG ──
-  const handleExportVideo = async () => {
-    if (!videoRef.current || !overlayRef.current) return;
-    
-    // ── STEP 1: GENERATE THUMBNAIL & SAVE DRAFT ──
-    // Thumbnail is required for the draft list view
-    setDownloading(true);
-    setRenderProgress(5);
-    try {
-      showToast("Menyiapkan draft video...", "loading", 0);
-
-      let finalBgSrc = bgSrc;
-      // AUTO-GENERATE THUMBNAIL JIKA KOSONG & BERUPA YOUTUBE
-      if ((!finalBgSrc || finalBgSrc === DEFAULT_BG) && videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))) {
-          const ytIdMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})/);
-          if (ytIdMatch && ytIdMatch[1]) {
-              finalBgSrc = `https://img.youtube.com/vi/${ytIdMatch[1]}/maxresdefault.jpg`;
-              setBgSrc(finalBgSrc);
-          }
-      }
-
-      const thumbnailDataUrl = await exportCardToCanvas({
-        template, label, titleHtml, source, articleSource,
-        bgMode, bgSrc: finalBgSrc, bgT, bg2Src, bg2T, splitAngle,
-        stickers, extraTexts,
-        assetRect7: imgRectangle7 as string,
-        assetContent: imgContent as string,
-        assetIdentityBar: imgIdentityBar as string,
-      });
-
-      if (locationState?.fromDraft !== false) {
-          const draftTemplate = {
-            imageDataUrl: thumbnailDataUrl,
-            template, label, titleHtml, source, articleSource,
-            bgSrc: finalBgSrc, bgMode, bgT, bg2Src, bg2T, splitAngle,
-            videoUrl, stickers, extraTexts,
-          };
-        const existingDraftId = locationState?.draftId;
-        if (existingDraftId && draftStore.get(existingDraftId)) {
-          await draftStore.updateTemplate(existingDraftId, draftTemplate);
-        } else {
-          await draftStore.create({
-            articleTitle: locationState?.articleTitle ?? stripHtml(titleHtml),
-            aiTitle: titleHtml,
-            aiContent: locationState?.aiContent ?? [],
-            source,
-            imageUrl: locationState?.imageUrl ?? (videoUrl || finalBgSrc),
-            videoUrl: videoUrl || undefined,
-            template: draftTemplate,
-          });
-        }
-        showToast("✅ Draft Video Tersimpan!", "success");
-        // We don't redirect yet, we proceed to export the actual video file
-      }
-    } catch (draftErr) {
-      console.error("Draft save error:", draftErr);
-      // Non-blocking, continue to video export
-    }
-
-    // ── STEP 2: ACTUAL VIDEO RENDER & DOWNLOAD ──
-    setRenderProgress(10);
-
-    let ffmpegAvailable = false;
-    try {
-      // Phase 1: Try to Load FFmpeg
-      setRenderProgress(10);
-      if (!ffmpegLoaded) {
-        try {
-          await loadFfmpeg();
-          ffmpegAvailable = true;
-        } catch (ffmpegError) {
-          console.warn("FFmpeg loading failed, will export as WebM", ffmpegError);
-          ffmpegAvailable = false;
-        }
-      } else {
-        ffmpegAvailable = true;
-      }
-      setRenderProgress(20);
-      const ffmpeg = ffmpegRef.current;
-
-      const video = videoRef.current;
-      
-      // Phase 2: Render Overlay
-      setRenderProgress(30);
-      const overlayDataUrl = await toPng(overlayRef.current, { cacheBust: true, width: VIDEO_W, height: VIDEO_H });
-      const overlayImg = new Image();
-      overlayImg.src = overlayDataUrl;
-      await new Promise(r => overlayImg.onload = r);
-
-      // Phase 3: Prepare Recording Canvas
-      setRenderProgress(35);
-      const canvas = document.createElement("canvas");
-      canvas.width = VIDEO_W;
-      canvas.height = VIDEO_H;
-      const ctx = canvas.getContext("2d");
-
-      // Phase 4: Capture Stream
-      setRenderProgress(40);
-      const stream = canvas.captureStream(30);
-      if ((video as any).captureStream) {
-          const vStream = (video as any).captureStream();
-          const audioTracks = vStream.getAudioTracks();
-          if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
-      }
-
-      // Phase 5: Record as WebM first
-      let mimeType = "video/webm;codecs=vp8";
-      const codecs = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm"];
-      for (const codec of codecs) {
-        if (MediaRecorder.isTypeSupported(codec)) {
-          mimeType = codec;
-          break;
-        }
-      }
-      
-      setRenderProgress(45);
-      const recorder = new MediaRecorder(stream, { mimeType });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      
-      const recordingPromise = new Promise<Blob>((resolve, reject) => {
-        recorder.onstop = async () => {
-            try {
-                const webmBlob = new Blob(chunks, { type: "video/webm" });
-                resolve(webmBlob);
-            } catch (e) {
-                console.error("Recording save failed:", e);
-                reject(e);
-            }
-        };
-      });
-      
-      recorder.start();
-      setRenderProgress(50);
-      video.currentTime = 0;
-      await video.play();
-
-      const totalFrames = Math.ceil(video.duration * 30);
-      let frameCount = 0;
-      
-      const draw = () => {
-        if (video.paused || video.ended) {
-          recorder.stop();
-          return;
-        }
-        ctx?.drawImage(video, 0, 0, VIDEO_W, VIDEO_H);
-        ctx?.drawImage(overlayImg, 0, 0, VIDEO_W, VIDEO_H);
-        frameCount++;
-        // Update progress during recording (50-75%)
-        setRenderProgress(50 + Math.floor((frameCount / totalFrames) * 25));
-        requestAnimationFrame(draw);
-      };
-      draw();
-
-      // Phase 6: Get recorded WebM blob
-      setRenderProgress(75);
-      const webmBlob = await recordingPromise;
-      
-      // Phase 7: Try to transcode to MP4 if FFmpeg available, otherwise export WebM
-      if (ffmpegAvailable) {
-        setRenderProgress(80);
-        try {
-          const webmData = await fetchFile(webmBlob);
-          await ffmpeg.writeFile('input.webm', webmData);
-          
-          // Setup progress tracking for FFmpeg
-          let lastProgress = 0;
-          ffmpeg.on('progress', ({ progress }) => {
-            const newProgress = 80 + Math.floor(progress * 20); // 80-100%
-            if (newProgress > lastProgress) {
-              lastProgress = newProgress;
-              setRenderProgress(newProgress);
-            }
-          });
-          
-          // Convert to MP4 with H.264 codec (high quality, no quality loss)
-          await ffmpeg.exec([
-            '-i', 'input.webm',
-            '-c:v', 'libx264',
-            '-preset', 'slow',
-            '-crf', '18',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            'output.mp4'
-          ]);
-          
-          setRenderProgress(95);
-          const mp4Data = await ffmpeg.readFile('output.mp4');
-          const mp4Blob = new Blob([new Uint8Array(mp4Data as any)], { type: 'video/mp4' });
-          
-          // Copy caption if sharing
-          if (locationState?.exportMode === "share") {
-            const captionText = [...(locationState?.aiContent ?? []), "", `Sumber: ${source}`].join("\n");
-            await navigator.clipboard.writeText(captionText).catch(() => {});
-          }
-
-          // Download or Share MP4
-          setRenderProgress(99);
-          const url = URL.createObjectURL(mp4Blob);
-          const filename = `discuss-video-${Date.now()}.mp4`;
-          
-          if (locationState?.exportMode === "share" && navigator.canShare) {
-            try {
-              const file = new File([mp4Blob], filename, { type: 'video/mp4' });
-              if (navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: filename });
-              } else {
-                const a = document.createElement("a");
-                a.href = url; a.download = filename; a.click();
-              }
-            } catch (e) {
-              const a = document.createElement("a");
-              a.href = url; a.download = filename; a.click();
-            }
-          } else {
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            a.click();
-          }
-          
-          // Cleanup
-          await ffmpeg.deleteFile('input.webm');
-          await ffmpeg.deleteFile('output.mp4');
-          
-          setRenderProgress(100);
-        } catch (transcodeError) {
-          console.warn("FFmpeg transcode failed, exporting as WebM", transcodeError);
-          // Fallback to WebM export
-          throw new Error("FALLBACK_TO_WEBM");
-        }
-      } else {
-        throw new Error("FALLBACK_TO_WEBM");
-      }
-
-    } catch (err: any) {
-      // If error is fallback or FFmpeg not available, export as WebM
-      if (err instanceof Error && err.message === "FALLBACK_TO_WEBM") {
-        // ... (The large WebM recording logic)
-        // [Existing logic from 1181 to 1277]
-        const video = videoRef.current;
-        if (!video || !overlayRef.current) throw new Error("Video or overlay not found");
-        setRenderProgress(80);
-        const overlayDataUrl = await toPng(overlayRef.current, { cacheBust: true, width: VIDEO_W, height: VIDEO_H });
-        const overlayImg = new Image();
-        overlayImg.src = overlayDataUrl;
-        await new Promise(r => overlayImg.onload = r);
-        const canvas = document.createElement("canvas");
-        canvas.width = VIDEO_W; canvas.height = VIDEO_H;
-        const ctx = canvas.getContext("2d");
-        const stream = canvas.captureStream(30);
-        if ((video as any).captureStream) {
-          const vStream = (video as any).captureStream();
-          const audioTracks = vStream.getAudioTracks();
-          if (audioTracks.length > 0) stream.addTrack(audioTracks[0]);
-        }
-        let mimeType = "video/webm;codecs=vp8";
-        const codecs = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm"];
-        for (const codec of codecs) { if (MediaRecorder.isTypeSupported(codec)) { mimeType = codec; break; } }
-        const recorder = new MediaRecorder(stream, { mimeType });
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-        const recordingPromise = new Promise<void>((resolve) => {
-          recorder.onstop = async () => {
-            const webmBlob = new Blob(chunks, { type: "video/webm" });
-            const url = URL.createObjectURL(webmBlob);
-            const filename = `discuss-video-${Date.now()}.webm`;
-            if (locationState?.exportMode === "share") {
-              const captionText = [...(locationState?.aiContent ?? []), "", `Sumber: ${source}`].join("\n");
-              await navigator.clipboard.writeText(captionText).catch(() => {});
-            }
-            if (locationState?.exportMode === "share" && navigator.canShare) {
-              try {
-                const file = new File([webmBlob], filename, { type: 'video/webm' });
-                if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: filename }); }
-                else { const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); }
-              } catch (e) { const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); }
-            } else { const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); }
-            resolve();
-          };
-        });
-        recorder.start(); setRenderProgress(85);
-        video.currentTime = 0; await video.play();
-        const totalFrames = Math.ceil(video.duration * 30);
-        let frameCount = 0;
-        const draw = () => {
-          if (video.paused || video.ended) { recorder.stop(); return; }
-          ctx?.drawImage(video, 0, 0, VIDEO_W, VIDEO_H);
-          ctx?.drawImage(overlayImg, 0, 0, VIDEO_W, VIDEO_H);
-          frameCount++;
-          setRenderProgress(85 + Math.floor((frameCount / totalFrames) * 15));
-          requestAnimationFrame(draw);
-        };
-        draw();
-        await recordingPromise;
-        setRenderProgress(100);
-      } else {
-        console.error("Video export error:", err);
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        alert(`Video export error:\n${errorMsg}\n\nMake sure:\n1. Your internet connection is stable\n2. You have enough disk space`);
-        setRenderProgress(0);
-      }
-    } finally {
-      setDownloading(false);
-      setTimeout(() => setRenderProgress(0), 500);
-    }
-  };
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/gi, " ").trim();
 
@@ -1253,7 +640,6 @@ export function EditorPage() {
     if (!source.trim()) { showToast("Isi sumber gambar terlebih dahulu", "error"); return; }
     if (label === "Discuss" && !titleHtml.trim()) { showToast("Isi judul terlebih dahulu", "error"); return; }
     
-    setDownloading(true);
     try {
       showToast("Menyimpan draft...", "loading", 0);
 
@@ -1338,7 +724,6 @@ export function EditorPage() {
         hiddenCardRef.current.style.visibility = "hidden";
         hiddenCardRef.current.style.zIndex = "-9999";
       }
-      setDownloading(false);
     }
   };
   
@@ -1455,39 +840,13 @@ export function EditorPage() {
         </div>
         <button onClick={handleReset} title="Reset Editor" className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-red-50 hover:text-red-400 transition text-neutral-400 ml-auto mr-1"><RotateCcw size={15} /></button>
         
-        {/* Progress UI - only shown if actually rendering (triggered from Drafts) */}
-        <div className="relative">
-          {renderProgress > 0 && locationState?.autoExport && (
-            <svg className="absolute -inset-1.5" viewBox="0 0 36 36" style={{ width: 36, height: 36 }}>
-              {/* Background circle */}
-              <circle cx="18" cy="18" r="15" fill="none" stroke="#f3f4f6" strokeWidth="2" />
-              {/* Progress circle */}
-              <circle
-                cx="18"
-                cy="18"
-                r="15"
-                fill="none"
-                stroke="#ff742f"
-                strokeWidth="2"
-                strokeDasharray={`${(renderProgress / 100) * 94.2} 94.2`}
-                strokeLinecap="round"
-                style={{
-                  transform: 'rotate(-90deg)',
-                  transformOrigin: '50% 50%',
-                  transition: 'stroke-dasharray 0.3s ease'
-                }}
-              />
-            </svg>
-          )}
           <button 
             onClick={handleSaveDraft} 
-            disabled={downloading} 
-            className={`relative z-10 flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold ${downloading ? "bg-neutral-300" : "bg-[#ff742f]"}`}
+            className="flex items-center gap-2 px-3 h-9 rounded-full transition text-white shadow-sm text-xs font-bold bg-[#ff742f] active:scale-95"
           >
             <Cloud size={14} />
-            <span>{downloading ? "Menyimpan..." : "Simpan"}</span>
+            <span>Simpan</span>
           </button>
-        </div>
       </header>
 
       {/* ── PANEL CONTENT BUILDER ── rendered once to preserve refs/state */}
@@ -1581,7 +940,7 @@ export function EditorPage() {
 
                   {template === "video" && (
                     <button onClick={() => videoInputRef.current?.click()} className="w-full py-2 border border-dashed border-neutral-300 rounded-lg text-neutral-500 text-xs font-medium hover:border-[#ff742f] hover:text-[#ff742f] transition">
-                      {videoSrc ? "Ganti Video" : "+ Upload Video"}
+                      {videoUrl ? "Ganti Video" : "+ Upload Video"}
                     </button>
                   )}
                 </>
@@ -1590,7 +949,7 @@ export function EditorPage() {
               {/* ── BACKGROUND ── */}
               {activeTab === "background" && (
                 <>
-                  {!videoSrc && (
+                  {!videoUrl && (
                     <div className="flex bg-neutral-100 p-0.5 rounded-lg">
                       {["single","collage"].map(m => (
                         <button key={m} onClick={() => setBgMode(m as any)}
@@ -1601,8 +960,8 @@ export function EditorPage() {
                     </div>
                   )}
                   <div className="space-y-2.5">
-                    <p className="text-xs text-neutral-400 font-medium">{videoSrc ? "Video" : "Gambar Utama"}</p>
-                    {!videoSrc && (
+                    <p className="text-xs text-neutral-400 font-medium">{videoUrl ? "Video" : "Gambar Utama"}</p>
+                    {!videoUrl && (
                       <div className="flex gap-2">
                         <button onClick={() => fileInputRef.current?.click()} className="shrink-0 px-3 py-2 border border-dashed border-neutral-300 rounded-lg text-xs text-neutral-500 hover:border-[#ff742f] hover:text-[#ff742f] transition">
                           📁 Upload
@@ -1611,14 +970,14 @@ export function EditorPage() {
                       </div>
                     )}
                     {/* Pinch hint — gantikan slider Zoom */}
-                    {!videoSrc && (
+                    {!videoUrl && (
                       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-200">
                         <span style={{ fontSize: 16 }}>🤏</span>
                         <span className="text-[11px] text-neutral-400 font-medium">Pinch di preview untuk zoom & geser gambar</span>
                       </div>
                     )}
                     {/* ── Upscale BG1 Button ── */}
-                    {!videoSrc && (
+                    {!videoUrl && (
                       <button
                         onClick={() => handleUpscaleBg(1)}
                         disabled={upscaling}
@@ -1648,7 +1007,7 @@ export function EditorPage() {
                       </div>
                     )}
                   </div>
-                  {bgMode === "collage" && !videoSrc && (
+                  {bgMode === "collage" && !videoUrl && (
                     <div className="space-y-2.5 pt-1 border-t border-neutral-100">
                       <p className="text-xs text-neutral-400 font-medium">Gambar Kedua</p>
                       <div className="flex gap-2">
