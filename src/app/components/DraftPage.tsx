@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import {
   FileText, Image as ImageIcon, Trash2, PlusCircle,
   Download, Copy, Check, Cloud, CloudDownload,
-  Clock, X, Share2, Play
+  Clock, X, Share2, Play, Pencil
 } from "lucide-react";
 import { draftStore, type Draft } from "../store/draftStore";
 import { MascotEmptyState } from "./MascotEmptyState";
@@ -139,6 +139,14 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
 
   const [rewriting, setRewriting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Lock scroll
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, []);
 
   const isVideo = draft.template?.template === "video";
 
@@ -317,13 +325,13 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
     >
       {/* Redesigned Card Container */}
       <div
-        className="relative w-full max-w-[400px] bg-[#18181b] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col transform transition-all scale-100"
+        className="relative w-full max-w-[360px] bg-[#18181b] border border-white/10 rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col transform transition-all scale-100"
         onClick={e => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-50 p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-white/90 hover:text-white transition-all border border-white/10 shadow-lg"
+          className="absolute top-4 right-4 z-[100] p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-white/90 hover:text-white transition-all border border-white/10 shadow-lg"
         >
           <X size={20} strokeWidth={2.5} />
         </button>
@@ -340,7 +348,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
         <div className="relative w-full aspect-[4/5] bg-black flex items-center justify-center overflow-hidden group">
           <div className="flex items-center justify-center transition-transform group-hover:scale-[1.02] duration-500"
             style={{
-              transform: `scale(${0.18})`,
+              transform: `scale(${draft.template?.template === "video" ? 0.21 : 0.22})`,
               transformOrigin: "center center",
               width: draft.template?.template === "video" ? VIDEO_W : POST_W,
               height: draft.template?.template === "video" ? VIDEO_H : POST_H,
@@ -363,7 +371,15 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
 
           {/* Play/Pause control overlay if it's a video */}
           {draft.template?.template === "video" && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all cursor-pointer">
+            <div 
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!videoRef.current) return;
+                if (videoRef.current.paused) videoRef.current.play();
+                else videoRef.current.pause();
+              }}
+            >
               <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
                 <Play size={32} color="white" fill="white" className="ml-1" />
               </div>
@@ -371,18 +387,22 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
           )}
 
           {/* Bottom Fade Gradient for text contrast */}
-          <div className="absolute bottom-0 w-full h-32 bg-gradient-to-t from-[#18181b] to-transparent pointer-events-none"></div>
+          <div className="absolute bottom-0 w-full h-24 bg-gradient-to-t from-[#18181b] to-transparent pointer-events-none"></div>
         </div>
 
         {/* Information Section */}
-        <div className="p-6 pt-0 flex flex-col gap-6 bg-[#18181b] relative z-10">
-          <div className="space-y-2.5">
-            <h3 className="text-white font-extrabold text-xl leading-tight line-clamp-2">
+        <div className="p-5 pt-0 flex flex-col gap-4 bg-[#18181b] relative z-10">
+          <div className="space-y-1.5">
+            <h3 className="text-white font-extrabold text-lg leading-tight line-clamp-2">
               {stripHtml(draft.aiTitle) || draft.articleTitle}
             </h3>
             <div className="relative">
               {captionMode === "view" ? (
-                <p className="text-zinc-400 text-sm line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                <p 
+                  onClick={() => setCaptionMode('edit')}
+                  className="text-zinc-400 text-sm line-clamp-3 leading-relaxed whitespace-pre-wrap cursor-pointer hover:text-zinc-300 transition-colors"
+                  title="Klik untuk edit caption"
+                >
                   {captionText}
                 </p>
               ) : (
@@ -390,7 +410,8 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
                   ref={textareaRef}
                   value={captionText}
                   onChange={e => setCaptionText(e.target.value)}
-                  className="w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-zinc-300 text-sm focus:outline-none focus:border-white/20 resize-none"
+                  onBlur={() => setCaptionMode('view')}
+                  className="w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-zinc-300 text-sm focus:outline-none focus:border-white/20 resize-none font-sans"
                 />
               )}
             </div>
@@ -425,31 +446,22 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
               <Share2 size={20} strokeWidth={2.5} />
             </button>
 
-            {/* Copy Caption Button */}
+            {/* Edit Template Button (Replacing Copy) */}
             <button 
-              onClick={async () => {
-                await navigator.clipboard.writeText(captionText);
-                alert("Caption berhasil disalin!");
-              }}
+              onClick={() => handleEditTemplate()}
               className="flex items-center justify-center p-3.5 bg-white/5 hover:bg-white/10 active:bg-white/20 text-white rounded-xl transition-all border border-white/5" 
-              title="Salin Caption"
+              title="Edit di Editor"
             >
-              <Copy size={20} strokeWidth={2.5} />
+              <Pencil size={20} strokeWidth={2.5} />
             </button>
           </div>
 
-          <div className="flex justify-between items-center px-1">
+          <div className="flex justify-center items-center px-1">
              <button 
                 onClick={() => setCaptionMode(captionMode === 'view' ? 'edit' : 'view')}
-                className="text-white/30 text-[10px] font-bold hover:text-white/60 transition-colors uppercase tracking-widest"
+                className="text-white/20 text-[9px] font-bold hover:text-white/40 transition-colors uppercase tracking-widest"
              >
-                {captionMode === 'view' ? '✎ Edit Caption' : '✓ Selesai'}
-             </button>
-             <button 
-                onClick={() => handleEditTemplate()}
-                className="text-white/30 text-[10px] font-bold hover:text-white/60 transition-colors uppercase tracking-widest"
-             >
-                Lanjutkan di Editor →
+                {captionMode === 'view' ? '✎ Klik teks untuk edit caption' : '✓ Selesai'}
              </button>
           </div>
         </div>

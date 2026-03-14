@@ -75,7 +75,7 @@ export function Overlay({ cardW, cardH, stickers, extraTexts, selectedStickerId,
   const snap = snapIndicator ?? { x: false, y: false };
   return (
     <>
-      {stickers.map((s: any) => {
+      {(stickers ?? []).map((s: any) => {
         const isSel = selectedStickerId === s.id;
         const isCircle = s.shape === "circle";
         const isSquare = s.shape === "square";
@@ -99,7 +99,7 @@ export function Overlay({ cardW, cardH, stickers, extraTexts, selectedStickerId,
           </div>
         );
       })}
-      {extraTexts.map((t: any) => {
+      {(extraTexts ?? []).map((t: any) => {
         const isSel = selectedTextId === t.id;
         return (
           <div key={t.id} style={{ position: "absolute", left: `${t.x}%`, top: `${t.y}%`, zIndex: 5, transform: `translate(-50%, -50%) rotate(${t.rotation}deg)`, fontSize: t.fontSize, fontWeight: t.fontWeight, color: t.color, whiteSpace: "pre-wrap", textAlign: "center", fontFamily: FONT_BOLD, lineHeight: 1.2, filter: t.shadowBlur > 0 ? `drop-shadow(0 2px ${t.shadowBlur}px rgba(0,0,0,0.85))` : "none", outline: isSel ? "4px solid #ff742f" : "none", outlineOffset: "8px", borderRadius: "4px", pointerEvents: (onTextTouch || onTextMouseDown) ? "auto" : "none", touchAction: "none", userSelect: "none" }}
