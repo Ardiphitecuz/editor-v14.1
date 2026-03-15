@@ -144,6 +144,7 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
   const [rewriting, setRewriting] = useState(false);
   const [shareFile, setShareFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // Lock scroll
   useEffect(() => {
@@ -367,16 +368,20 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
     >
       {/* Redesigned Card Container */}
       <div
+        ref={modalRef}
         className="relative w-full max-w-[360px] bg-[#18181b] border border-white/10 rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col transform transition-all scale-100"
         onClick={e => e.stopPropagation()}
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-[100] p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-white/90 hover:text-white transition-all border border-white/10 shadow-lg"
-        >
-          <X size={20} strokeWidth={2.5} />
-        </button>
+        {/* Modal Header Actions */}
+        <div className="absolute top-4 right-4 z-[100] flex items-center gap-2">
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            className="p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-white/90 hover:text-white transition-all border border-white/10 shadow-lg"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+        </div>
 
         {/* Status Badge */}
         <div className="absolute top-5 left-5 z-50 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-1.5 shadow-lg">

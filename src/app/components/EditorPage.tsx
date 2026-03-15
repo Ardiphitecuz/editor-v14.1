@@ -76,105 +76,6 @@ function Slider({ label, value, min, max, step = 1, onChange, suffix = "" }: { l
   );
 }
 
-/**
- * SplitAngleSlider — slider kemiringan yang smooth di mobile
- * Menggunakan addEventListener langsung di DOM + setPointerCapture
- * agar tidak tersendat oleh parent overflow-y-auto yang intercept touch.
- */
-function SplitAngleSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const stateRef = useRef({ active: false, pointerId: -1, value });
-  // Simpan onChange di ref supaya useEffect tidak perlu re-run setiap render
-  const onChangeRef = useRef(onChange);
-  useEffect(() => { onChangeRef.current = onChange; });
-
-  const MIN = -30; const MAX = 30;
-  const pct = ((value - MIN) / (MAX - MIN)) * 100;
-
-  stateRef.current.value = value;
-
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-
-    const getVal = (clientX: number) => {
-      const rect = el.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      return Math.round(MIN + ratio * (MAX - MIN));
-    };
-
-    const onDown = (e: PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      stateRef.current.active = true;
-      stateRef.current.pointerId = e.pointerId;
-      el.setPointerCapture(e.pointerId);
-      onChangeRef.current(getVal(e.clientX));
-    };
-
-    const onMove = (e: PointerEvent) => {
-      if (!stateRef.current.active || e.pointerId !== stateRef.current.pointerId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      onChangeRef.current(getVal(e.clientX));
-    };
-
-    const onUp = (e: PointerEvent) => {
-      if (e.pointerId !== stateRef.current.pointerId) return;
-      stateRef.current.active = false;
-      el.releasePointerCapture(e.pointerId);
-    };
-
-    const blockTouch = (e: TouchEvent) => {
-      if (stateRef.current.active) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-
-    el.addEventListener('pointerdown', onDown, { passive: false });
-    el.addEventListener('pointermove', onMove, { passive: false });
-    el.addEventListener('pointerup', onUp);
-    el.addEventListener('pointercancel', onUp);
-    el.addEventListener('touchmove', blockTouch, { passive: false, capture: true });
-    el.addEventListener('touchstart', blockTouch, { passive: false, capture: true });
-
-    return () => {
-      el.removeEventListener('pointerdown', onDown);
-      el.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerup', onUp);
-      el.removeEventListener('pointercancel', onUp);
-      el.removeEventListener('touchmove', blockTouch, { capture: true } as any);
-      el.removeEventListener('touchstart', blockTouch, { capture: true } as any);
-    };
-  }, []); // deps kosong — listeners hanya dipasang sekali, onChange via ref
-
-  return (
-    <div className="flex flex-col gap-1.5" data-slider="true" style={{ touchAction: "none" }}>
-      <div className="flex justify-between items-center">
-        <span className="text-[12px] text-neutral-500">Kemiringan Split</span>
-        <span className="text-[12px] text-neutral-400 tabular-nums">{value}°</span>
-      </div>
-      <div
-        ref={trackRef}
-        data-slider="true"
-        className="relative w-full rounded-full select-none"
-        style={{ height: 36, background: "#f0f0f0", touchAction: "none", cursor: "ew-resize", userSelect: "none" }}
-      >
-        {/* Fill */}
-        <div className="absolute top-0 left-0 h-full rounded-full pointer-events-none"
-          style={{ width: `${pct}%`, background: "linear-gradient(90deg,#ff742f,#ff9a5c)" }} />
-        {/* Thumb */}
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white pointer-events-none"
-          style={{ left: `${pct}%`, width: 32, height: 32, background: "#ff742f", boxShadow: "0 2px 8px rgba(0,0,0,0.25)" }} />
-        {/* Center mark */}
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none"
-          style={{ left: "50%", width: 2, height: 14, background: "rgba(0,0,0,0.15)", borderRadius: 1 }} />
-      </div>
-    </div>
-  );
-}
 
 // ── Crop Modal ───────────────────────────────────────────────────────────────
 function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "original" | "square" | "circle"; onDone: (cropped: string) => void; onClose: () => void }) {
@@ -335,7 +236,7 @@ export function EditorPage() {
   const [bgT, setBgT] = useState<BgTransform>(locationState?.bgT ?? { ...DEFAULT_BG_TRANSFORM });
   const [bg2Src, setBg2Src] = useState<string>(locationState?.bg2Src ?? DEFAULT_BG);
   const [bg2T, setBg2T] = useState<BgTransform>(locationState?.bg2T ?? { ...DEFAULT_BG_TRANSFORM });
-  const [splitAngle, setSplitAngle] = useState(locationState?.splitAngle ?? 8);
+  const [splitAngle, setSplitAngle] = useState(10);
   const [videoUrl, setVideoUrl] = useState<string | null>(locationState?.videoUrl ?? null);
 
   const [stickers, setStickers] = useState<Sticker[]>(locationState?.stickers ?? []);
@@ -383,7 +284,6 @@ export function EditorPage() {
   const [sourceUrlErr, setSourceUrlErr] = useState<string | null>(null);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [showTextEditPopup, setShowTextEditPopup] = useState(false);
-  const [showSplitAngleSlider, setShowSplitAngleSlider] = useState(false);
   const [showBgSubBubbles, setShowBgSubBubbles] = useState(false);
   const [showBgSub2Bubbles, setShowBgSub2Bubbles] = useState(false);
   const [showBg2UrlPopup, setShowBg2UrlPopup] = useState(false);
@@ -445,10 +345,12 @@ export function EditorPage() {
   useEffect(() => { if (selectedStickerId) { setZoomTarget(selectedStickerId); setShowZoomSlider(true); } }, [selectedStickerId]);
   useEffect(() => { if (selectedTextId) { setZoomTarget(selectedTextId); setShowZoomSlider(true); } }, [selectedTextId]);
   useEffect(() => {
+    const initialTitle = locationState?.titleHtml || INIT_TITLE;
     if (editorRef.current) {
-      editorRef.current.innerHTML = INIT_TITLE;
-      setTitleHtml(INIT_TITLE);
+      editorRef.current.innerHTML = initialTitle;
     }
+    setTitleHtml(initialTitle);
+
     // Jika datang dari ArticlePage (ada titleHtml), langsung buka panel Konten
     if (locationState?.titleHtml) {
       setActiveTab("content");
@@ -463,8 +365,23 @@ export function EditorPage() {
 
 
   const updateFormatState = useCallback(() => { setIsBoldActive(document.queryCommandState("bold")); setIsItalicActive(document.queryCommandState("italic")); }, []);
-  const handleEditorInput = useCallback(() => { if (editorRef.current) setTitleHtml(editorRef.current.innerHTML); updateFormatState(); }, [updateFormatState]);
-  const applyFormat = useCallback((cmd: "bold" | "italic") => { editorRef.current?.focus(); document.execCommand(cmd); if (editorRef.current) setTitleHtml(editorRef.current.innerHTML); updateFormatState(); }, [updateFormatState]);
+  const handleEditorInput = useCallback(() => {
+    if (editorRef.current) {
+      const html = editorRef.current.innerHTML;
+      setTitleHtml(typeof html === 'string' ? html : String(html));
+    }
+    updateFormatState();
+  }, [updateFormatState]);
+
+  const applyFormat = useCallback((cmd: "bold" | "italic") => {
+    editorRef.current?.focus();
+    document.execCommand(cmd);
+    if (editorRef.current) {
+      const html = editorRef.current.innerHTML;
+      setTitleHtml(typeof html === 'string' ? html : String(html));
+    }
+    updateFormatState();
+  }, [updateFormatState]);
 
   const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>, which: 1 | 2) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -714,7 +631,7 @@ export function EditorPage() {
       };
 
       if (existingDraftId && draftStore.get(existingDraftId)) {
-        await draftStore.updateTemplate(existingDraftId, draftTemplate);
+        await draftStore.updateDraft(existingDraftId, draftData);
       } else {
         await draftStore.create(draftData);
       }
@@ -725,7 +642,7 @@ export function EditorPage() {
       }
       return draftData;
     } catch (e: any) {
-      console.error("Save error:", e);
+      console.error("Save error full object:", e);
       if (!returnOnly) showToast("Gagal simpan: " + (e?.message ?? "coba lagi"), "error");
     } finally {
       if (hiddenCardRef.current) {
@@ -914,7 +831,7 @@ export function EditorPage() {
                       <div className="flex gap-1">
                         {(["bold", "italic"] as const).map(c => (
                           <button key={c} onMouseDown={(e) => { e.preventDefault(); applyFormat(c) }}
-                            className={`w-6 h-6 rounded flex items-center justify-center transition ${c === "bold" ? isBoldActive : isItalicActive ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-400 hover:text-neutral-700"}`}>
+                            className={`w-6 h-6 rounded flex items-center justify-center transition ${(c === "bold" ? isBoldActive : isItalicActive) ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-400 hover:text-neutral-700"}`}>
                             {c === "bold" ? <Bold size={11} /> : <Italic size={11} />}
                           </button>
                         ))}
@@ -1050,8 +967,6 @@ export function EditorPage() {
                         <span style={{ fontSize: 16 }}>🤏</span>
                         <span className="text-[11px] text-neutral-400 font-medium">Pinch di sisi kanan preview untuk zoom gambar kedua</span>
                       </div>
-                      {/* Kemiringan slider — fix dengan pointer capture */}
-                      <SplitAngleSlider value={splitAngle} onChange={setSplitAngle} />
                       {/* ── Upscale BG2 Button ── */}
                       <button
                         onClick={() => handleUpscaleBg(2)}
@@ -1303,7 +1218,10 @@ export function EditorPage() {
               .bubble-pop { animation: bubblePop 0.22s cubic-bezier(0.34,1.56,0.64,1) both; }
               .zoom-slide { animation: zoomSlideIn 0.2s ease both; }
               * { -webkit-user-select: none; user-select: none; }
-              input, textarea { -webkit-user-select: text; user-select: text; }
+              input, textarea, [contenteditable], .pc-title, .vc-title { 
+                -webkit-user-select: text !important; 
+                user-select: text !important; 
+              }
             `}</style>
 
             {/* ── SOURCE URL POPUP ── */}
@@ -1599,11 +1517,6 @@ export function EditorPage() {
                         action: () => { setBgMode(p => p === "collage" ? "single" : "collage"); setShowBgSubBubbles(false); },
                         active: bgMode === "collage"
                       },
-                      ...(bgMode === "collage" ? [{
-                        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="22" /><path d="M8 6l4-4 4 4" /><path d="M8 18l4 4 4-4" /></svg>,
-                        action: () => setShowSplitAngleSlider(p => !p),
-                        active: showSplitAngleSlider
-                      }] : []),
                       {
                         icon: upscaling
                           ? <svg className="animate-spin" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
@@ -1701,19 +1614,6 @@ export function EditorPage() {
                   );
                 })()}
 
-                {/* ── SPLIT ANGLE INLINE SLIDER ── */}
-                {showSplitAngleSlider && bgMode === "collage" && (
-                  <div className="absolute left-16 top-1/2 -translate-y-1/2 z-30"
-                    onClick={e => e.stopPropagation()}>
-                    <VerticalSlider
-                      value={splitAngle} min={-30} max={30}
-                      height={Math.round(PREVIEW_H * 0.38)}
-                      onChange={setSplitAngle}
-                      onClose={() => setShowSplitAngleSlider(false)}
-                      label="SPLIT"
-                    />
-                  </div>
-                )}
 
                 {/* ── UPSCALE PROGRESS OVERLAY ── */}
                 {upscaling && (
@@ -1770,12 +1670,10 @@ export function EditorPage() {
                           setMobileBubbleTab(null);
                           setActiveTab(null);
                           setShowZoomSlider(false);
-                          setShowSplitAngleSlider(false);
                           setShowBgSubBubbles(false);
                         } else {
                           setMobileBubbleTab(t.id);
                           setActiveTab(t.id);
-                          setShowSplitAngleSlider(false);
                           setShowBgSubBubbles(false);
                           setShowBgSub2Bubbles(false);
                           // BG tidak pakai zoom slider — pakai pinch langsung di preview

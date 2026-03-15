@@ -3,42 +3,42 @@
 
 /* ── Custom Fonts (Gilroy) ── */
 
-/* 1. Gilroy (Untuk Judul Umum) */
+/* 1. Gilroy (Untuk Judul Umum - Regular) */
 @font-face {
   font-family: 'Gilroy';
   src: url('/fonts/Gilroy.woff2') format('woff2'),
     url('/fonts/Gilroy.ttf') format('truetype');
-  font-weight: 700;
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 /* 2. Gilroy Bold (Untuk Judul Highlight) */
 @font-face {
-  font-family: 'Gilroy-Bold';
+  font-family: 'Gilroy';
   src: url('/fonts/Gilroy-Bold.woff2') format('woff2'),
     url('/fonts/Gilroy-Bold.ttf') format('truetype');
-  font-weight: 600;
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
 /* 3. Gilroy Italic (Untuk Aksen Miring) */
 @font-face {
-  font-family: 'Gilroy-Italic';
+  font-family: 'Gilroy';
   src: url('/fonts/Gilroy-Italic.woff2') format('woff2'),
     url('/fonts/Gilroy-Italic.ttf') format('truetype');
-  font-weight: 700;
+  font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 
-/* 4. Gilroy Italic Bold (Untuk Aksen Miring highlight) */
+/* 4. Gilroy Bold Italic (Untuk Aksen Miring highlight) */
 @font-face {
-  font-family: 'Gilroy-BoldItalic';
+  font-family: 'Gilroy';
   src: url('/fonts/Gilroy-BoldItalic.woff2') format('woff2'),
     url('/fonts/Gilroy-BoldItalic.ttf') format('truetype');
-  font-weight: 600;
+  font-weight: 700;
   font-style: italic;
   font-display: swap;
 }

@@ -85,13 +85,14 @@ async function loadVideoFrame(url: string): Promise<HTMLVideoElement> {
 async function waitFonts() {
   try {
     await Promise.all([
-      document.fonts.load("bold 90px 'Gilroy-Bold'"),
+      document.fonts.load("400 90px 'Gilroy'"),
       document.fonts.load("700 90px 'Gilroy'"),
-      document.fonts.load("italic 33px 'Gilroy-Italic'"),
-      document.fonts.load("italic bold 33px 'Gilroy-BoldItalic'"),
+      document.fonts.load("italic 400 90px 'Gilroy'"),
+      document.fonts.load("italic 700 90px 'Gilroy'"),
+      document.fonts.load("italic 33px 'Gilroy'"),
     ]);
     await document.fonts.ready;
-  } catch { /* fallback ke Nunito */ }
+  } catch { /* fallback */ }
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -126,6 +127,85 @@ function drawGradient(ctx: CanvasRenderingContext2D, y: number, cardW: number, c
   ctx.fillStyle = g; ctx.fillRect(0, y, cardW, cardH - y);
 }
 
+interface TextSegment {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+}
+
+/** Memecah HTML ke array of segments tanpa mempedulikan baris (<br>) terlebih dahulu */
+function parseHtmlToSegments(html: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html.replace(/\n/g, ""); // Bersihkan newline asli dari editor agar tidak mengacaukan spasi
+
+  const traverse = (node: Node, bold = false, italic = false) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent) segments.push({ text: node.textContent, bold, italic });
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as Element).tagName.toLowerCase();
+      if (tag === 'br') {
+        segments.push({ text: "\n", bold: false, italic: false });
+      } else {
+        const isB = bold || tag === 'b' || tag === 'strong';
+        const isI = italic || tag === 'i' || tag === 'em';
+        for (const child of Array.from(node.childNodes)) {
+          traverse(child, isB, isI);
+        }
+      }
+    }
+  };
+  
+  for (const child of Array.from(tempDiv.childNodes)) traverse(child);
+  return segments;
+}
+
+/** Algoritma Word Wrap untuk Rich Text */
+function wrapRichLines(ctx: CanvasRenderingContext2D, html: string, maxW: number, fontSize: number, fontFamily: string): TextSegment[][] {
+  const allSegments = parseHtmlToSegments(html);
+  const lines: TextSegment[][] = [];
+  let currentLine: TextSegment[] = [];
+  let currentLineWidth = 0;
+
+  const pushLine = () => {
+    if (currentLine.length > 0) lines.push(currentLine);
+    currentLine = [];
+    currentLineWidth = 0;
+  };
+
+  for (const seg of allSegments) {
+    if (seg.text === "\n") {
+      pushLine();
+      continue;
+    }
+
+    const weight = seg.bold ? "700" : "400";
+    const style = seg.italic ? "italic" : "normal";
+    ctx.font = `${style} ${weight} ${fontSize}px ${fontFamily}`;
+
+    const words = seg.text.split(/(\s+)/); // Simpan spasi agar presisi
+    for (const word of words) {
+      if (!word) continue;
+      const wordW = ctx.measureText(word).width;
+
+      if (currentLineWidth + wordW > maxW && currentLineWidth > 0 && word.trim() !== "") {
+        pushLine();
+        // Simpan sisa segmen (word) ke baris baru
+        if (word.trim() !== "") {
+          currentLine.push({ ...seg, text: word });
+          currentLineWidth = wordW;
+        }
+      } else {
+        // Jika baris kosong dan word sendiri sudah > maxW, biarkan saja (paksa masuk)
+        currentLine.push({ ...seg, text: word });
+        currentLineWidth += wordW;
+      }
+    }
+  }
+  pushLine();
+  return lines;
+}
+
 function stripHtml(html: string): string {
   return html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<\/div>/gi, "\n")
     .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -150,7 +230,6 @@ function drawTitleBox(ctx: CanvasRenderingContext2D, titleHtml: string, imgConte
   ctx.save(); roundRect(ctx, x, y, w, h, 30); ctx.clip();
   ctx.fillStyle = "#ff742f"; ctx.fillRect(x, y, w, h);
   if (imgContent.naturalWidth) {
-    // objectFit: cover
     const ar = imgContent.naturalWidth / imgContent.naturalHeight;
     const bAr = w / h; let iw = w, ih = h;
     if (ar > bAr) { ih = h; iw = ih * ar; } else { iw = w; ih = iw / ar; }
@@ -158,10 +237,28 @@ function drawTitleBox(ctx: CanvasRenderingContext2D, titleHtml: string, imgConte
     ctx.drawImage(imgContent, x - (iw - w) / 2, y - (ih - h) / 2, iw, ih);
   }
   ctx.restore();
-  ctx.save(); ctx.font = `bold ${fontSize}px ${fontFamily}`;
-  ctx.fillStyle = "white"; ctx.textBaseline = "top";
-  const lines = wrapText(ctx, stripHtml(titleHtml), 1339);
-  for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], x + 112, y + 61 + i * lineH);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  const startX = x + 112;
+  const startY = y + 61;
+  const maxW = 1339;
+
+  const lines = wrapRichLines(ctx, titleHtml, maxW, fontSize, fontFamily);
+  let currentY = startY;
+
+  for (const segments of lines) {
+    let currentX = startX;
+    for (const seg of segments) {
+      const weight = seg.bold ? "700" : "400";
+      const style = seg.italic ? "italic" : "normal";
+      ctx.font = `${style} ${weight} ${fontSize}px ${fontFamily}`;
+      ctx.fillStyle = "white";
+      ctx.fillText(seg.text, currentX, currentY);
+      currentX += ctx.measureText(seg.text).width;
+    }
+    currentY += lineH;
+  }
   ctx.restore();
 }
 
@@ -278,8 +375,9 @@ function drawExtraText(ctx: CanvasRenderingContext2D, t: ExtraText, cardW: numbe
   ctx.save(); ctx.translate((t.x / 100) * cardW, (t.y / 100) * cardH); ctx.rotate((t.rotation * Math.PI) / 180);
   if (t.shadowBlur > 0) { ctx.shadowBlur = t.shadowBlur; ctx.shadowColor = "rgba(0,0,0,0.85)"; }
   const isBold = t.fontWeight === 'bold' || parseInt(t.fontWeight) >= 700;
-  const fontFamily = isBold ? "'Gilroy-Bold',Nunito,sans-serif" : "'Gilroy',Nunito,sans-serif";
-  ctx.font = `${t.fontStyle || ''} ${t.fontWeight || 'normal'} ${t.fontSize}px ${fontFamily}`;
+  const weight = isBold ? "700" : "400";
+  const fontFamily = "'Gilroy', Nunito, sans-serif";
+  ctx.font = `${t.fontStyle || ''} ${weight} ${t.fontSize}px ${fontFamily}`;
   ctx.fillStyle = t.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(t.text, 0, 0); ctx.restore();
 }
@@ -342,7 +440,7 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
       tbX = titleBoxMeasure.x; tbY = titleBoxMeasure.y; tbW = titleBoxMeasure.w; tbH = titleBoxMeasure.h;
     } else {
       ctx.font = `bold 90px ${FONT}`;
-      const lines = wrapText(ctx, stripHtml(titleHtml), 1339);
+      const lines = wrapRichLines(ctx, titleHtml, 1339, 90, "'Gilroy'");
       tbH = 61 + lines.length * 112 + 69; tbW = containerW; tbX = containerX; tbY = cardH - 469 - tbH;
     }
     await drawNotifBadge(ctx, label, imgRect7, containerX, tbY - 85 - 82);
@@ -356,7 +454,7 @@ export async function exportCardToCanvas(params: CardExportParams): Promise<stri
       tbX = titleBoxMeasure.x; tbY = titleBoxMeasure.y; tbW = titleBoxMeasure.w; tbH = titleBoxMeasure.h;
     } else {
       ctx.font = `bold 85px ${FONT}`;
-      const lines = wrapText(ctx, stripHtml(titleHtml), 1339);
+      const lines = wrapRichLines(ctx, titleHtml, 1339, 85, "'Gilroy'");
       tbH = 61 + lines.length * 108 + 69; tbW = containerW; tbX = containerX; tbY = cardH - 949 - tbH;
     }
     await drawNotifBadge(ctx, label, imgRect7, containerX, tbY - 85 - 82);

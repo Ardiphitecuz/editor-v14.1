@@ -49,10 +49,10 @@ export const LABEL_OPTIONS = [
   "Discuss", "Fact", "Teori", "Update", "Info", "News", "Hot", "Viral", "Special", "Misteri"
 ];
 
-export const FONT_REGULAR = "'Gilroy', 'Nunito', sans-serif";
-export const FONT_BOLD = "'Gilroy-Bold', 'Nunito', sans-serif";
-export const FONT_ITALIC = "'Gilroy-Italic', 'Nunito', sans-serif";
-export const FONT_BOLD_ITALIC = "'Gilroy-BoldItalic', 'Nunito', sans-serif";
+export const FONT_REGULAR = "Gilroy, 'Nunito', sans-serif";
+export const FONT_BOLD = "Gilroy, 'Nunito', sans-serif";
+export const FONT_ITALIC = "Gilroy, 'Nunito', sans-serif";
+export const FONT_BOLD_ITALIC = "Gilroy, 'Nunito', sans-serif";
 
 // ── Components Helper ────────────────────────────────────────────────────────
 
@@ -175,9 +175,9 @@ export function PostCard(props: any) {
   return (
     <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: POST_W, height: POST_H }}>
       <style>{`
-        .pc-title strong, .pc-title b { font-family: ${FONT_BOLD}; font-style: normal; font-weight: 800; }
-        .pc-title em, .pc-title i { font-family: ${FONT_ITALIC}; font-style: italic; font-weight: 700; }
-        .pc-title b i, .pc-title i b, .pc-title strong em, .pc-title em strong { font-family: ${FONT_BOLD_ITALIC}; font-weight: 800; }
+        .pc-title strong, .pc-title b { font-family: Gilroy; font-style: normal; font-weight: 700; }
+        .pc-title em, .pc-title i { font-family: Gilroy; font-style: italic; font-weight: 400; }
+        .pc-title b i, .pc-title i b, .pc-title strong em, .pc-title em strong { font-family: Gilroy; font-weight: 700; font-style: italic; }
         .pc-title:focus { outline: none; box-shadow: 0 0 0 6px rgba(255,255,255,0.25); border-radius: 8px; }
       `}</style>
       <Background mode={bgMode} src1={bgSrc} t1={bgT} src2={bg2Src} t2={bg2T} splitAngle={splitAngle} cardW={POST_W} cardH={POST_H} />
@@ -197,24 +197,23 @@ export function PostCard(props: any) {
 
       <div style={{ position: "absolute", left: "50%", bottom: 469, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85, pointerEvents: interactive ? "auto" : "none" }}>
         <div style={{ pointerEvents: "none" }}><NotifBadge label={label} /></div>
-        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}
-          onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+        <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}>
           <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} />
           <img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}>
             <div ref={inlineTitleRef} className="pc-title"
               contentEditable={interactive} suppressContentEditableWarning
-              onInput={onTitleChange}
-              style={{ fontFamily: FONT_REGULAR, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden", textAlign: "left" }} />
+              onInput={interactive ? (e: any) => onTitleChange?.(e.target.innerHTML) : undefined}
+              style={{ fontFamily: FONT_REGULAR, fontSize: 90, lineHeight: "112px", color: "white", width: 1339, overflow: "hidden", textAlign: "left", outline: "none" }} />
           </div>
         </div>
       </div>
 
-      <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 6, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", left: 89, top: 1812.55, width: 1562.246, height: 133.453, borderRadius: 18, overflow: "hidden", zIndex: 50, pointerEvents: "none" }}>
         <img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} />
       </div>
 
-      <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 6, display: "flex", alignItems: "center", gap: 20, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", left: 89, top: 2034, zIndex: 50, display: "flex", alignItems: "center", gap: 20, pointerEvents: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
           <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24.5 24.5" fill="none"><path d={svgPaths.p3eb20f0} fill="white" /></svg></div>
           <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 20, letterSpacing: "-0.18px", lineHeight: "22px", color: "white", whiteSpace: "nowrap" }}>{source}</span>
@@ -242,12 +241,23 @@ export function VideoCard(props: any) {
     stickers = [], extraTexts = [],
     onBgTouch, onBgMouseDown, bgDragActive, snapIndicator,
     onStickerTouch, onStickerMouseDown, onTextTouch, onTextMouseDown,
-    selectedStickerId, selectedTextId, videoRef, overlayRef
+    selectedStickerId, selectedTextId, videoRef, overlayRef, onTitleChange
   } = props;
   const is34 = videoAspectRatio === "3:4";
   const cardW = is34 ? POST_W : VIDEO_W;
   const cardH = is34 ? POST_H : VIDEO_H;
   const interactive = !!(onBgTouch || onBgMouseDown);
+  const inlineTitleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (inlineTitleRef.current) inlineTitleRef.current.innerHTML = titleHtml;
+  }, []);
+
+  useEffect(() => {
+    const el = inlineTitleRef.current;
+    if (!el || document.activeElement === el) return;
+    if (el.innerHTML !== titleHtml) el.innerHTML = titleHtml;
+  }, [titleHtml]);
 
   const togglePlay = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation(); e.preventDefault();
@@ -259,9 +269,9 @@ export function VideoCard(props: any) {
   return (
     <div style={{ position: "relative", backgroundColor: "#000", overflow: "hidden", width: cardW, height: cardH }} onClick={togglePlay}>
       <style>{`
-        .vc-title strong, .vc-title b { font-family: ${FONT_BOLD}; font-style: normal; font-weight: 800; }
-        .vc-title em, .vc-title i { font-family: ${FONT_ITALIC}; font-style: italic; font-weight: 700; }
-        .vc-title b i, .vc-title i b, .vc-title strong em, .vc-title em strong { font-family: ${FONT_BOLD_ITALIC}; font-weight: 800; }
+        .vc-title strong, .vc-title b { font-family: Gilroy; font-style: normal; font-weight: 700; }
+        .vc-title em, .vc-title i { font-family: Gilroy; font-style: italic; font-weight: 400; }
+        .vc-title b i, .vc-title i b, .vc-title strong em, .vc-title em strong { font-family: Gilroy; font-weight: 700; font-style: italic; }
       `}</style>
 
       {videoUrl ? (
@@ -282,20 +292,24 @@ export function VideoCard(props: any) {
         {/* Gradient Positioning */}
         <div style={{ position: "absolute", left: 0, top: is34 ? 1600 : cardH * 0.55, width: "100%", height: is34 ? cardH - 1600 : cardH * 0.45, zIndex: 3, background: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,${is34 ? 0.75 : 0.82}) 100%)` }} />
 
-        {/* Title Group Positioning */}
-        <div style={{ position: "absolute", left: "50%", bottom: is34 ? 469 : 949, transform: "translateX(-50%)", width: 1563, zIndex: 6, display: "flex", flexDirection: "column", gap: 85 }}>
+        <div style={{ position: "absolute", left: "50%", bottom: is34 ? 469 : 949, transform: "translateX(-50%)", width: 1563, zIndex: 40, display: "flex", flexDirection: "column", gap: 85, pointerEvents: interactive ? "auto" : "none" }}>
           <NotifBadge label={label} />
           <div style={{ position: "relative", width: "100%", borderRadius: 30, overflow: "hidden" }}>
             <div style={{ position: "absolute", inset: 0, backgroundColor: "#ff742f" }} /><img alt="" src={imgContent} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "multiply", opacity: 0.25 }} />
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}><div className="vc-title" style={{ fontFamily: FONT_REGULAR, fontSize: is34 ? 90 : 85, lineHeight: is34 ? "112px" : "108px", color: "white", width: 1339, overflow: "hidden", textAlign: "left" }} dangerouslySetInnerHTML={{ __html: titleHtml }} /></div>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: "61px 112px 69px" }}>
+              <div ref={inlineTitleRef} className="vc-title"
+                contentEditable={interactive} suppressContentEditableWarning
+                onInput={interactive ? (e: any) => onTitleChange?.(e.target.innerHTML) : undefined}
+                style={{ fontFamily: FONT_REGULAR, fontSize: is34 ? 90 : 85, lineHeight: is34 ? "112px" : "108px", color: "white", width: 1339, overflow: "hidden", textAlign: "left", outline: "none" }} />
+            </div>
           </div>
         </div>
 
         {/* Identity Bar Positioning */}
-        <div style={{ position: "absolute", left: is34 ? 89 : 146, top: is34 ? 1812.55 : 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 6 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
+        <div style={{ position: "absolute", left: is34 ? 89 : 146, top: is34 ? 1812.55 : 2310.55, width: 1562.25, height: 133.45, borderRadius: 18, overflow: "hidden", zIndex: 50 }}><img alt="" src={imgIdentityBar} style={{ position: "absolute", left: 0, width: "100%", maxWidth: "none", top: "-1076.47%", height: "1176.47%" }} /></div>
 
         {/* Source Bars Positioning */}
-        <div style={{ position: "absolute", left: is34 ? 89 : 136, top: is34 ? 2034 : 2544, zIndex: 7, display: "flex", alignItems: "center", gap: 20 }}>
+        <div style={{ position: "absolute", left: is34 ? 89 : 136, top: is34 ? 2034 : 2544, zIndex: 50, display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 10, backdropFilter: "blur(18.9px)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}>
             <div style={{ width: 30, height: 30, flexShrink: 0 }}><svg width="100%" height="100%" viewBox="0 0 24 24" fill="none"><path d="M19 0H5C3.67441 0.00158786 2.40356 0.528882 1.46622 1.46622C0.528882 2.40356 0.00158786 3.67441 0 5L0 19C0.00158786 20.3256 0.528882 21.5964 1.46622 22.5338C2.40356 23.4711 3.67441 23.9984 5 24H19C20.3256 23.9984 21.5964 23.4711 22.5338 22.5338C23.4711 21.5964 23.9984 20.3256 24 19V5C23.9984 3.67441 23.4711 2.40356 22.5338 1.46622C21.5964 0.528882 20.3256 0.00158786 19 0V0ZM20 11H22V13H20V11ZM20 9V7H22V9H20ZM18 11H6V2H18V11ZM4 13H2V11H4V13ZM4 9H2V7H4V9ZM2 15H4V17H2V15ZM6 13H18V22H6V13ZM20 15H22V17H20V15ZM22 5H20V2.184C20.5829 2.39008 21.0879 2.77123 21.4459 3.2753C21.8039 3.77937 21.9974 4.38174 22 5ZM4 2.184V5H2C2.00256 4.38174 2.19608 3.77937 2.55409 3.2753C2.91209 2.77123 3.41709 2.39008 4 2.184ZM2 19H4V21.816C3.41709 21.6099 2.91209 21.2288 2.55409 20.7247C2.19608 20.2206 2.00256 19.6183 2 19ZM20 21.816V19H22C21.9974 19.6183 21.8039 20.2206 21.4459 20.7247C21.0879 21.2288 20.5829 21.6099 20 21.816Z" fill="white" /></svg></div>
             <span style={{ fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: is34 ? 20 : 22, letterSpacing: "-0.18px", lineHeight: "22px", textDecoration: is34 ? "none" : "underline", color: "white", whiteSpace: "nowrap" }}>{source}</span>

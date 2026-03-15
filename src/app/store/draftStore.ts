@@ -201,15 +201,14 @@ export const draftStore = {
     notify();
   },
 
-  /** Update template (setelah user edit di editor lalu simpan) */
-  async updateTemplate(id: string, template: DraftTemplate): Promise<void> {
+  /** Update draft metadata and template (setelah user edit di editor lalu simpan) */
+  async updateDraft(id: string, data: Partial<Omit<Draft, "id" | "createdAt">>): Promise<void> {
     _drafts = _drafts.map(d =>
-      d.id === id ? { ...d, template, updatedAt: Date.now() } : d
+      d.id === id ? { ...d, ...data, updatedAt: Date.now() } : d
     );
     persist(_drafts);
-    // Await IDB write selesai sebelum notify
-    if (template.imageDataUrl) {
-      try { await idbSet(id, template.imageDataUrl); }
+    if (data.template?.imageDataUrl) {
+      try { await idbSet(id, data.template.imageDataUrl); }
       catch(e) { console.warn("[draftStore] IDB set error:", e); }
     }
     notify();
