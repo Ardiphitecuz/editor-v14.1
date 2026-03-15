@@ -676,6 +676,54 @@ app.get('/api/img', async (req, res) => {
   }
 });
 
+// ── Video Proxy — bypass CORS & support Range requests for mobile ─────────────
+// Frontend memanggil: GET /api/video-proxy?url=https://cdn.example.com/video.mp4
+app.get('/api/video-proxy', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).send('URL required');
+
+    const parsed = new URL(url);
+    const axiosHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Referer': parsed.origin,
+    };
+
+    if (req.headers.range) {
+      axiosHeaders['Range'] = req.headers.range;
+    }
+
+    const response = await axios.get(url, {
+      timeout: 30000,
+      responseType: 'stream',
+      headers: axiosHeaders,
+      maxRedirects: 5,
+      ...(url.startsWith('https://') ? { httpsAgent: httpsAgentRelaxed } : {}),
+      validateStatus: (status) => status >= 200 && status < 300 || status === 206,
+    });
+
+    const headersToPass = [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'cache-control'
+    ];
+
+    headersToPass.forEach(h => {
+      if (response.headers[h]) res.setHeader(h, response.headers[h]);
+    });
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.status(response.status);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('[video proxy error]', error.message);
+    res.status(500).send('Video not available: ' + error.message);
+  }
+});
+
 // ── Newsroom RSS Engine — /api/feeds ─────────────────────────────────────────
 // Port penuh dari the-newsroom-rss (https://github.com/royalgarter/the-newsroom-rss)
 // Mendukung GET dan POST, kompatibel dengan newsroom frontend API contract

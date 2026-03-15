@@ -214,7 +214,10 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
           cardHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? VIDEO_H : POST_H,
           outWidth: 1080,
           outHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? 1920 : 1440,
-          onProgress: (p) => setExportProgress(p)
+          bitrate: 4_000_000,
+          fps: 60,
+          onProgress: (p) => setExportProgress(p),
+          bgT: draft.template?.bgT
         });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -264,7 +267,10 @@ function DraftPreviewModal({ draft: initialDraft, onClose, draftCount }: { draft
             cardHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? VIDEO_H : POST_H,
             outWidth: 1080,
             outHeight: ((draft.template?.videoAspectRatio ?? "9:16") === "9:16") ? 1920 : 1440,
-            onProgress: (p) => setExportProgress(p)
+            bitrate: 4_000_000,
+            fps: 60,
+            onProgress: (p) => setExportProgress(p),
+            bgT: draft.template?.bgT
           });
           const file = new File([blob], `otaku_video_${Date.now()}.mp4`, { type: "video/mp4" });
           setShareFile(file);

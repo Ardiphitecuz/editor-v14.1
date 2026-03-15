@@ -276,7 +276,15 @@ export function VideoCard(props: any) {
 
       {videoUrl ? (
         <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-          <video ref={videoRef} src={videoUrl} loop playsInline crossOrigin="anonymous" style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(cardH * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} />
+          <video 
+            ref={videoRef} 
+            src={videoUrl} 
+            loop 
+            autoPlay
+            playsInline 
+            crossOrigin="anonymous" 
+            style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(calc(-50% + ${bgT.x}px), calc(-50% + ${bgT.y}px))`, height: Math.round(cardH * bgT.scale), width: "auto", maxWidth: "none", pointerEvents: "none" }} 
+          />
           {interactive && <div onTouchStart={onBgTouch ? (e) => { e.stopPropagation(); onBgTouch(1, e); } : undefined} onMouseDown={onBgMouseDown ? (e) => onBgMouseDown(1, e) : undefined} style={{ position: "absolute", inset: 0, zIndex: 20, cursor: bgDragActive === 1 ? "grabbing" : "grab", touchAction: "none" }} />}
         </div>
       ) : (

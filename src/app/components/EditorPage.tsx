@@ -188,6 +188,27 @@ function CropModal({ src, shape, onDone, onClose }: { src: string; shape: "origi
 export function EditorPage() {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Fullscreen on Mobile
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) return;
+
+    const enterFullscreen = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    };
+
+    window.addEventListener("click", enterFullscreen, { once: true });
+    window.addEventListener("touchstart", enterFullscreen, { once: true });
+
+    return () => {
+      window.removeEventListener("click", enterFullscreen);
+      window.removeEventListener("touchstart", enterFullscreen);
+    };
+  }, []);
+
   const locationState = location.state as {
     template?: TemplateType;
     videoAspectRatio?: "3:4" | "9:16";
@@ -758,7 +779,7 @@ export function EditorPage() {
 
       {/* ── HEADER ── */}
       <header className="fixed top-0 inset-x-0 h-14 bg-white/80 backdrop-blur-md z-30 flex items-center justify-between px-4 border-b border-neutral-100/50">
-        <button onClick={() => navigate("/")} className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition text-neutral-600"><ArrowLeft size={18} /></button>
+        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition text-neutral-600"><ArrowLeft size={18} /></button>
         <div className="flex bg-neutral-100 rounded-full p-1">
           <button onClick={() => setTemplate("post")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "post" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Post</button>
           <button onClick={() => setTemplate("video")} className={`px-3 py-1 text-[11px] font-bold rounded-full transition ${template === "video" ? "bg-white shadow-sm text-black" : "text-neutral-400"}`}>Video</button>
