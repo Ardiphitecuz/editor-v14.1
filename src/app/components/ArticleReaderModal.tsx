@@ -5,6 +5,7 @@ import {
   X, ExternalLink, ArrowLeft, Bookmark, Languages, Share2, 
   Sparkles, RefreshCw, Check, Copy, BookmarkPlus, Edit3, Clock 
 } from "lucide-react";
+import { requestFullscreenAndNavigate } from "../utils/navigation";
 import type { Article } from "../data/articles";
 import { PROXY_SERVERS, fetchWithTimeout, handleImgError, fetchFullContentRacing, simpleMdToHtml } from "../services/fetcherUtils";
 import { articleStore } from "../store/articleStore";
@@ -572,7 +573,7 @@ const loadFullContent = async (targetArticle: Article) => {
                 <button onClick={() => {
                     const formattedTitle = simpleMdToHtml(aiPopup.title);
                     onClose();
-                    navigate("/editor", { state: { titleHtml: formattedTitle, aiContent: aiPopup.content, source: article!.source, bgUrl: article!.image, fromDraft: true, articleTitle: article!.title, imageUrl: article!.image } });
+                    requestFullscreenAndNavigate("/editor", navigate, { state: { titleHtml: formattedTitle, aiContent: aiPopup.content, source: article!.source, bgUrl: article!.image, fromDraft: true, articleTitle: article!.title, imageUrl: article!.image } });
                   }}
                   className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold bg-gradient-to-br from-orange-500 to-orange-400 text-white active:scale-95 transition-all">
                   <Edit3 size={14} /> Editor

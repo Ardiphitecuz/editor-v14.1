@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router";
 import { Home, BookMarked, Bookmark, Rss, PlusCircle } from "lucide-react";
+import { requestFullscreenAndNavigate } from "../utils/navigation";
 
 const NAV_PATHS = [
   { label: "Home",    path: "/",              icon: Home },
@@ -47,7 +48,7 @@ export function BottomNav() {
 
         {/* Center: Create */}
         <button
-          onClick={() => navigate("/editor")}
+          onClick={() => requestFullscreenAndNavigate("/editor", navigate)}
           className="flex flex-col items-center justify-center gap-1 flex-1 py-2 transition-all active:scale-90"
         >
           <div

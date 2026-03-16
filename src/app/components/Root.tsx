@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
 import { BottomNav } from "./BottomNav";
 import { SideNav } from "./Sidenav";
@@ -7,6 +8,16 @@ const HIDE_NAV_PATHS = ["/editor"];
 export function Root() {
   const location = useLocation();
   const hideNav = HIDE_NAV_PATHS.some(p => location.pathname.startsWith(p));
+
+  useEffect(() => {
+    const updateVh = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
+    };
+    updateVh();
+    window.addEventListener("resize", updateVh);
+    return () => window.removeEventListener("resize", updateVh);
+  }, []);
 
   return (
     <div className="min-h-screen flex" style={{ background: "#f8f5f1" }}>

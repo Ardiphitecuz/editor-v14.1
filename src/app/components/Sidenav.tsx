@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from "react-router";
 import {
   Home, BookMarked, Bookmark, Rss, PlusCircle, ChevronDown, Settings,
 } from "lucide-react";
+import { requestFullscreenAndNavigate } from "../utils/navigation";
 
 // Menu sama persis dengan BottomNav mobile + Settings
 const NAV_ITEMS = [
@@ -74,7 +75,7 @@ export function SideNav() {
       {/* Create button */}
       <div className="px-4 pt-4 mt-2">
         <button
-          onClick={() => navigate("/editor")}
+          onClick={() => requestFullscreenAndNavigate("/editor", navigate)}
           className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl transition-all active:scale-[0.97] hover:opacity-90"
           style={{ background: "#ff742f", color: "white" }}
         >

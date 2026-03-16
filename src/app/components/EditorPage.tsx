@@ -200,11 +200,10 @@ export function EditorPage() {
       }
     };
 
-    window.addEventListener("click", enterFullscreen, { once: true });
+    // Fallback for direct entrance or missed user gesture
     window.addEventListener("touchstart", enterFullscreen, { once: true });
 
     return () => {
-      window.removeEventListener("click", enterFullscreen);
       window.removeEventListener("touchstart", enterFullscreen);
     };
   }, []);
@@ -770,7 +769,7 @@ export function EditorPage() {
   ];
 
   return (
-    <div className="h-[100dvh] bg-[#f8f9fa] flex flex-col overflow-hidden font-sans">
+    <div className="bg-[#f8f9fa] flex flex-col overflow-hidden font-sans" style={{ height: "calc(var(--vh, 1vh) * 100)" }}>
       <div ref={hiddenCardRef} style={{ position: "fixed", top: 0, left: 0, width: CARD_W, height: CARD_H, pointerEvents: "none", zIndex: -9999, visibility: "hidden" }}>{renderCard(false)}</div>
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleBgUpload(e, 1)} />
       <input ref={file2InputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleBgUpload(e, 2)} />

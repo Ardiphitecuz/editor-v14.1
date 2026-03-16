@@ -4,6 +4,7 @@ import {
   ArrowLeft, Clock, Share2, Bookmark, Sparkles,
   RefreshCw, ExternalLink, Edit3, Languages, Copy, Check, X, BookmarkPlus,
 } from "lucide-react";
+import { requestFullscreenAndNavigate } from "../utils/navigation";
 import { articleStore } from "../store/articleStore";
 import { draftStore } from "../store/draftStore";
 import { rewriteArticleOnDemand, getCachedRewrite, getAIConfig } from "../services/rewriter";
@@ -586,7 +587,7 @@ export function ArticlePage() {
                         onClick={() => {
                           setAiPopup(null);
                           setAiCloudUrl(null);
-                          navigate("/editor", { state: { titleHtml: aiPopup!.title, aiContent: aiPopup!.content, source: article.source, bgUrl: article.image, fromDraft: true, articleTitle: article.title, imageUrl: article.image } });
+                          requestFullscreenAndNavigate("/editor", navigate, { state: { titleHtml: aiPopup!.title, aiContent: aiPopup!.content, source: article.source, bgUrl: article.image, fromDraft: true, articleTitle: article.title, imageUrl: article.image } });
                         }}
                         className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl transition-all active:scale-95"
                         style={{ background: "linear-gradient(135deg,#ff742f,#ff9a5c)", color: "white" }}>
