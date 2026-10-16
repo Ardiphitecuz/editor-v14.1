@@ -348,7 +348,7 @@ export function HomePage() {
 
   return (
     <>
-      <div className="lg:hidden"><FoloMobileHome /></div>
+      <div className="lg:hidden"><FoloMobileHome articles={fetchedArticles} loading={loading} errors={errors} refresh={refresh} /></div>
       <div className="hidden lg:flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-neutral-100">
