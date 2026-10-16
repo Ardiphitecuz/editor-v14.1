@@ -112,6 +112,8 @@ const USER_AGENTS = [
   'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
 ];
 
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function fetchUrl(url, options = {}) {
   const isHttps = url.startsWith('https://');
   const baseConfig = {
@@ -123,28 +125,37 @@ async function fetchUrl(url, options = {}) {
   };
 
   const uaList = options.ua ? [options.ua] : USER_AGENTS;
+  let lastError;
 
   for (const ua of uaList) {
-    try {
-      return await axios.get(url, {
-        ...baseConfig,
-        headers: {
-          'User-Agent': ua,
-          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          ...(options.headers || {}),
-        },
-      });
-    } catch (err) {
-      const status = err.response?.status;
-      // Kalau 403/429, coba UA berikutnya. Kalau error lain, langsung throw
-      if ((status === 403 || status === 429) && ua !== uaList[uaList.length - 1]) {
-        continue;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await axios.get(url, {
+          ...baseConfig,
+          headers: {
+            'User-Agent': ua,
+            'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'no-cache',
+            ...(options.headers || {}),
+          },
+        });
+      } catch (err) {
+        lastError = err;
+        const status = err.response?.status;
+        const retryable = !status || status === 408 || status === 425 || status === 429 || status >= 500;
+        if (retryable && attempt === 0) {
+          await wait(300);
+          continue;
+        }
+        // Rate limits and bot blocks can sometimes recover with a different UA.
+        if ((status === 403 || status === 429) && ua !== uaList[uaList.length - 1]) break;
+        throw err;
       }
-      throw err;
     }
   }
+
+  throw lastError || new Error('Unable to fetch URL');
 }
 
 // ── parseRSS — fetch + parse satu RSS URL ─────────────────────────────────────
