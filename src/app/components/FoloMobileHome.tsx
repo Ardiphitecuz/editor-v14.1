@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Bookmark, Check, Clock3, Flame, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import { CATEGORIES, type Article } from "../data/articles";
-import { useNews } from "../hooks/useNews";
 import { articleStore } from "../store/articleStore";
 import { ArticleReaderModal } from "./ArticleReaderModal";
 
@@ -49,8 +48,7 @@ function FeedRow({ article, onOpen, refresh }: { article: Article; onOpen: () =>
   );
 }
 
-export function FoloMobileHome() {
-  const { articles, loading, errors, refresh } = useNews();
+export function FoloMobileHome({ articles, loading, errors, refresh }: { articles: Article[]; loading: boolean; errors: Record<string, string>; refresh: () => void }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Semua");
   const [filter, setFilter] = useState<FeedFilter>("all");
