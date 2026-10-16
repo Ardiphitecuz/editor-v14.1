@@ -7,6 +7,7 @@ import { LazyImage } from "./ui/LazyImage";
 import { useCatFrame, catFrameUrl } from "./LoadingCat";
 import { MascotEmptyState } from "./MascotEmptyState";
 import { ArticleReaderModal } from "./ArticleReaderModal";
+import { FoloMobileHome } from "./FoloMobileHome";
 
 async function gtranslate(text: string): Promise<string> {
   try {
@@ -346,7 +347,9 @@ export function HomePage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
+    <>
+      <div className="lg:hidden"><FoloMobileHome articles={fetchedArticles} loading={loading} errors={errors} refresh={refresh} /></div>
+      <div className="hidden lg:flex flex-col min-h-screen" style={{ background: "#f8f5f1" }}>
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-neutral-100">
         <div className="px-4 pt-4 pb-3">
@@ -573,5 +576,6 @@ export function HomePage() {
         onClose={() => setActiveArticle(null)} 
       />
     </div>
+    </>
   );
 }
