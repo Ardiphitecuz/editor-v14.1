@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Plus, Trash2, ToggleLeft, ToggleRight,
+  Plus, Trash2, ToggleLeft, ToggleRight, Pencil,
   Rss, Loader2, CheckCircle2, XCircle, AlertCircle,
   Search,
 } from "lucide-react";
 import {
-  getSources, addSource, removeSource, toggleSource,
+  getSources, addSource, removeSource, toggleSource, renameSource, getPreferredSourceTitle,
   detectSourceType, buildGoogleNewsUrl, isGoogleNewsUrl, type NewsSource,
 } from "../services/sourceManager";
 import { clearAllSourceCache } from "../services/newsFetcher";
@@ -19,8 +19,8 @@ const LANG_LABELS: Record<string, string> = {
 
 // ── Source Card ───────────────────────────────────────────────────────────────
 
-function SourceCard({ source, onToggle, onRemove }: {
-  source: NewsSource; onToggle: () => void; onRemove: () => void;
+function SourceCard({ source, onToggle, onRemove, onRename }: {
+  source: NewsSource; onToggle: () => void; onRemove: () => void; onRename: () => void;
 }) {
   const isDefault = source.id === "yaraon";
 
@@ -55,12 +55,12 @@ function SourceCard({ source, onToggle, onRemove }: {
         className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
         style={{ background: getAvatarBg(source.name), fontSize: 15 }}
       >
-        {source.name.charAt(0).toUpperCase()}
+        {getPreferredSourceTitle(source).charAt(0).toUpperCase()}
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }} className="truncate">{source.name}</p>
+        <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }} className="truncate">{getPreferredSourceTitle(source)}</p>
         <p style={{ fontSize: 11, color: "#b0a89e" }} className="truncate">
           {isGoogleNewsUrl(source.feedUrl ?? source.url) ? "Google News" : (source.feedUrl ?? source.url)}
         </p>
@@ -74,8 +74,13 @@ function SourceCard({ source, onToggle, onRemove }: {
         </div>
       )}
 
+      {/* Custom title, following Folo's subscription-title precedence */}
+      <button onClick={onRename} aria-label="Ubah nama sumber" title="Ubah nama sumber" className="shrink-0 p-1.5 rounded-lg hover:bg-orange-50 transition-colors">
+        <Pencil size={15} style={{ color: "#9a8f84" }} />
+      </button>
+
       {/* Toggle */}
-      <button onClick={onToggle} className="shrink-0 hover:opacity-80 transition-opacity">
+      <button onClick={onToggle className="shrink-0 hover:opacity-80 transition-opacity">
         {source.enabled
           ? <ToggleRight size={26} style={{ color: "#ff742f" }} />
           : <ToggleLeft size={26} style={{ color: "#c0b8b0" }} />}
@@ -291,6 +296,16 @@ export function SubscriptionsPage() {
     loadSources();
   }
 
+  function handleRename(id: string) {
+    const source = sources.find((item) => item.id === id);
+    if (!source) return;
+    const current = source.customTitle ?? source.name;
+    const next = window.prompt("Nama tampilan sumber (kosongkan untuk memakai nama asli):", current);
+    if (next === null) return;
+    renameSource(id, next);
+    loadSources();
+  }
+
   const enabledSources = sources.filter(s => s.enabled);
   const allSources = sources;
 
@@ -345,6 +360,7 @@ export function SubscriptionsPage() {
               source={source}
               onToggle={() => handleToggle(source.id)}
               onRemove={() => handleRemove(source.id)}
+              onRename={() => handleRename(source.id)}
             />
           ))}
 
