@@ -4,6 +4,7 @@ import { ARTICLES } from "../data/articles";
 type Listener = () => void;
 
 const SAVED_KEY = "otaku_saved_ids";
+const READ_KEY = "otaku_read_ids";
 const CACHE_KEY = "otaku_articles_cache_v11"; // v11 = invalidate cache lama dari Vercel
 const CACHE_TTL = 1000 * 60 * 120; // 2 jam — survive tab close, langsung tampil saat buka ulang
 
@@ -78,6 +79,41 @@ class ArticleStore {
   }
 
   // ── Saved articles (persisted to localStorage) ───────────────────────────
+
+  // ── Read state (persisted locally, similar to a reading inbox) ───────────
+
+  getReadIds(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem(READ_KEY) ?? "[]");
+    } catch { return []; }
+  }
+
+  isRead(id: string): boolean {
+    return this.getReadIds().includes(id);
+  }
+
+  markRead(id: string): void {
+    const ids = this.getReadIds();
+    if (!ids.includes(id)) {
+      try { localStorage.setItem(READ_KEY, JSON.stringify([id, ...ids])); } catch {}
+      this.listeners.forEach((fn) => fn());
+    }
+  }
+
+  markUnread(id: string): void {
+    const ids = this.getReadIds().filter((itemId) => itemId !== id);
+    try { localStorage.setItem(READ_KEY, JSON.stringify(ids)); } catch {}
+    this.listeners.forEach((fn) => fn());
+  }
+
+  toggleRead(id: string): boolean {
+    if (this.isRead(id)) {
+      this.markUnread(id);
+      return false;
+    }
+    this.markRead(id);
+    return true;
+  }
 
   getSavedIds(): string[] {
     try {

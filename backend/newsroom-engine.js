@@ -18,7 +18,10 @@
 
 import axios from 'axios';
 import RSSParser from 'rss-parser';
+import { normalizeRssItem as normalizeItem } from './rss-normalize.js';
 import https from 'https';
+
+const FEED_STALE_CACHE = new Map(); // keeps a recent body for conditional HTTP revalidation
 
 // ── HTTPS Agent (bypass sertifikat lemah) ─────────────────────────────────────
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -109,6 +112,8 @@ const USER_AGENTS = [
   'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
 ];
 
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function fetchUrl(url, options = {}) {
   const isHttps = url.startsWith('https://');
   const baseConfig = {
@@ -116,31 +121,41 @@ async function fetchUrl(url, options = {}) {
     responseType: options.responseType || 'text',
     maxRedirects: 5,
     ...(isHttps ? { httpsAgent } : {}),
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
   };
 
   const uaList = options.ua ? [options.ua] : USER_AGENTS;
+  let lastError;
 
   for (const ua of uaList) {
-    try {
-      return await axios.get(url, {
-        ...baseConfig,
-        headers: {
-          'User-Agent': ua,
-          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          ...(options.headers || {}),
-        },
-      });
-    } catch (err) {
-      const status = err.response?.status;
-      // Kalau 403/429, coba UA berikutnya. Kalau error lain, langsung throw
-      if ((status === 403 || status === 429) && ua !== uaList[uaList.length - 1]) {
-        continue;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await axios.get(url, {
+          ...baseConfig,
+          headers: {
+            'User-Agent': ua,
+            'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'no-cache',
+            ...(options.headers || {}),
+          },
+        });
+      } catch (err) {
+        lastError = err;
+        const status = err.response?.status;
+        const retryable = !status || status === 408 || status === 425 || status === 429 || status >= 500;
+        if (retryable && attempt === 0) {
+          await wait(300);
+          continue;
+        }
+        // Rate limits and bot blocks can sometimes recover with a different UA.
+        if ((status === 403 || status === 429) && ua !== uaList[uaList.length - 1]) break;
+        throw err;
       }
-      throw err;
     }
   }
+
+  throw lastError || new Error('Unable to fetch URL');
 }
 
 // ── parseRSS — fetch + parse satu RSS URL ─────────────────────────────────────
@@ -161,15 +176,38 @@ async function parseRSS(url, pioneer = false) {
 
     if (!content) {
       try {
-        const response = await fetchUrl(url, {
-          timeout: pioneer ? 5000 : 10000,  // max 10 detik per feed
-          headers: {
-            'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-          },
+        const stale = FEED_STALE_CACHE.get(url);
+        const headers = {
+          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+          ...(stale?.etag ? { 'If-None-Match': stale.etag } : {}),
+          ...(stale?.lastModified ? { 'If-Modified-Since': stale.lastModified } : {}),
+        };
+        let response = await fetchUrl(url, {
+          timeout: pioneer ? 5000 : 10000,
+          headers,
         });
-        content = response.data;
+
+        if (response.status === 304 && stale?.body) {
+          content = stale.body;
+        } else if (response.status === 304) {
+          // Validator without a retained body: retry once without conditional headers.
+          response = await fetchUrl(url, {
+            timeout: pioneer ? 5000 : 10000,
+            headers: { 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+          });
+          content = response.data;
+        } else {
+          content = response.data;
+        }
+
         if (content) {
           CACHE.set(key_rss, content, 60 * 15);
+          FEED_STALE_CACHE.set(url, {
+            body: content,
+            etag: response.headers?.etag || stale?.etag || null,
+            lastModified: response.headers?.['last-modified'] || stale?.lastModified || null,
+            updatedAt: Date.now(),
+          });
           markFeedSuccess(url);
         }
       } catch (ex) {
@@ -197,58 +235,6 @@ async function parseRSS(url, pioneer = false) {
     console.error('parseRSS.error:', url, error?.message || error);
     return { rss_url: url };
   }
-}
-
-function normalizeItem(item) {
-  const mediaContents = Array.isArray(item['media:content'])
-    ? item['media:content']
-    : item['media:content'] ? [item['media:content']] : [];
-
-  const mediaThumb = item['media:thumbnail'];
-  const mediaGroup = item['media:group'];
-
-  // Attachments (enclosures)
-  const attachments = (item.enclosure ? [item.enclosure] : []).map(e => ({
-    url: e.url,
-    mimeType: e.type || '',
-  }));
-
-  // Fix: ambil URL thumbnail dengan aman dari berbagai format
-  function safeThumbUrl(t) {
-    if (!t) return null;
-    if (typeof t === 'string') return t;
-    if (t.$?.url) return t.$.url;
-    if (t.url) return t.url;
-    return null;
-  }
-
-  const thumbUrl = safeThumbUrl(mediaThumb);
-
-  return {
-    title: { value: item.title || '' },
-    links: item.link ? [{ href: item.link }] : [],
-    link: item.link || '',
-    // contentSnippet sudah di-strip HTML oleh parseXmlString
-    description: { value: item.contentSnippet || item.summary || '' },
-    content: { value: item['content:encoded'] || item.content || '' },
-    published: item.isoDate || item.pubDate ? new Date(item.isoDate || item.pubDate) : null,
-    updated: item.isoDate ? new Date(item.isoDate) : null,
-    author: item.author || item['dc:creator']
-      ? { name: item.author || item['dc:creator'] }
-      : null,
-    categories: (item.categories || []).map(c => ({ label: c, term: c })),
-    attachments,
-    'media:content': mediaContents.map(m => ({
-      url: m.$.url || m.url || '',
-      medium: m.$.medium || m.medium || '',
-    })),
-    'media:thumbnail': thumbUrl ? { url: thumbUrl } : null,
-    'media:group': mediaGroup || null,
-    'media:description': { value: item['media:description'] || '' },
-    'media:community': item['media:community'] || null,
-    'dc:subject': item['dc:subject'] || null,
-    source: item.source ? { url: item.source.url } : null,
-  };
 }
 
 // ── processRssItem — port persis dari rss.ts asli ─────────────────────────────

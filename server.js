@@ -44,7 +44,7 @@ function axiosConfig(url, extra = {}) {
   };
 }
 
-const FEEDAPI_KEY = "69aec5f773dca1197d08df52.yyUs97SBONqeb3Y";
+const FEEDAPI_KEY = process.env.FEEDAPI_KEY || "";
 
 // ── HTML Entity Decoder lengkap ───────────────────────────────────────────────
 const HTML_ENTITIES = {
@@ -516,6 +516,12 @@ app.get('/api/feedapi', async (req, res) => {
     const { url } = req.query;
     if (!url) {
       return res.status(400).json({ success: false, error: 'URL is required' });
+    }
+    if (!FEEDAPI_KEY) {
+      return res.status(503).json({
+        success: false,
+        error: 'FeedAPI is not configured. Set FEEDAPI_KEY in the server environment.',
+      });
     }
 
     // Make request to FeedAPI to extract articles
