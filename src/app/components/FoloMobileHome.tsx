@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
-import { Bookmark, Check, Clock3, Flame, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { useNavigate } from "react-router";
+import { Bookmark, Check, Clock3, Flame, Search, RefreshCw, Sparkles, Rss } from "lucide-react";
 import { CATEGORIES, type Article } from "../data/articles";
 import { articleStore } from "../store/articleStore";
 import { ArticleReaderModal } from "./ArticleReaderModal";
@@ -49,6 +50,7 @@ function FeedRow({ article, onOpen, refresh }: { article: Article; onOpen: () =>
 }
 
 export function FoloMobileHome({ articles, loading, errors, refresh }: { articles: Article[]; loading: boolean; errors: Record<string, string>; refresh: () => void }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Semua");
   const [filter, setFilter] = useState<FeedFilter>("all");
@@ -78,7 +80,7 @@ export function FoloMobileHome({ articles, loading, errors, refresh }: { article
               <h1 className="mt-1 text-[25px] font-bold tracking-tight">Your feed<span className="text-orange-500">.</span></h1>
             </div>
             <button aria-label="Refresh feed" onClick={refresh} className="w-10 h-10 rounded-full bg-neutral-100 grid place-items-center active:scale-95">
-              <SlidersHorizontal size={18} />
+              <RefreshCw size={18} />
             </button>
           </div>
           <label className="mt-4 flex items-center gap-2.5 rounded-2xl bg-neutral-100 px-3.5 py-3">
@@ -131,6 +133,7 @@ export function FoloMobileHome({ articles, loading, errors, refresh }: { article
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-100 bg-white/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto flex h-[62px] max-w-lg items-center justify-around px-3">
           <button onClick={() => { setFilter("all"); setCategory("Semua"); setQuery(""); }} className="flex flex-col items-center gap-1 text-orange-600"><Sparkles size={20}/><span className="text-[10px] font-semibold">Feed</span></button>
+          <button onClick={() => navigate("/subscriptions")} className="flex flex-col items-center gap-1 text-neutral-400"><Rss size={20}/><span className="text-[10px] font-semibold">Sources</span></button>
           <button onClick={() => setFilter("unread")} className={`flex flex-col items-center gap-1 ${filter === "unread" ? "text-orange-600" : "text-neutral-400"}`}><Check size={20}/><span className="text-[10px] font-semibold">Unread</span></button>
           <button onClick={() => setFilter("saved")} className={`flex flex-col items-center gap-1 ${filter === "saved" ? "text-orange-600" : "text-neutral-400"}`}><Bookmark size={20}/><span className="text-[10px] font-semibold">Saved</span></button>
         </div>
