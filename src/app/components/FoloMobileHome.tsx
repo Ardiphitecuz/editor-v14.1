@@ -53,7 +53,7 @@ export function FoloMobileHome({ articles, loading, errors, refresh }: { article
   const [category, setCategory] = useState("Semua");
   const [filter, setFilter] = useState<FeedFilter>("all");
   const [activeArticle, setActiveArticle] = useState<Article | null>(null);
-  const [, setRevision] = useState(0);
+  const [readingStateVersion, setRevision] = useState(0);
   const bump = () => setRevision(n => n + 1);
 
   useEffect(() => articleStore.subscribe(bump), []);
@@ -64,7 +64,7 @@ export function FoloMobileHome({ articles, loading, errors, refresh }: { article
     const matchesCategory = category === "Semua" || article.category === category;
     const matchesFilter = filter === "all" || (filter === "unread" && !articleStore.isRead(article.id)) || (filter === "saved" && articleStore.isSaved(article.id));
     return matchesQuery && matchesCategory && matchesFilter;
-  }), [articles, query, category, filter]);
+  }), [articles, query, category, filter, readingStateVersion]);
 
   const featured = visible.find(article => article.hot) ?? visible[0];
 
