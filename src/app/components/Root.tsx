@@ -31,9 +31,11 @@ export function Root() {
           <Outlet />
         </main>
         {!hideNav && (
-          <div className="lg:hidden">
-            <BottomNav />
-          </div>
+          {location.pathname !== "/" && (
+            <div className="lg:hidden">
+              <BottomNav />
+            </div>
+          )}
         )}
       </div>
     </div>
