@@ -21,6 +21,8 @@ import RSSParser from 'rss-parser';
 import { normalizeRssItem as normalizeItem } from './rss-normalize.js';
 import https from 'https';
 
+const FEED_STALE_CACHE = new Map(); // keeps a recent body for conditional HTTP revalidation
+
 // ── HTTPS Agent (bypass sertifikat lemah) ─────────────────────────────────────
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -117,6 +119,7 @@ async function fetchUrl(url, options = {}) {
     responseType: options.responseType || 'text',
     maxRedirects: 5,
     ...(isHttps ? { httpsAgent } : {}),
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
   };
 
   const uaList = options.ua ? [options.ua] : USER_AGENTS;
@@ -162,15 +165,38 @@ async function parseRSS(url, pioneer = false) {
 
     if (!content) {
       try {
-        const response = await fetchUrl(url, {
-          timeout: pioneer ? 5000 : 10000,  // max 10 detik per feed
-          headers: {
-            'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-          },
+        const stale = FEED_STALE_CACHE.get(url);
+        const headers = {
+          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+          ...(stale?.etag ? { 'If-None-Match': stale.etag } : {}),
+          ...(stale?.lastModified ? { 'If-Modified-Since': stale.lastModified } : {}),
+        };
+        let response = await fetchUrl(url, {
+          timeout: pioneer ? 5000 : 10000,
+          headers,
         });
-        content = response.data;
+
+        if (response.status === 304 && stale?.body) {
+          content = stale.body;
+        } else if (response.status === 304) {
+          // Validator without a retained body: retry once without conditional headers.
+          response = await fetchUrl(url, {
+            timeout: pioneer ? 5000 : 10000,
+            headers: { 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+          });
+          content = response.data;
+        } else {
+          content = response.data;
+        }
+
         if (content) {
           CACHE.set(key_rss, content, 60 * 15);
+          FEED_STALE_CACHE.set(url, {
+            body: content,
+            etag: response.headers?.etag || stale?.etag || null,
+            lastModified: response.headers?.['last-modified'] || stale?.lastModified || null,
+            updatedAt: Date.now(),
+          });
           markFeedSuccess(url);
         }
       } catch (ex) {
