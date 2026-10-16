@@ -18,6 +18,7 @@
 
 import axios from 'axios';
 import RSSParser from 'rss-parser';
+import { normalizeRssItem as normalizeItem } from './rss-normalize.js';
 import https from 'https';
 
 // ── HTTPS Agent (bypass sertifikat lemah) ─────────────────────────────────────
@@ -197,58 +198,6 @@ async function parseRSS(url, pioneer = false) {
     console.error('parseRSS.error:', url, error?.message || error);
     return { rss_url: url };
   }
-}
-
-function normalizeItem(item) {
-  const mediaContents = Array.isArray(item['media:content'])
-    ? item['media:content']
-    : item['media:content'] ? [item['media:content']] : [];
-
-  const mediaThumb = item['media:thumbnail'];
-  const mediaGroup = item['media:group'];
-
-  // Attachments (enclosures)
-  const attachments = (item.enclosure ? [item.enclosure] : []).map(e => ({
-    url: e.url,
-    mimeType: e.type || '',
-  }));
-
-  // Fix: ambil URL thumbnail dengan aman dari berbagai format
-  function safeThumbUrl(t) {
-    if (!t) return null;
-    if (typeof t === 'string') return t;
-    if (t.$?.url) return t.$.url;
-    if (t.url) return t.url;
-    return null;
-  }
-
-  const thumbUrl = safeThumbUrl(mediaThumb);
-
-  return {
-    title: { value: item.title || '' },
-    links: item.link ? [{ href: item.link }] : [],
-    link: item.link || '',
-    // contentSnippet sudah di-strip HTML oleh parseXmlString
-    description: { value: item.contentSnippet || item.summary || '' },
-    content: { value: item['content:encoded'] || item.content || '' },
-    published: item.isoDate || item.pubDate ? new Date(item.isoDate || item.pubDate) : null,
-    updated: item.isoDate ? new Date(item.isoDate) : null,
-    author: item.author || item['dc:creator']
-      ? { name: item.author || item['dc:creator'] }
-      : null,
-    categories: (item.categories || []).map(c => ({ label: c, term: c })),
-    attachments,
-    'media:content': mediaContents.map(m => ({
-      url: m.$.url || m.url || '',
-      medium: m.$.medium || m.medium || '',
-    })),
-    'media:thumbnail': thumbUrl ? { url: thumbUrl } : null,
-    'media:group': mediaGroup || null,
-    'media:description': { value: item['media:description'] || '' },
-    'media:community': item['media:community'] || null,
-    'dc:subject': item['dc:subject'] || null,
-    source: item.source ? { url: item.source.url } : null,
-  };
 }
 
 // ── processRssItem — port persis dari rss.ts asli ─────────────────────────────
