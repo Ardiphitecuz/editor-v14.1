@@ -3,6 +3,8 @@ export type SourceType = "rss" | "website";
 export interface NewsSource {
   id: string;
   name: string;
+  /** User-defined subscription title, preferred over the feed-provided name. */
+  customTitle?: string;
   url: string;
   feedUrl?: string;
   type: SourceType;
@@ -96,6 +98,21 @@ export function removeSource(id: string): void {
 
 export function toggleSource(id: string, enabled: boolean): void {
   saveSources(getSources().map((s) => (s.id === id ? { ...s, enabled } : s)));
+}
+
+/** Resolve the title displayed for a source. User custom title takes precedence. */
+export function getPreferredSourceTitle(source: Pick<NewsSource, "name" | "customTitle">): string {
+  return source.customTitle?.trim() || source.name;
+}
+
+/** Set or clear a user-defined title without changing the source's original name. */
+export function renameSource(id: string, customTitle: string): void {
+  const title = customTitle.trim();
+  saveSources(getSources().map((source) => {
+    if (source.id !== id) return source;
+    const { customTitle: _previous, ...rest } = source;
+    return title ? { ...rest, customTitle: title } : rest;
+  }));
 }
 
 export function updateSourceMeta(
