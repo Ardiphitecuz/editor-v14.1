@@ -30,12 +30,10 @@ export function Root() {
         <main className={hideNav ? "flex-1" : "flex-1 pb-16 lg:pb-0"}>
           <Outlet />
         </main>
-        {!hideNav && (
-          {location.pathname !== "/" && (
-            <div className="lg:hidden">
-              <BottomNav />
-            </div>
-          )}
+        {!hideNav && location.pathname !== "/" && (
+          <div className="lg:hidden">
+            <BottomNav />
+          </div>
         )}
       </div>
     </div>
